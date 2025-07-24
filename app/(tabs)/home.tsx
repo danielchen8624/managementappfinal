@@ -1,20 +1,57 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Text, View, TouchableOpacity, StyleSheet } from "react-native";
 import TaskModal from "../(components)/taskModal";
-
-function homePage() {
+import { router } from "expo-router";
+import { auth, db } from "../../firebaseConfig";
+import { doc, getDoc } from "firebase/firestore";
+import { useUser } from "../UserContext";
+import { ActivityIndicator } from "react-native";
+import ProjectModal from "../(components)/projectModal";
+function HomePage() {
   const [modalVisible, setModalVisible] = useState(false);
+  const [projectModal, setProjectModal] = useState(false);
 
+  const {role, loading} = useUser();
+
+  if (loading) {
+    return(
+    <View style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
+        <ActivityIndicator />
+        <Text>Loading...</Text>
+      </View>
+    )
+  }
   return (
+    console.log("Role:", role),
     <View style={styles.container}>
+      {(role === "customer" || role === "manager") && (
+        <TouchableOpacity
+          onPress={() => router.push("/requestHistory")}
+          style={styles.requestHistoryButton}
+        >
+          <Text style={styles.requestHistoryText}>History</Text>
+        </TouchableOpacity>
+      )}
+      {role === "manager" && (
+        console.log("Manager role detected"),
+        <TouchableOpacity
+          onPress={() => setProjectModal(true)}
+          style={styles.addButton}
+        >
+          <Text style={styles.addButtonText}>Add Project</Text>
+        </TouchableOpacity>
+      )}
+
       <Text style={styles.title}>Home Page</Text>
 
-      <TouchableOpacity
-        style={styles.addButton}
-        onPress={() => setModalVisible(true)}
-      >
-        <Text style={styles.addButtonText}>Submit Request</Text>
-      </TouchableOpacity>
+      {role === "customer" && (
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={() => setModalVisible(true)}
+        >
+          <Text style={styles.addButtonText}>Submit Request</Text>
+        </TouchableOpacity>
+      )}
 
       {modalVisible && (
         <TaskModal
@@ -22,10 +59,17 @@ function homePage() {
           onClose={() => setModalVisible(false)}
         />
       )}
+      {projectModal && (
+        <ProjectModal
+          visible={projectModal}
+          onClose={() => setProjectModal(false)}
+        />
+      )}
     </View>
   );
 }
-export default homePage;
+
+export default HomePage;
 
 const styles = StyleSheet.create({
   container: {
@@ -53,6 +97,18 @@ const styles = StyleSheet.create({
     elevation: 2, // for Android
   },
   addButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "500",
+  },
+  requestHistoryButton: {
+    backgroundColor: "#4B5563", // gray
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    marginBottom: 12,
+  },
+  requestHistoryText: {
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "500",

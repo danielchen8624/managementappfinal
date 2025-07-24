@@ -59,12 +59,12 @@ const data = [
   { label: "Windows & Mirrors", value: "Windows & Mirrors", priority: 1 },
 ];
 
-type TaskModalProps = {
+type ProjectModalProps = {
   visible: boolean;
   onClose: () => void;
 };
 
-function TaskModal({ visible, onClose }: TaskModalProps) {
+function ProjectModal({ visible, onClose }: ProjectModalProps) {
   const [taskType, setTaskType] = useState("");
   const [taskDescription, setTaskDescription] = useState("");
   const [roomNumber, setRoomNumber] = useState("");
@@ -77,8 +77,8 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
     return;
   }
     try {
-      console.log("this shit is wrong dood");
-      await addDoc(collection(db, "tasks"), {
+      console.log("hai");
+      await addDoc(collection(db, "projects"), {
         taskType,
         description: taskDescription,
         roomNumber,
@@ -87,7 +87,7 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
         createdBy: currentUser.uid,
         createdAt: new Date(),
       });
-      Alert.alert("Request Submitted!");
+      Alert.alert("Project Added!");
     } catch (error) {
       console.error("Error adding document: ", error);
     } finally {
@@ -145,7 +145,7 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
   );
 }
 
-export default TaskModal;
+export default ProjectModal;
 
 const styles = StyleSheet.create({
   modalOverlay: {

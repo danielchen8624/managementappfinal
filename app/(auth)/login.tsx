@@ -17,14 +17,24 @@ import {
 import { auth } from "../../firebaseConfig";
 import { router, useLocalSearchParams } from "expo-router";
 import { db } from "../../firebaseConfig";
-import { collection, addDoc } from "firebase/firestore";
+import {
+  collection,
+  addDoc,
+  doc,
+  setDoc,
+  getDocs,
+  query,
+  where,
+} from "firebase/firestore";
 
 export default function LoginScreen() {
-  
+  const params = useLocalSearchParams();
+  const userType = params.role as string;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   const handleSignUp = async () => {
+    console.log(userType);
     try {
       const userCredential = await createUserWithEmailAndPassword(
         auth,
@@ -34,9 +44,9 @@ export default function LoginScreen() {
       const user = userCredential.user;
 
       // Add user to Firestore
-      await addDoc(collection(db, "users"), {
+      await setDoc(doc(db, "users", user.uid), {
         userID: user.uid,
-        role: "user", // Default role, can be changed later
+        role: userType,
         email: email,
         createdAt: new Date(),
       });
@@ -48,58 +58,88 @@ export default function LoginScreen() {
   };
 
   const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert("Error", "Please enter both email and password.");
+      return;
+    }
+
     try {
+      // Step 1: Query Firestore by email
+      const q = query(collection(db, "users"), where("email", "==", email));
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
+        Alert.alert("Error", "No user found with this email.");
+        return;
+      }
+
+      const userDoc = querySnapshot.docs[0];
+      const firestoreRole = userDoc.data().role;
+
+      // Step 2: Check role match
+      if (firestoreRole !== userType) {
+        Alert.alert(
+          "Access Denied",
+          `This user is registered as "${firestoreRole}", not "${userType}". Please use the correct login option.`
+        );
+        return;
+      }
+
+      // Step 3: Role is valid, proceed to sign in
       await signInWithEmailAndPassword(auth, email, password);
-      Alert.alert("Success!", "Logged in.");
+      Alert.alert("Success!", `Logged in as ${firestoreRole}.`);
     } catch (error: any) {
-      Alert.alert("Error", error.message);
+      Alert.alert("Login Failed", error.message);
     }
   };
 
   // KeyboardAvoidingView moves components up away from keyboard if it is overlapped
   return (
-    <SafeAreaView style = {{flex: 1, backgroundColor: "#F9FAFB"}}>
-    <KeyboardAvoidingView style={styles.container} behavior="padding">
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <View style={styles.card}>
-          <Text style={styles.title}>Login</Text>
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#F9FAFB" }}>
+      <KeyboardAvoidingView style={styles.container} behavior="padding">
+        <ScrollView contentContainerStyle={styles.scroll}>
+          <View style={styles.card}>
+            <Text style={styles.title}>Login</Text>
 
-          <Text style={styles.label}>Email</Text>
-          <TextInput
-            placeholder="Email"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            style={styles.input}
-          />
+            <Text style={styles.label}>Email</Text>
+            <TextInput
+              placeholder="Email"
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              style={styles.input}
+            />
 
-          <Text style={styles.label}>Password</Text>
-          <TextInput
-            placeholder="Password"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            style={styles.input}
-          />
+            <Text style={styles.label}>Password</Text>
+            <TextInput
+              placeholder="Password"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              style={styles.input}
+            />
 
-          <TouchableOpacity style={styles.button} onPress={handleSignUp}>
-            <Text style={styles.buttonText}>Sign Up</Text>
+            <TouchableOpacity style={styles.button} onPress={handleSignUp}>
+              <Text style={styles.buttonText}>Sign Up</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.button, styles.secondaryButton]}
+              onPress={handleLogin}
+            >
+              <Text style={styles.buttonText}>Login</Text>
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity
+            onPress={() => router.replace("../selectLogin")}
+            style={styles.backTextContainer}
+          >
+            <Text style={styles.backText}>Back to Select Login</Text>
           </TouchableOpacity>
-
-          <TouchableOpacity style={[styles.button, styles.secondaryButton]} onPress={handleLogin}>
-            <Text style={styles.buttonText}>Login</Text>
-          </TouchableOpacity>
-        </View>
-
-        <TouchableOpacity
-          onPress={() => router.replace("../selectLogin")}
-          style={styles.backTextContainer}
-        >
-          <Text style={styles.backText}>Back to Select Login</Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

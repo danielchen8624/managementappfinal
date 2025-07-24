@@ -13,7 +13,8 @@ import React, { useState, useEffect } from "react";
 
 function TaskPage() {
   const [currentTasks, setCurrentTasks] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true); //maybe use this later 
+  const [currentProjects, setCurrentProjects] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true); // maybe use this later
 
   type Task = {
     id: string;
@@ -29,18 +30,27 @@ function TaskPage() {
   };
 
   useEffect(() => {
-    const q = query(collection(db, "tasks"), where("status", "==", "pending"));
-    const unsub = onSnapshot(q, (querySnapshot) => {
-      const taskData: any[] = [];
-      querySnapshot.forEach((doc) => {
-        taskData.push({ id: doc.id, ...doc.data() });
-      });
+    const tasksQ = query(collection(db, "tasks"), where("status", "==", "pending"));
+    const projectsQ = query(collection(db, "projects"), where("status", "==", "pending"));
 
-      taskData.sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99));
-      setCurrentTasks(taskData);
+    const unsubTasks = onSnapshot(tasksQ, (snap) => {
+      const items: any[] = [];
+      snap.forEach((d) => items.push({ id: d.id, ...d.data() }));
+      items.sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99));
+      setCurrentTasks(items);
     });
 
-    return unsub;
+    const unsubProjects = onSnapshot(projectsQ, (snap) => {
+      const items: any[] = [];
+      snap.forEach((d) => items.push({ id: d.id, ...d.data() }));
+      items.sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99));
+      setCurrentProjects(items);
+    });
+
+    return () => {
+      unsubTasks();
+      unsubProjects();
+    };
   }, []);
 
   const openScreen = (task: Task) => {
@@ -60,7 +70,7 @@ function TaskPage() {
   };
 
   const openHistory = () => {
-    router.push({ pathname: "/home" });
+    router.push({ pathname: "/completedTasks" });
   };
 
   return (
@@ -88,6 +98,31 @@ function TaskPage() {
             </TouchableOpacity>
           ))
         )}
+
+        <View style={styles.header}>
+          <Text style={styles.headerText}>Projects ▼</Text>
+        </View>
+
+        {currentProjects.length === 0 ? (
+          <Text style={styles.emptyText}>No pending projects available.</Text>
+        ) : (
+          currentProjects.map((project) => (
+            <TouchableOpacity
+              key={project.id}
+              onPress={() => openScreen(project)}
+              style={styles.taskCard}
+            >
+              <Text style={styles.taskTitle}>Type: {project.taskType}</Text>
+              <Text style={styles.taskText}>Room: {project.roomNumber || "N/A"}</Text>
+              <Text style={styles.taskText}>
+                Priority: {project.priority ?? "Unassigned"}
+              </Text>
+              <Text style={styles.taskText}>
+                Date: {project.createdAt?.toDate().toLocaleString()}
+              </Text>
+            </TouchableOpacity>
+          ))
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -103,6 +138,27 @@ const styles = StyleSheet.create({
   scrollContainer: {
     padding: 16,
     paddingBottom: 40,
+  },
+  header: {
+    width: "100%",
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    backgroundColor: "#2563EB",
+    alignItems: "center",
+    justifyContent: "center",
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  headerText: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    letterSpacing: 0.5,
   },
   historyButton: {
     backgroundColor: "#007AFF",

@@ -3,7 +3,6 @@ import { router } from "expo-router";
 
 function SelectLogin() {
   const handleSelect = (role: string) => {
-    console.log(role)
     router.replace({
       pathname: "../login",
       params: { role },
