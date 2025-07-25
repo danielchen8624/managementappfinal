@@ -14,6 +14,7 @@ function ToDoScreen() {
   const taskDescription = params.taskDescription as string;
   const createdBy = params.createdBy as string;
   const taskId = params.taskId as string;
+  const taskStatus = params.taskStatus as string;
 
   const handleAccept = async () => {
     if (!taskId) {
@@ -25,7 +26,7 @@ function ToDoScreen() {
       const taskRef = doc(db, "tasks", taskId);
       await updateDoc(taskRef, {
         status: "in progress",
-        assignedWorker: auth.currentUser?.uid
+        assignedWorker: auth.currentUser?.uid,
       });
       console.log("Updated task to in progress!");
       router.back();
@@ -48,18 +49,20 @@ function ToDoScreen() {
           <Text style={styles.question}>Do you want to accept this task?</Text>
 
           <View style={styles.buttonRow}>
-            <TouchableOpacity
-              onPress={handleAccept}
-              style={styles.acceptButton}
-            >
-              <Text style={styles.buttonText}>Yes</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => router.back()}
-              style={styles.declineButton}
-            >
-              <Text style={styles.buttonText}>No</Text>
-            </TouchableOpacity>
+            {taskStatus === "pending" ? (
+              <>
+                <TouchableOpacity onPress={handleAccept} style={styles.acceptButton}>
+                  <Text style={styles.buttonText}>Yes</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => router.back()} style={styles.declineButton}>
+                  <Text style={styles.buttonText}>No</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <View style={styles.acceptButton}>
+              <Text style={styles.buttonText}>I've Completed This Task</Text>
+            </View>
+            )}
           </View>
         </View>
       </View>

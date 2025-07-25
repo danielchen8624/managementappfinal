@@ -32,7 +32,7 @@ function TaskPage() {
     );
   }
 
-  type Task = {
+   type Task = {
     id: string;
     priority?: number;
     roomNumber?: string;
