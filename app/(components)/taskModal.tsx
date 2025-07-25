@@ -77,7 +77,6 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
     return;
   }
     try {
-      console.log("this shit is wrong dood");
       await addDoc(collection(db, "tasks"), {
         taskType,
         description: taskDescription,
@@ -86,6 +85,7 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
         status: "pending",
         createdBy: currentUser.uid,
         createdAt: new Date(),
+        assignedWorkers: null
       });
       Alert.alert("Request Submitted!");
     } catch (error) {

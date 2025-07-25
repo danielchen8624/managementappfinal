@@ -7,12 +7,13 @@ import { doc, getDoc } from "firebase/firestore";
 import { useUser } from "../UserContext";
 import { ActivityIndicator } from "react-native";
 import ProjectModal from "../(components)/projectModal";
+import CurrentTaskModal from "../(components)/currentTask";
 function HomePage() {
   const [modalVisible, setModalVisible] = useState(false);
   const [projectModal, setProjectModal] = useState(false);
+  const [currentTaskModal, setCurrentTaskModal] = useState(false);
 
   const {role, loading} = useUser();
-
   if (loading) {
     return(
     <View style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
@@ -42,8 +43,17 @@ function HomePage() {
         </TouchableOpacity>
       )}
 
-      <Text style={styles.title}>Home Page</Text>
+       {role === "employee" && (
 
+        <TouchableOpacity
+          onPress={() => setCurrentTaskModal(true)}
+          style={styles.addButton}
+        >
+          <Text style={styles.addButtonText}>View Current Task</Text>
+        </TouchableOpacity>
+      )}
+
+      
       {role === "customer" && (
         <TouchableOpacity
           style={styles.addButton}
@@ -64,6 +74,12 @@ function HomePage() {
           visible={projectModal}
           onClose={() => setProjectModal(false)}
         />
+      )}
+
+      {currentTaskModal && (
+        <CurrentTaskModal
+        visible = {currentTaskModal}
+        onClose = {() => setCurrentTaskModal(false)} />
       )}
     </View>
   );

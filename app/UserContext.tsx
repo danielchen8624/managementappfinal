@@ -10,7 +10,6 @@ type UserContextType = {
 };
 
 const UserContext = createContext<UserContextType>({ role: null, loading: true });
-
 export const UserProvider = ({ children }: { children: React.ReactNode }) => {
   const [role, setRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -29,6 +28,7 @@ useEffect(() => {
         const data = userDoc.data();
         setRole(data.role || null);
       } else {
+        console.error("User document does not exist");
         setRole(null);
       }
     } catch (err) {

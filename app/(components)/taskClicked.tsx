@@ -5,7 +5,7 @@ import {
   StyleSheet,
   SafeAreaView,
 } from "react-native";
-import { db } from "../../firebaseConfig";
+import { db, auth } from "../../firebaseConfig";
 import { router, useLocalSearchParams } from "expo-router";
 import { doc, updateDoc } from "firebase/firestore";
 
@@ -25,6 +25,7 @@ function ToDoScreen() {
       const taskRef = doc(db, "tasks", taskId);
       await updateDoc(taskRef, {
         status: "in progress",
+        assignedWorker: auth.currentUser?.uid
       });
       console.log("Updated task to in progress!");
       router.back();

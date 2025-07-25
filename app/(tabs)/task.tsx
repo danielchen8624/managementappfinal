@@ -5,16 +5,32 @@ import {
   TouchableOpacity,
   ScrollView,
   SafeAreaView,
+  ActivityIndicator,
 } from "react-native";
 import { router } from "expo-router";
 import { db } from "../../firebaseConfig";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import React, { useState, useEffect } from "react";
+import { useUser } from "../UserContext";
 
 function TaskPage() {
   const [currentTasks, setCurrentTasks] = useState<any[]>([]);
   const [currentProjects, setCurrentProjects] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true); // maybe use this later
+
+  const { role, loading } = useUser();
+  if (loading) {
+    return (
+      <View
+        style={[
+          styles.container,
+          { justifyContent: "center", alignItems: "center" },
+        ]}
+      >
+        <ActivityIndicator />
+        <Text>Loading...</Text>
+      </View>
+    );
+  }
 
   type Task = {
     id: string;
@@ -30,8 +46,14 @@ function TaskPage() {
   };
 
   useEffect(() => {
-    const tasksQ = query(collection(db, "tasks"), where("status", "==", "pending"));
-    const projectsQ = query(collection(db, "projects"), where("status", "==", "pending"));
+    const tasksQ = query(
+      collection(db, "tasks"),
+      where("status", "==", "pending")
+    );
+    const projectsQ = query(
+      collection(db, "projects"),
+      where("status", "==", "pending")
+    );
 
     const unsubTasks = onSnapshot(tasksQ, (snap) => {
       const items: any[] = [];
@@ -52,6 +74,10 @@ function TaskPage() {
       unsubProjects();
     };
   }, []);
+
+  if (role === "customer") {
+    return null;
+  }
 
   const openScreen = (task: Task) => {
     router.push({
@@ -90,8 +116,12 @@ function TaskPage() {
               style={styles.taskCard}
             >
               <Text style={styles.taskTitle}>Type: {task.taskType}</Text>
-              <Text style={styles.taskText}>Room: {task.roomNumber || "N/A"}</Text>
-              <Text style={styles.taskText}>Priority: {task.priority ?? "Unassigned"}</Text>
+              <Text style={styles.taskText}>
+                Room: {task.roomNumber || "N/A"}
+              </Text>
+              <Text style={styles.taskText}>
+                Priority: {task.priority ?? "Unassigned"}
+              </Text>
               <Text style={styles.taskText}>
                 Date: {task.createdAt?.toDate().toLocaleString()}
               </Text>
@@ -113,7 +143,9 @@ function TaskPage() {
               style={styles.taskCard}
             >
               <Text style={styles.taskTitle}>Type: {project.taskType}</Text>
-              <Text style={styles.taskText}>Room: {project.roomNumber || "N/A"}</Text>
+              <Text style={styles.taskText}>
+                Room: {project.roomNumber || "N/A"}
+              </Text>
               <Text style={styles.taskText}>
                 Priority: {project.priority ?? "Unassigned"}
               </Text>

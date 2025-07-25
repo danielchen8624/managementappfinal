@@ -86,6 +86,8 @@ function ProjectModal({ visible, onClose }: ProjectModalProps) {
         status: "pending",
         createdBy: currentUser.uid,
         createdAt: new Date(),
+        assignedWorkers: null //manager can assign to specific workers later, so change null into a state that holds array of worker ids that manager sets
+
       });
       Alert.alert("Project Added!");
     } catch (error) {
