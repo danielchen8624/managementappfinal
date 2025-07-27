@@ -106,6 +106,9 @@ function TaskPage() {
       </TouchableOpacity>
 
       <ScrollView contentContainerStyle={styles.scrollContainer}>
+         <View style={styles.header}>
+          <Text style={styles.headerText}>Tasks ▼</Text>
+        </View>
         {currentTasks.length === 0 ? (
           <Text style={styles.emptyText}>No pending tasks available.</Text>
         ) : (
@@ -175,6 +178,7 @@ const styles = StyleSheet.create({
     width: "100%",
     paddingVertical: 16,
     paddingHorizontal: 20,
+    marginBottom: 5,
     backgroundColor: "#2563EB",
     alignItems: "center",
     justifyContent: "center",

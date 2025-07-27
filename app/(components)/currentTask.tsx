@@ -8,23 +8,30 @@ import {
   ScrollView,
 } from "react-native";
 import { db, auth } from "../../firebaseConfig";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
+import {
+  collection,
+  query,
+  where,
+  onSnapshot,
+  Timestamp,
+} from "firebase/firestore";
 import React, { useState, useEffect } from "react";
 import { useUser } from "../UserContext";
 import { router } from "expo-router";
+import ElapsedTimer from "./elapsedTimer";
 
 type Task = {
-    id: string;
-    priority?: number;
-    roomNumber?: string;
-    status: string;
-    taskType: string;
-    description: string;
-    createdBy: string;
-    createdAt?: {
-      toDate: () => Date;
-    };
+  id: string;
+  priority?: number;
+  roomNumber?: string;
+  status: string;
+  taskType: string;
+  description: string;
+  createdBy: string;
+  createdAt?: {
+    toDate: () => Date;
   };
+};
 
 type TaskModalProps = {
   visible: boolean;
@@ -49,10 +56,9 @@ function CurrentTaskModal({ visible, onClose }: TaskModalProps) {
       (snap) => {
         const items: any[] = [];
         snap.forEach((d) => {
-            items.push({ id: d.id, ...d.data()
-            }
-             )});
-        
+          items.push({ id: d.id, ...d.data() });
+        });
+
         items.sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99));
         setCurrentTasks(items);
         console.log(currentTasks);
@@ -66,20 +72,20 @@ function CurrentTaskModal({ visible, onClose }: TaskModalProps) {
   }, [role]);
 
   const openScreen = (task: Task) => {
-      router.push({
-        pathname: "/taskClicked",
-        params: {
-          taskId: task.id,
-          taskType: task.taskType,
-          taskDescription: task.description,
-          taskRoomNumber: task.roomNumber,
-          taskPriority: task.priority,
-          taskStatus: task.status,
-          taskCreatedBy: task.createdBy,
-          taskCreatedAt: task.createdAt?.toDate().toLocaleString(),
-        },
-      });
-    };
+    router.push({
+      pathname: "/taskClicked",
+      params: {
+        taskId: task.id,
+        taskType: task.taskType,
+        taskDescription: task.description,
+        taskRoomNumber: task.roomNumber,
+        taskPriority: task.priority,
+        taskStatus: task.status,
+        taskCreatedBy: task.createdBy,
+        taskCreatedAt: task.createdAt?.toDate().toLocaleString(),
+      },
+    });
+  };
 
   if (!visible) return null;
 
@@ -101,23 +107,33 @@ function CurrentTaskModal({ visible, onClose }: TaskModalProps) {
           ) : (
             <ScrollView>
               {currentTasks.map((task) => (
-                <TouchableOpacity               
-                onPress={async () => {
+                <TouchableOpacity
+                  onPress={async () => {
                     openScreen(task);
                     onClose();
-                }}
-                key={task.id}>
-                <View key={task.id} style={styles.taskCard}>
-                  <Text style={styles.taskTitle}>Type: {task.taskType}</Text>
-                  <Text style={styles.taskText}>Room: {task.roomNumber || "N/A"}</Text>
-                  <Text style={styles.taskText}>Priority: {task.priority ?? "Unassigned"}</Text>
-                  <Text style={styles.taskText}>
-                    Date: {task.createdAt?.toDate().toLocaleString()}
-                  </Text>
-                  <Text style={styles.taskText}>
-                    Description: {task.description || "No description"}
-                  </Text>
-                </View>
+                  }}
+                  key={task.id}
+                >
+                  <View key={task.id} style={styles.taskCard}>
+                    <Text style={styles.taskTitle}>Type: {task.taskType}</Text>
+                    <Text style={styles.taskText}>
+                      Room: {task.roomNumber || "N/A"}
+                    </Text>
+                    <Text style={styles.taskText}>
+                      Priority: {task.priority ?? "Unassigned"}
+                    </Text>
+                    <Text style={styles.taskText}>
+                      Date: {task.createdAt?.toDate().toLocaleString()}
+                    </Text>
+                    <Text style={styles.taskText}>
+                      Description: {task.description || "No description"}
+                    </Text>
+                    <ElapsedTimer
+                      start={task.startTime} // Firestore Timestamp
+                      prefix="Elapsed: "
+                      style={styles.taskText}
+                    />
+                  </View>
                 </TouchableOpacity>
               ))}
             </ScrollView>

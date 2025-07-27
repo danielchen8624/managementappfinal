@@ -4,10 +4,11 @@ import {
   TouchableOpacity,
   StyleSheet,
   SafeAreaView,
+  Alert,
 } from "react-native";
 import { db, auth } from "../../firebaseConfig";
 import { router, useLocalSearchParams } from "expo-router";
-import { doc, updateDoc } from "firebase/firestore";
+import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
 
 function ToDoScreen() {
   const params = useLocalSearchParams();
@@ -15,6 +16,24 @@ function ToDoScreen() {
   const createdBy = params.createdBy as string;
   const taskId = params.taskId as string;
   const taskStatus = params.taskStatus as string;
+
+  const handleCompleteTask = async () => {
+    if (!taskId) {
+      console.error("No task ID found!");
+      return;
+    }   
+    try {
+      const taskRef = doc(db, "tasks", taskId);
+      await updateDoc(taskRef, {
+        status: "completed",
+        completedAt: new Date(),
+      });
+      Alert.alert("Task marked as completed!");
+      router.back();
+    } catch (error) {
+      console.error(error);
+    }
+  };
 
   const handleAccept = async () => {
     if (!taskId) {
@@ -27,6 +46,7 @@ function ToDoScreen() {
       await updateDoc(taskRef, {
         status: "in progress",
         assignedWorker: auth.currentUser?.uid,
+        startTime: serverTimestamp(),
       });
       console.log("Updated task to in progress!");
       router.back();
@@ -59,9 +79,9 @@ function ToDoScreen() {
                 </TouchableOpacity>
               </>
             ) : (
-              <View style={styles.acceptButton}>
+              <TouchableOpacity style={styles.acceptButton} onPress ={handleCompleteTask}>
               <Text style={styles.buttonText}>I've Completed This Task</Text>
-            </View>
+            </TouchableOpacity>
             )}
           </View>
         </View>

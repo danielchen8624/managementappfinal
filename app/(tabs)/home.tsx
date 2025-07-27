@@ -13,75 +13,88 @@ function HomePage() {
   const [projectModal, setProjectModal] = useState(false);
   const [currentTaskModal, setCurrentTaskModal] = useState(false);
 
-  const {role, loading} = useUser();
+  const { role, loading } = useUser();
   if (loading) {
-    return(
-    <View style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
+    return (
+      <View
+        style={[
+          styles.container,
+          { justifyContent: "center", alignItems: "center" },
+        ]}
+      >
         <ActivityIndicator />
         <Text>Loading...</Text>
       </View>
-    )
+    );
   }
   return (
     console.log("Role:", role),
-    <View style={styles.container}>
-      {(role === "customer" || role === "manager") && (
-        <TouchableOpacity
-          onPress={() => router.push("/requestHistory")}
-          style={styles.requestHistoryButton}
-        >
-          <Text style={styles.requestHistoryText}>History</Text>
-        </TouchableOpacity>
-      )}
-      {role === "manager" && (
-        console.log("Manager role detected"),
-        <TouchableOpacity
-          onPress={() => setProjectModal(true)}
-          style={styles.addButton}
-        >
-          <Text style={styles.addButtonText}>Add Project</Text>
-        </TouchableOpacity>
-      )}
+    (
+      <View style={styles.container}>
+        {(role === "customer" || role === "manager") && (
+          <TouchableOpacity
+            onPress={() => router.push("/requestHistory")}
+            style={styles.requestHistoryButton}
+          >
+            <Text style={styles.requestHistoryText}>History</Text>
+          </TouchableOpacity>
+        )}
+        {role === "manager" && (
+          <>
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={() => router.push("/manageEmployees")}
+            >
+              <Text style={styles.requestHistoryText}>Manage Employees</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setProjectModal(true)}
+              style={styles.addButton}
+            >
+              <Text style={styles.addButtonText}>Add Project</Text>
+            </TouchableOpacity>
+          </>
+        )}
 
-       {role === "employee" && (
+        {role === "employee" && (
+          <TouchableOpacity
+            onPress={() => setCurrentTaskModal(true)}
+            style={styles.addButton}
+          >
+            <Text style={styles.addButtonText}>View Current Task</Text>
+          </TouchableOpacity>
+        )}
 
-        <TouchableOpacity
-          onPress={() => setCurrentTaskModal(true)}
-          style={styles.addButton}
-        >
-          <Text style={styles.addButtonText}>View Current Task</Text>
-        </TouchableOpacity>
-      )}
+        {role === "customer" && (
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => setModalVisible(true)}
+          >
+            <Text style={styles.addButtonText}>Submit Request</Text>
+          </TouchableOpacity>
+        )}
 
-      
-      {role === "customer" && (
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => setModalVisible(true)}
-        >
-          <Text style={styles.addButtonText}>Submit Request</Text>
-        </TouchableOpacity>
-      )}
+        {modalVisible && (
+          <TaskModal
+            visible={modalVisible}
+            onClose={() => setModalVisible(false)}
+          />
+        )}
+        {projectModal && (
+          <ProjectModal
+            visible={projectModal}
+            onClose={() => setProjectModal(false)}
+          />
+        )}
 
-      {modalVisible && (
-        <TaskModal
-          visible={modalVisible}
-          onClose={() => setModalVisible(false)}
-        />
-      )}
-      {projectModal && (
-        <ProjectModal
-          visible={projectModal}
-          onClose={() => setProjectModal(false)}
-        />
-      )}
-
-      {currentTaskModal && (
-        <CurrentTaskModal
-        visible = {currentTaskModal}
-        onClose = {() => setCurrentTaskModal(false)} />
-      )}
-    </View>
+        {currentTaskModal && (
+          <CurrentTaskModal
+            visible={currentTaskModal}
+            onClose={() => setCurrentTaskModal(false)}
+          />
+        )}
+      </View>
+    )
   );
 }
 
@@ -105,6 +118,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#2563EB", // blue
     paddingVertical: 12,
     paddingHorizontal: 24,
+    marginBottom:16,
     borderRadius: 12,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
