@@ -31,7 +31,7 @@ function SendMessage() {
         title: messageTitle.trim(),
         content: message.trim(),
         createdBy: currentUser.uid,
-        createdAt: serverTimestamp(), // safer than new Date()
+        createdAt: serverTimestamp(),
       });
       Alert.alert("Message Sent!");
       router.back();
@@ -48,10 +48,10 @@ function SendMessage() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}>
-          <Text style={styles.backButton}>{"<"}</Text>
+          <Text style={styles.backButton}>‹</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Send Message</Text>
-        <View style={{ width: 50 }} /> {/* Spacer for symmetry */}
+        <View style={{ width: 50 }} />
       </View>
 
       <View style={styles.form}>
@@ -85,19 +85,19 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#F9FAFB",
-    paddingHorizontal: 20,
     paddingTop: 20,
   },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    paddingHorizontal: 20,
     marginBottom: 20,
   },
   backButton: {
     color: "#2563EB",
-    fontSize: 16,
-    fontWeight: "500",
+    fontSize: 24,
+    fontWeight: "600",
   },
   headerTitle: {
     fontSize: 22,
@@ -106,7 +106,8 @@ const styles = StyleSheet.create({
   },
   form: {
     flex: 1,
-    alignItems: "center",
+    gap: 8,
+    marginHorizontal: 10,
   },
   input: {
     width: "100%",
@@ -126,9 +127,11 @@ const styles = StyleSheet.create({
   sendButton: {
     backgroundColor: "#2563EB",
     paddingVertical: 14,
-    paddingHorizontal: 40,
     borderRadius: 12,
     marginTop: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    marginHorizontal: 20, // consistent spacing like the rest of your components
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -141,3 +144,4 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 });
+

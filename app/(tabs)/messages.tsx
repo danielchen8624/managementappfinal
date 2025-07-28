@@ -61,7 +61,9 @@ function MessagePage() {
       minute: "2-digit",
       hour12: true,
     };
-    return new Intl.DateTimeFormat("en-US", options).format(date).replace(",", " at");
+    return new Intl.DateTimeFormat("en-US", options)
+      .format(date)
+      .replace(",", " at");
   };
 
   const renderItem = ({ item }: { item: Message }) => {

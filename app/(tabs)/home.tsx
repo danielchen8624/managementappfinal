@@ -1,100 +1,87 @@
-import React, { useState, useEffect } from "react";
-import { Text, View, TouchableOpacity, StyleSheet } from "react-native";
+import React, { useState } from "react";
+import {
+  Text,
+  View,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+  Animated,
+} from "react-native";
 import TaskModal from "../(components)/taskModal";
-import { router } from "expo-router";
-import { auth, db } from "../../firebaseConfig";
-import { doc, getDoc } from "firebase/firestore";
-import { useUser } from "../UserContext";
-import { ActivityIndicator } from "react-native";
 import ProjectModal from "../(components)/projectModal";
 import CurrentTaskModal from "../(components)/currentTask";
+import { router } from "expo-router";
+import { useUser } from "../UserContext";
+import { Ionicons, MaterialIcons, FontAwesome5 } from "@expo/vector-icons";
+
 function HomePage() {
   const [modalVisible, setModalVisible] = useState(false);
   const [projectModal, setProjectModal] = useState(false);
   const [currentTaskModal, setCurrentTaskModal] = useState(false);
-
   const { role, loading } = useUser();
+
   if (loading) {
     return (
-      <View
-        style={[
-          styles.container,
-          { justifyContent: "center", alignItems: "center" },
-        ]}
-      >
-        <ActivityIndicator />
-        <Text>Loading...</Text>
+      <View style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
+        <ActivityIndicator size="large" color="#2563EB" />
+        <Text style={styles.loadingText}>Loading...</Text>
       </View>
     );
   }
+
   return (
-    console.log("Role:", role),
-    (
-      <View style={styles.container}>
-        {(role === "customer" || role === "manager") && (
+    <View style={styles.container}>
+      <Text style={styles.welcomeText}>Welcome{role ? `, ${role}` : ""}!</Text>
+
+      {(role === "customer" || role === "manager") && (
+        <TouchableOpacity onPress={() => router.push("/requestHistory")} style={styles.grayButton}>
+          <MaterialIcons name="history" size={20} color="white" style={styles.icon} />
+          <Text style={styles.buttonText}>View Request History</Text>
+        </TouchableOpacity>
+      )}
+
+      {role === "manager" && (
+        <>
           <TouchableOpacity
-            onPress={() => router.push("/requestHistory")}
-            style={styles.requestHistoryButton}
+            onPress={() => router.push("/manageEmployees")}
+            style={styles.purpleButton}
           >
-            <Text style={styles.requestHistoryText}>History</Text>
+            <Ionicons name="people" size={20} color="white" style={styles.icon} />
+            <Text style={styles.buttonText}>Manage Employees</Text>
           </TouchableOpacity>
-        )}
-        {role === "manager" && (
-          <>
-            <TouchableOpacity
-              style={styles.addButton}
-              onPress={() => router.push("/manageEmployees")}
-            >
-              <Text style={styles.requestHistoryText}>Manage Employees</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => setProjectModal(true)}
-              style={styles.addButton}
-            >
-              <Text style={styles.addButtonText}>Add Project</Text>
-            </TouchableOpacity>
-          </>
-        )}
 
-        {role === "employee" && (
-          <TouchableOpacity
-            onPress={() => setCurrentTaskModal(true)}
-            style={styles.addButton}
-          >
-            <Text style={styles.addButtonText}>View Current Task</Text>
+          <TouchableOpacity onPress={() => setProjectModal(true)} style={styles.primaryButton}>
+            <FontAwesome5 name="project-diagram" size={18} color="white" style={styles.icon} />
+            <Text style={styles.buttonText}>Add New Project</Text>
           </TouchableOpacity>
-        )}
+        </>
+      )}
 
-        {role === "customer" && (
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() => setModalVisible(true)}
-          >
-            <Text style={styles.addButtonText}>Submit Request</Text>
-          </TouchableOpacity>
-        )}
+      {role === "employee" && (
+        <TouchableOpacity onPress={() => setCurrentTaskModal(true)} style={styles.primaryButton}>
+          <MaterialIcons name="assignment" size={20} color="white" style={styles.icon} />
+          <Text style={styles.buttonText}>View Current Task</Text>
+        </TouchableOpacity>
+      )}
 
-        {modalVisible && (
-          <TaskModal
-            visible={modalVisible}
-            onClose={() => setModalVisible(false)}
-          />
-        )}
-        {projectModal && (
-          <ProjectModal
-            visible={projectModal}
-            onClose={() => setProjectModal(false)}
-          />
-        )}
+      {role === "customer" && (
+        <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.primaryButton}>
+          <Ionicons name="create" size={20} color="white" style={styles.icon} />
+          <Text style={styles.buttonText}>Submit Request</Text>
+        </TouchableOpacity>
+      )}
 
-        {currentTaskModal && (
-          <CurrentTaskModal
-            visible={currentTaskModal}
-            onClose={() => setCurrentTaskModal(false)}
-          />
-        )}
-      </View>
-    )
+      {/* Modals */}
+      {modalVisible && (
+        <TaskModal visible={modalVisible} onClose={() => setModalVisible(false)} />
+      )}
+      {projectModal && (
+        <ProjectModal visible={projectModal} onClose={() => setProjectModal(false)} />
+      )}
+      {currentTaskModal && (
+        <CurrentTaskModal visible={currentTaskModal} onClose={() => setCurrentTaskModal(false)} />
+      )}
+    </View>
   );
 }
 
@@ -103,44 +90,62 @@ export default HomePage;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: "center",
+    backgroundColor: "#F9FAFB",
+    paddingHorizontal: 24,
+    paddingTop: 80,
     alignItems: "center",
-    backgroundColor: "#F9FAFB", // light gray background
-    paddingHorizontal: 24,
   },
-  title: {
+  welcomeText: {
     fontSize: 24,
-    fontWeight: "600",
-    marginBottom: 20,
-    color: "#111827", // dark text
+    fontWeight: "700",
+    marginBottom: 32,
+    color: "#111827",
   },
-  addButton: {
-    backgroundColor: "#2563EB", // blue
-    paddingVertical: 12,
+  primaryButton: {
+    flexDirection: "row",
+    backgroundColor: "#2563EB",
+    paddingVertical: 14,
     paddingHorizontal: 24,
-    marginBottom:16,
     borderRadius: 12,
+    alignItems: "center",
+    marginBottom: 16,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 2, // for Android
+    elevation: 3,
   },
-  addButtonText: {
+  grayButton: {
+    flexDirection: "row",
+    backgroundColor: "#4B5563",
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    marginBottom: 16,
+    elevation: 2,
+  },
+  purpleButton: {
+    flexDirection: "row",
+    backgroundColor: "#7C3AED",
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    marginBottom: 16,
+    elevation: 2,
+  },
+  buttonText: {
     color: "#FFFFFF",
     fontSize: 16,
-    fontWeight: "500",
+    fontWeight: "600",
   },
-  requestHistoryButton: {
-    backgroundColor: "#4B5563", // gray
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    marginBottom: 12,
+  icon: {
+    marginRight: 10,
   },
-  requestHistoryText: {
-    color: "#FFFFFF",
+  loadingText: {
+    marginTop: 10,
     fontSize: 16,
-    fontWeight: "500",
+    color: "#6B7280",
   },
 });

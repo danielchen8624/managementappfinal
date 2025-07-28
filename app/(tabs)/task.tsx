@@ -3,7 +3,7 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  ScrollView,
+  FlatList,
   SafeAreaView,
   ActivityIndicator,
 } from "react-native";
@@ -16,44 +16,19 @@ import { useUser } from "../UserContext";
 function TaskPage() {
   const [currentTasks, setCurrentTasks] = useState<any[]>([]);
   const [currentProjects, setCurrentProjects] = useState<any[]>([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showTasks, setShowTasks] = useState(true);
+  const [showProjects, setShowProjects] = useState(true);
 
   const { role, loading } = useUser();
-  if (loading) {
-    return (
-      <View
-        style={[
-          styles.container,
-          { justifyContent: "center", alignItems: "center" },
-        ]}
-      >
-        <ActivityIndicator />
-        <Text>Loading...</Text>
-      </View>
-    );
-  }
-
-   type Task = {
-    id: string;
-    priority?: number;
-    roomNumber?: string;
-    status: string;
-    taskType: string;
-    description: string;
-    createdBy: string;
-    createdAt?: {
-      toDate: () => Date;
-    };
-  };
 
   useEffect(() => {
-    const tasksQ = query(
-      collection(db, "tasks"),
-      where("status", "==", "pending")
-    );
-    const projectsQ = query(
-      collection(db, "projects"),
-      where("status", "==", "pending")
-    );
+    fetchData();
+  }, []);
+
+  const fetchData = () => {
+    const tasksQ = query(collection(db, "tasks"), where("status", "==", "pending"));
+    const projectsQ = query(collection(db, "projects"), where("status", "==", "pending"));
 
     const unsubTasks = onSnapshot(tasksQ, (snap) => {
       const items: any[] = [];
@@ -73,30 +48,52 @@ function TaskPage() {
       unsubTasks();
       unsubProjects();
     };
-  }, []);
+  };
 
-  if (role === "customer") {
-    return null;
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    fetchData();
+    setTimeout(() => setIsRefreshing(false), 800);
+  };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
+        <ActivityIndicator />
+        <Text>Loading...</Text>
+      </View>
+    );
   }
 
-  const openScreen = (task: Task) => {
+  if (role === "customer") return null;
+
+  const openScreen = (item: any) => {
     router.push({
       pathname: "/taskClicked",
       params: {
-        taskId: task.id,
-        taskType: task.taskType,
-        taskDescription: task.description,
-        taskRoomNumber: task.roomNumber,
-        taskPriority: task.priority,
-        taskStatus: task.status,
-        taskCreatedBy: task.createdBy,
-        taskCreatedAt: task.createdAt?.toDate().toLocaleString(),
+        taskId: item.id,
+        taskType: item.taskType,
+        taskDescription: item.description,
+        taskRoomNumber: item.roomNumber,
+        taskPriority: item.priority,
+        taskStatus: item.status,
+        taskCreatedBy: item.createdBy,
+        taskCreatedAt: item.createdAt?.toDate().toLocaleString(),
       },
     });
   };
 
+  const renderCard = (item: any) => (
+    <TouchableOpacity key={item.id} onPress={() => openScreen(item)} style={styles.taskCard}>
+      <Text style={styles.taskTitle}>Type: {item.taskType}</Text>
+      <Text style={styles.taskText}>Room: {item.roomNumber || "N/A"}</Text>
+      <Text style={styles.taskText}>Priority: {item.priority ?? "Unassigned"}</Text>
+      <Text style={styles.taskText}>Date: {item.createdAt?.toDate().toLocaleString()}</Text>
+    </TouchableOpacity>
+  );
+
   const openHistory = () => {
-    router.push({ pathname: "/completedTasks" });
+    router.push("/completedTasks");
   };
 
   return (
@@ -105,60 +102,40 @@ function TaskPage() {
         <Text style={styles.historyButtonText}>Task History</Text>
       </TouchableOpacity>
 
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
-         <View style={styles.header}>
-          <Text style={styles.headerText}>Tasks ▼</Text>
-        </View>
-        {currentTasks.length === 0 ? (
-          <Text style={styles.emptyText}>No pending tasks available.</Text>
-        ) : (
-          currentTasks.map((task) => (
-            <TouchableOpacity
-              key={task.id}
-              onPress={() => openScreen(task)}
-              style={styles.taskCard}
-            >
-              <Text style={styles.taskTitle}>Type: {task.taskType}</Text>
-              <Text style={styles.taskText}>
-                Room: {task.roomNumber || "N/A"}
-              </Text>
-              <Text style={styles.taskText}>
-                Priority: {task.priority ?? "Unassigned"}
-              </Text>
-              <Text style={styles.taskText}>
-                Date: {task.createdAt?.toDate().toLocaleString()}
-              </Text>
+      <FlatList
+        data={[]} // required, but we're using ListHeaderComponent instead
+        renderItem={() => null} // prevents renderItem error
+        keyExtractor={() => Math.random().toString()} // dummy key
+        contentContainerStyle={styles.scrollContainer}
+        refreshing={isRefreshing}
+        onRefresh={handleRefresh}
+        ListHeaderComponent={
+          <>
+            {/* TASKS */}
+            <TouchableOpacity onPress={() => setShowTasks(!showTasks)} style={styles.header}>
+              <Text style={styles.headerText}>Tasks {showTasks ? "▲" : "▼"}</Text>
             </TouchableOpacity>
-          ))
-        )}
+            {showTasks &&
+              (currentTasks.length === 0 ? (
+                <Text style={styles.emptyText}>No pending tasks available.</Text>
+              ) : (
+                currentTasks.map((item) => renderCard(item))
+              ))}
 
-        <View style={styles.header}>
-          <Text style={styles.headerText}>Projects ▼</Text>
-        </View>
-
-        {currentProjects.length === 0 ? (
-          <Text style={styles.emptyText}>No pending projects available.</Text>
-        ) : (
-          currentProjects.map((project) => (
-            <TouchableOpacity
-              key={project.id}
-              onPress={() => openScreen(project)}
-              style={styles.taskCard}
-            >
-              <Text style={styles.taskTitle}>Type: {project.taskType}</Text>
-              <Text style={styles.taskText}>
-                Room: {project.roomNumber || "N/A"}
-              </Text>
-              <Text style={styles.taskText}>
-                Priority: {project.priority ?? "Unassigned"}
-              </Text>
-              <Text style={styles.taskText}>
-                Date: {project.createdAt?.toDate().toLocaleString()}
-              </Text>
+            {/* PROJECTS */}
+            <TouchableOpacity onPress={() => setShowProjects(!showProjects)} style={styles.header}>
+              <Text style={styles.headerText}>Projects {showProjects ? "▲" : "▼"}</Text>
             </TouchableOpacity>
-          ))
-        )}
-      </ScrollView>
+            {showProjects &&
+              (currentProjects.length === 0 ? (
+                <Text style={styles.emptyText}>No pending projects available.</Text>
+              ) : (
+                currentProjects.map((item) => renderCard(item))
+              ))}
+          </>
+        }
+        showsVerticalScrollIndicator={false}
+      />
     </SafeAreaView>
   );
 }
@@ -239,6 +216,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: "center",
     marginTop: 32,
+    marginBottom: 32,
     color: "#999",
   },
 });
