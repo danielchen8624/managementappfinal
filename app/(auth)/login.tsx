@@ -26,12 +26,16 @@ import {
   query,
   where,
 } from "firebase/firestore";
+import { useTheme } from "../ThemeContext"; 
 
 export default function LoginScreen() {
   const params = useLocalSearchParams();
   const userType = params.role as string;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const { theme, toggleTheme } = useTheme();
+
+  const isDark = theme === "dark";
 
   const handleSignUp = async () => {
     console.log(userType);
@@ -43,7 +47,6 @@ export default function LoginScreen() {
       );
       const user = userCredential.user;
 
-      // Add user to Firestore
       await setDoc(doc(db, "users", user.uid), {
         userID: user.uid,
         role: userType,
@@ -64,7 +67,6 @@ export default function LoginScreen() {
     }
 
     try {
-      // Step 1: Query Firestore by email
       const q = query(collection(db, "users"), where("email", "==", email));
       const querySnapshot = await getDocs(q);
 
@@ -76,7 +78,6 @@ export default function LoginScreen() {
       const userDoc = querySnapshot.docs[0];
       const firestoreRole = userDoc.data().role;
 
-      // Step 2: Check role match
       if (firestoreRole !== userType) {
         Alert.alert(
           "Access Denied",
@@ -85,7 +86,6 @@ export default function LoginScreen() {
         return;
       }
 
-      // Step 3: Role is valid, proceed to sign in
       await signInWithEmailAndPassword(auth, email, password);
       Alert.alert("Success!", `Logged in as ${firestoreRole}.`);
     } catch (error: any) {
@@ -93,31 +93,46 @@ export default function LoginScreen() {
     }
   };
 
-  // KeyboardAvoidingView moves components up away from keyboard if it is overlapped
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#F9FAFB" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: isDark ? "#111827" : "#F9FAFB" }}>
       <KeyboardAvoidingView style={styles.container} behavior="padding">
         <ScrollView contentContainerStyle={styles.scroll}>
-          <View style={styles.card}>
-            <Text style={styles.title}>Login</Text>
+          <View style={[styles.card, { backgroundColor: isDark ? "#1e1e1e" : "#FFFFFF" }]}>
+            <Text style={[styles.title, { color: isDark ? "#fff" : "#111" }]}>Login</Text>
 
-            <Text style={styles.label}>Email</Text>
+            <Text style={[styles.label, { color: isDark ? "#ccc" : "#333" }]}>Email</Text>
             <TextInput
               placeholder="Email"
+              placeholderTextColor={isDark ? "#aaa" : "#999"}
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
               keyboardType="email-address"
-              style={styles.input}
+              style={[
+                styles.input,
+                {
+                  backgroundColor: isDark ? "#2c2c2c" : "#fff",
+                  borderColor: isDark ? "#555" : "#ccc",
+                  color: isDark ? "#eee" : "#000",
+                },
+              ]}
             />
 
-            <Text style={styles.label}>Password</Text>
+            <Text style={[styles.label, { color: isDark ? "#ccc" : "#333" }]}>Password</Text>
             <TextInput
               placeholder="Password"
+              placeholderTextColor={isDark ? "#aaa" : "#999"}
               value={password}
               onChangeText={setPassword}
               secureTextEntry
-              style={styles.input}
+              style={[
+                styles.input,
+                {
+                  backgroundColor: isDark ? "#2c2c2c" : "#fff",
+                  borderColor: isDark ? "#555" : "#ccc",
+                  color: isDark ? "#eee" : "#000",
+                },
+              ]}
             />
 
             <TouchableOpacity style={styles.button} onPress={handleSignUp}>
@@ -130,13 +145,16 @@ export default function LoginScreen() {
             >
               <Text style={styles.buttonText}>Login</Text>
             </TouchableOpacity>
+
           </View>
 
           <TouchableOpacity
-            onPress={() => router.replace("../selectLogin")}
+            onPress={() => router.replace("/selectLogin")}
             style={styles.backTextContainer}
           >
-            <Text style={styles.backText}>Back to Select Login</Text>
+            <Text style={[styles.backText, { color: isDark ? "#93c5fd" : "#007AFF" }]}>
+              Back to Select Login
+            </Text>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -147,7 +165,6 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
   },
   scroll: {
     padding: 20,
@@ -160,7 +177,6 @@ const styles = StyleSheet.create({
   card: {
     width: "100%",
     height: "100%",
-    backgroundColor: "#FFFFFF",
     borderRadius: 16,
     padding: 24,
     shadowColor: "#000",
@@ -174,18 +190,14 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     textAlign: "center",
     marginBottom: 24,
-    color: "#111",
   },
   label: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#333",
     marginBottom: 6,
   },
   input: {
-    backgroundColor: "#fff",
     borderWidth: 1,
-    borderColor: "#ccc",
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderRadius: 12,
@@ -201,7 +213,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   secondaryButton: {
-    backgroundColor: "#4CAF50", // optional green alternative
+    backgroundColor: "#4CAF50",
   },
   buttonText: {
     color: "white",
@@ -213,7 +225,6 @@ const styles = StyleSheet.create({
   },
   backText: {
     fontSize: 14,
-    color: "#007AFF",
     textDecorationLine: "underline",
     textAlign: "center",
   },

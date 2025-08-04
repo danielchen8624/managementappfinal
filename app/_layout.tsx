@@ -5,7 +5,7 @@ import { auth } from "../firebaseConfig";
 import { router } from "expo-router";
 import { User } from "firebase/auth";
 import { UserProvider } from "./UserContext";
-
+import {ThemeProvider} from "./ThemeContext";
 export default function RootLayout() {
   const [user, setUser] = useState<User | null>(null);
 
@@ -25,10 +25,12 @@ export default function RootLayout() {
 
   return (
     <UserProvider>
+      <ThemeProvider>
     <Stack screenOptions={{headerShown: false}}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />;
     </Stack>
+    </ThemeProvider>
     </UserProvider>
   );
 }

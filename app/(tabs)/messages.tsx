@@ -17,6 +17,7 @@ import {
   orderBy,
   Timestamp,
 } from "firebase/firestore";
+import { useTheme } from "../ThemeContext";
 
 type Message = {
   id: string;
@@ -27,6 +28,10 @@ type Message = {
 };
 
 function MessagePage() {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+  const styles = getStyles(isDark);
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -66,21 +71,18 @@ function MessagePage() {
       .replace(",", " at");
   };
 
-  const renderItem = ({ item }: { item: Message }) => {
-    return (
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.title}>{item.title || "(No title)"}</Text>
-          <Text style={styles.date}>{formatDate(item.createdAt)}</Text>
-        </View>
-        <Text style={styles.content}>{item.content}</Text>
+  const renderItem = ({ item }: { item: Message }) => (
+    <View style={styles.card}>
+      <View style={styles.cardHeader}>
+        <Text style={styles.title}>{item.title || "(No title)"}</Text>
+        <Text style={styles.date}>{formatDate(item.createdAt)}</Text>
       </View>
-    );
-  };
+      <Text style={styles.content}>{item.content}</Text>
+    </View>
+  );
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Messages</Text>
         <TouchableOpacity
@@ -91,7 +93,6 @@ function MessagePage() {
         </TouchableOpacity>
       </View>
 
-      {/* Content */}
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator />
@@ -117,94 +118,95 @@ function MessagePage() {
 
 export default MessagePage;
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F9FAFB",
-    paddingTop: 20,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    marginBottom: 20,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#111827",
-  },
-  addButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#2563EB",
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  addButtonText: {
-    fontSize: 28,
-    color: "#fff",
-    marginTop: -2,
-    fontWeight: "500",
-  },
-  listContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 24,
-  },
-  center: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  loadingText: {
-    marginTop: 8,
-    color: "#444",
-  },
-  empty: {
-    fontSize: 16,
-    color: "#999",
-  },
-  card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 6,
-  },
-  title: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#111827",
-    flexShrink: 1,
-  },
-  date: {
-    fontSize: 12,
-    color: "#6B7280",
-    marginLeft: 8,
-  },
-  content: {
-    fontSize: 14,
-    color: "#374151",
-    lineHeight: 20,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: "#E5E7EB",
-    marginVertical: 8,
-  },
-});
+const getStyles = (isDark: boolean) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: isDark ? "#1E293B" : "#F9FAFB",
+      paddingTop: 20,
+    },
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 20,
+      marginBottom: 20,
+    },
+    headerTitle: {
+      fontSize: 24,
+      fontWeight: "bold",
+      color: isDark ? "#E2E8F0" : "#111827",
+    },
+    addButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: "#2563EB",
+      alignItems: "center",
+      justifyContent: "center",
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.15,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    addButtonText: {
+      fontSize: 28,
+      color: "#fff",
+      marginTop: -2,
+      fontWeight: "500",
+    },
+    listContent: {
+      paddingHorizontal: 20,
+      paddingBottom: 24,
+    },
+    center: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    loadingText: {
+      marginTop: 8,
+      color: isDark ? "#CBD5E1" : "#444",
+    },
+    empty: {
+      fontSize: 16,
+      color: isDark ? "#94A3B8" : "#999",
+    },
+    card: {
+      backgroundColor: isDark ? "#334155" : "#FFFFFF",
+      borderRadius: 12,
+      padding: 16,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.08,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    cardHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      marginBottom: 6,
+    },
+    title: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: isDark ? "#E5E7EB" : "#111827",
+      flexShrink: 1,
+    },
+    date: {
+      fontSize: 12,
+      color: isDark ? "#9CA3AF" : "#6B7280",
+      marginLeft: 8,
+    },
+    content: {
+      fontSize: 14,
+      color: isDark ? "#CBD5E1" : "#374151",
+      lineHeight: 20,
+    },
+    divider: {
+      height: 1,
+      backgroundColor: isDark ? "#475569" : "#E5E7EB",
+      marginVertical: 8,
+    },
+  });

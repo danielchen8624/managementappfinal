@@ -3,8 +3,12 @@ import React from "react";
 import { signOut } from "firebase/auth";
 import { auth } from "@/firebaseConfig";
 import { router } from "expo-router";
+import { useTheme } from "../ThemeContext";
 
 function ProfileScreen() {
+  const { theme, toggleTheme } = useTheme();
+  const isDark = theme === "dark";
+
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -20,64 +24,77 @@ function ProfileScreen() {
     }
   };
 
+  const themedStyles = getStyles(isDark);
+
   return (
-    <View style={styles.container}>
-        <Text style={styles.header}>Profile</Text>
-        <TouchableOpacity style={styles.button} onPress={editProfile}>
-          <Text style={styles.buttonText}>Edit Profile</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.button, styles.logout]} onPress={handleLogout}>
-          <Text style={styles.buttonText}>Sign Out</Text>
-        </TouchableOpacity>
+    <View style={themedStyles.container}>
+      <Text style={themedStyles.header}>Profile</Text>
+
+      <TouchableOpacity style={themedStyles.button} onPress={editProfile}>
+        <Text style={themedStyles.buttonText}>Edit Profile</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[themedStyles.button, themedStyles.logout]}
+        onPress={handleLogout}
+      >
+        <Text style={themedStyles.buttonText}>Sign Out</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[
+          themedStyles.button,
+          { backgroundColor: isDark ? "#444" : "#DDD" },
+        ]}
+        onPress={() => {
+          toggleTheme();
+          setTimeout(() => console.log("theme is now", theme), 100); // Optional, for debug
+        }}
+      >
+        <Text
+          style={[themedStyles.buttonText, { color: isDark ? "#FFF" : "#000" }]}
+        >
+          Toggle Theme
+        </Text>
+      </TouchableOpacity>
     </View>
   );
 }
 
 export default ProfileScreen;
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F9FAFB",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  card: {
-    flex: .5,
-    width: "100%",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 8,
-    alignItems: "center",
-  },
-  header: {
-    fontSize: 28,
-    fontWeight: "700",
-    marginBottom: 24,
-    color: "#333",
-  },
-  button: {
-    backgroundColor: "#007AFF",
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    marginTop: 12,
-    width: "100%",
-    alignItems: "center",
-    elevation: 3,
-  },
-  logout: {
-    backgroundColor: "#f44336",
-  },
-  buttonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-});
+// Dynamically generate styles based on theme
+const getStyles = (isDark: boolean) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: isDark ? "#111827" : "#F9FAFB",
+      justifyContent: "center",
+      alignItems: "center",
+      padding: 20,
+    },
+    header: {
+      fontSize: 28,
+      fontWeight: "700",
+      marginBottom: 24,
+      color: isDark ? "#E5E7EB" : "#333",
+    },
+    button: {
+      backgroundColor: isDark ? "#2563EB" : "#007AFF",
+      paddingVertical: 14,
+      paddingHorizontal: 24,
+      borderRadius: 12,
+      marginTop: 12,
+      width: "100%",
+      alignItems: "center",
+      elevation: 3,
+    },
+    logout: {
+      backgroundColor: isDark ? "#B91C1C" : "#f44336",
+    },
+    buttonText: {
+      color: "#FFFFFF",
+      fontSize: 16,
+      fontWeight: "600",
+    },
+  });

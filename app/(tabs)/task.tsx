@@ -12,6 +12,7 @@ import { db } from "../../firebaseConfig";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import React, { useState, useEffect } from "react";
 import { useUser } from "../UserContext";
+import { useTheme } from "../ThemeContext";
 
 function TaskPage() {
   const [currentTasks, setCurrentTasks] = useState<any[]>([]);
@@ -20,6 +21,9 @@ function TaskPage() {
   const [showTasks, setShowTasks] = useState(true);
   const [showProjects, setShowProjects] = useState(true);
 
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+  const styles = getStyles(isDark);
   const { role, loading } = useUser();
 
   useEffect(() => {
@@ -60,7 +64,7 @@ function TaskPage() {
     return (
       <View style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
         <ActivityIndicator />
-        <Text>Loading...</Text>
+        <Text style={styles.text}>Loading...</Text>
       </View>
     );
   }
@@ -103,15 +107,14 @@ function TaskPage() {
       </TouchableOpacity>
 
       <FlatList
-        data={[]} // required, but we're using ListHeaderComponent instead
-        renderItem={() => null} // prevents renderItem error
-        keyExtractor={() => Math.random().toString()} // dummy key
+        data={[]} // dummy to prevent errors
+        renderItem={() => null}
+        keyExtractor={() => Math.random().toString()}
         contentContainerStyle={styles.scrollContainer}
         refreshing={isRefreshing}
         onRefresh={handleRefresh}
         ListHeaderComponent={
           <>
-            {/* TASKS */}
             <TouchableOpacity onPress={() => setShowTasks(!showTasks)} style={styles.header}>
               <Text style={styles.headerText}>Tasks {showTasks ? "▲" : "▼"}</Text>
             </TouchableOpacity>
@@ -122,7 +125,6 @@ function TaskPage() {
                 currentTasks.map((item) => renderCard(item))
               ))}
 
-            {/* PROJECTS */}
             <TouchableOpacity onPress={() => setShowProjects(!showProjects)} style={styles.header}>
               <Text style={styles.headerText}>Projects {showProjects ? "▲" : "▼"}</Text>
             </TouchableOpacity>
@@ -142,81 +144,86 @@ function TaskPage() {
 
 export default TaskPage;
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F9FAFB",
-  },
-  scrollContainer: {
-    padding: 16,
-    paddingBottom: 40,
-  },
-  header: {
-    width: "100%",
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    marginBottom: 5,
-    backgroundColor: "#2563EB",
-    alignItems: "center",
-    justifyContent: "center",
-    borderBottomLeftRadius: 16,
-    borderBottomRightRadius: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  headerText: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#FFFFFF",
-    letterSpacing: 0.5,
-  },
-  historyButton: {
-    backgroundColor: "#007AFF",
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    alignSelf: "center",
-    marginVertical: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  historyButtonText: {
-    color: "white",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  taskCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 6,
-  },
-  taskTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 4,
-  },
-  taskText: {
-    fontSize: 14,
-    color: "#444",
-    marginBottom: 2,
-  },
-  emptyText: {
-    fontSize: 16,
-    textAlign: "center",
-    marginTop: 32,
-    marginBottom: 32,
-    color: "#999",
-  },
-});
+const getStyles = (isDark: boolean) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: isDark ? "#1E293B" : "#F9FAFB",
+    },
+    scrollContainer: {
+      padding: 16,
+      paddingBottom: 40,
+    },
+    header: {
+      width: "100%",
+      paddingVertical: 16,
+      paddingHorizontal: 20,
+      marginBottom: 5,
+      backgroundColor: isDark ? "#3B82F6" : "#2563EB",
+      alignItems: "center",
+      justifyContent: "center",
+      borderBottomLeftRadius: 16,
+      borderBottomRightRadius: 16,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.2,
+      shadowRadius: 4,
+      elevation: 4,
+    },
+    headerText: {
+      fontSize: 22,
+      fontWeight: "700",
+      color: "#FFFFFF",
+      letterSpacing: 0.5,
+    },
+    historyButton: {
+      backgroundColor: isDark ? "#1D4ED8" : "#007AFF",
+      paddingVertical: 14,
+      paddingHorizontal: 24,
+      borderRadius: 12,
+      alignSelf: "center",
+      marginVertical: 16,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.2,
+      shadowRadius: 4,
+      elevation: 4,
+    },
+    historyButtonText: {
+      color: "white",
+      fontSize: 16,
+      fontWeight: "600",
+    },
+    taskCard: {
+      backgroundColor: isDark ? "#334155" : "#FFFFFF",
+      borderRadius: 16,
+      padding: 20,
+      marginBottom: 16,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.1,
+      shadowRadius: 6,
+      elevation: 6,
+    },
+    taskTitle: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: isDark ? "#E2E8F0" : "#111",
+      marginBottom: 4,
+    },
+    taskText: {
+      fontSize: 14,
+      color: isDark ? "#CBD5E1" : "#444",
+      marginBottom: 2,
+    },
+    emptyText: {
+      fontSize: 16,
+      textAlign: "center",
+      marginTop: 32,
+      marginBottom: 32,
+      color: isDark ? "#9CA3AF" : "#999",
+    },
+    text: {
+      color: isDark ? "#E5E7EB" : "#111",
+    },
+  });

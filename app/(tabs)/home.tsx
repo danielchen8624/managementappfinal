@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  Animated,
 } from "react-native";
 import TaskModal from "../(components)/taskModal";
 import ProjectModal from "../(components)/projectModal";
@@ -13,12 +12,16 @@ import CurrentTaskModal from "../(components)/currentTask";
 import { router } from "expo-router";
 import { useUser } from "../UserContext";
 import { Ionicons, MaterialIcons, FontAwesome5 } from "@expo/vector-icons";
+import { useTheme } from "../ThemeContext";
 
 function HomePage() {
   const [modalVisible, setModalVisible] = useState(false);
   const [projectModal, setProjectModal] = useState(false);
   const [currentTaskModal, setCurrentTaskModal] = useState(false);
   const { role, loading } = useUser();
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+  const styles = getStyles(isDark);
 
   if (loading) {
     return (
@@ -87,65 +90,66 @@ function HomePage() {
 
 export default HomePage;
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F9FAFB",
-    paddingHorizontal: 24,
-    paddingTop: 80,
-    alignItems: "center",
-  },
-  welcomeText: {
-    fontSize: 24,
-    fontWeight: "700",
-    marginBottom: 32,
-    color: "#111827",
-  },
-  primaryButton: {
-    flexDirection: "row",
-    backgroundColor: "#2563EB",
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    alignItems: "center",
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  grayButton: {
-    flexDirection: "row",
-    backgroundColor: "#4B5563",
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    alignItems: "center",
-    marginBottom: 16,
-    elevation: 2,
-  },
-  purpleButton: {
-    flexDirection: "row",
-    backgroundColor: "#7C3AED",
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    alignItems: "center",
-    marginBottom: 16,
-    elevation: 2,
-  },
-  buttonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  icon: {
-    marginRight: 10,
-  },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 16,
-    color: "#6B7280",
-  },
-});
+const getStyles = (isDark: boolean) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: isDark ? "#111827" : "#F9FAFB",
+      paddingHorizontal: 24,
+      paddingTop: 80,
+      alignItems: "center",
+    },
+    welcomeText: {
+      fontSize: 24,
+      fontWeight: "700",
+      marginBottom: 32,
+      color: isDark ? "#E5E7EB" : "#111827",
+    },
+    primaryButton: {
+      flexDirection: "row",
+      backgroundColor: "#2563EB",
+      paddingVertical: 14,
+      paddingHorizontal: 24,
+      borderRadius: 12,
+      alignItems: "center",
+      marginBottom: 16,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    grayButton: {
+      flexDirection: "row",
+      backgroundColor: "#4B5563",
+      paddingVertical: 14,
+      paddingHorizontal: 24,
+      borderRadius: 12,
+      alignItems: "center",
+      marginBottom: 16,
+      elevation: 2,
+    },
+    purpleButton: {
+      flexDirection: "row",
+      backgroundColor: "#7C3AED",
+      paddingVertical: 14,
+      paddingHorizontal: 24,
+      borderRadius: 12,
+      alignItems: "center",
+      marginBottom: 16,
+      elevation: 2,
+    },
+    buttonText: {
+      color: "#FFFFFF",
+      fontSize: 16,
+      fontWeight: "600",
+    },
+    icon: {
+      marginRight: 10,
+    },
+    loadingText: {
+      marginTop: 10,
+      fontSize: 16,
+      color: isDark ? "#D1D5DB" : "#6B7280",
+    },
+  });

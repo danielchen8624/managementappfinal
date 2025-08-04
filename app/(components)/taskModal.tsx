@@ -11,6 +11,7 @@ import React, { useState } from "react";
 import { Dropdown } from "react-native-element-dropdown";
 import { db, auth } from "../../firebaseConfig";
 import { collection, addDoc } from "firebase/firestore";
+import { useTheme } from "../ThemeContext";
 
 const data = [
   { label: "Area of children", value: "Area of children", priority: 2 },
@@ -18,19 +19,31 @@ const data = [
   { label: "BBQ Area", value: "BBQ Area", priority: 2 },
   { label: "Bicycle area", value: "Bicycle area", priority: 3 },
   { label: "Billiard Room", value: "Billiard Room", priority: 2 },
-  { label: "Corridors & Staircase", value: "Corridors & Staircase", priority: 1 },
+  {
+    label: "Corridors & Staircase",
+    value: "Corridors & Staircase",
+    priority: 1,
+  },
   { label: "Dog Room", value: "Dog Room", priority: 2 },
   { label: "Doors", value: "Doors", priority: 3 },
   { label: "Electrical Room", value: "Electrical Room", priority: 3 },
   { label: "Elevators", value: "Elevators", priority: 2 },
-  { label: "Elevators (LD) - (HD)", value: "Elevators (LD) - (HD)", priority: 1 },
+  {
+    label: "Elevators (LD) - (HD)",
+    value: "Elevators (LD) - (HD)",
+    priority: 1,
+  },
   { label: "Enter Lobby", value: "Enter Lobby", priority: 1 },
   { label: "Exterior Ground", value: "Exterior Ground", priority: 2 },
   { label: "Fire Box", value: "Fire Box", priority: 3 },
   { label: "Fire Boxes", value: "Fire Boxes", priority: 1 },
   { label: "Game Room", value: "Game Room", priority: 2 },
   { label: "Garage Chute", value: "Garage Chute", priority: 1 },
-  { label: "General Vacuuming Carpet", value: "General Vacuuming Carpet", priority: 1 },
+  {
+    label: "General Vacuuming Carpet",
+    value: "General Vacuuming Carpet",
+    priority: 1,
+  },
   { label: "Guess Suite", value: "Guess Suite", priority: 3 },
   { label: "Gym & Yoga room", value: "Gym & Yoga room", priority: 2 },
   { label: "Hallway", value: "Hallway", priority: 2 },
@@ -40,13 +53,25 @@ const data = [
   { label: "Lockers Room", value: "Lockers Room", priority: 3 },
   { label: "Lounge Room", value: "Lounge Room", priority: 2 },
   { label: "Mail Boxes", value: "Mail Boxes", priority: 1 },
-  { label: "Maintenance of all floors", value: "Maintenance of all floors", priority: 2 },
+  {
+    label: "Maintenance of all floors",
+    value: "Maintenance of all floors",
+    priority: 2,
+  },
   { label: "Manager Office", value: "Manager Office", priority: 1 },
-  { label: "Men & Women Washroom & Sauna", value: "Men & Women Washroom & Sauna", priority: 1 },
+  {
+    label: "Men & Women Washroom & Sauna",
+    value: "Men & Women Washroom & Sauna",
+    priority: 1,
+  },
   { label: "Men's & Women's Gym", value: "Men's & Women's Gym", priority: 1 },
   { label: "Moving Room", value: "Moving Room", priority: 3 },
   { label: "Other", value: "Other", priority: 3 },
-  { label: "Parking Area (in-out side)", value: "Parking Area (in-out side)", priority: 1 },
+  {
+    label: "Parking Area (in-out side)",
+    value: "Parking Area (in-out side)",
+    priority: 1,
+  },
   { label: "Party Room", value: "Party Room", priority: 2 },
   { label: "Pool Area", value: "Pool Area", priority: 2 },
   { label: "Security Room", value: "Security Room", priority: 1 },
@@ -55,7 +80,11 @@ const data = [
   { label: "Staircase", value: "Staircase", priority: 3 },
   { label: "Telecom Room", value: "Telecom Room", priority: 3 },
   { label: "Waiting Room", value: "Waiting Room", priority: 1 },
-  { label: "Washroom (Men,Women & Security)", value: "Washroom (Men,Women & Security)", priority: 1 },
+  {
+    label: "Washroom (Men,Women & Security)",
+    value: "Washroom (Men,Women & Security)",
+    priority: 1,
+  },
   { label: "Windows & Mirrors", value: "Windows & Mirrors", priority: 1 },
 ];
 
@@ -69,13 +98,15 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
   const [taskDescription, setTaskDescription] = useState("");
   const [roomNumber, setRoomNumber] = useState("");
   const [priority, setPriority] = useState<number | null>(null);
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
 
   const handleSubmit = async () => {
     const currentUser = auth.currentUser;
-  if (!currentUser) {
-    Alert.alert("You must be logged in to submit a request.");
-    return;
-  }
+    if (!currentUser) {
+      Alert.alert("You must be logged in to submit a request.");
+      return;
+    }
     try {
       await addDoc(collection(db, "tasks"), {
         taskType,
@@ -85,7 +116,7 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
         status: "pending",
         createdBy: currentUser.uid,
         createdAt: new Date(),
-        assignedWorkers: null
+        assignedWorkers: null,
       });
       Alert.alert("Request Submitted!");
     } catch (error) {
@@ -102,13 +133,35 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
   return (
     <Modal animationType="slide" transparent={true} visible={visible}>
       <View style={styles.modalOverlay}>
-        <View style={styles.modalContainer}>
+        <View
+          style={[
+            styles.modalContainer,
+            { backgroundColor: isDark ? "#1E1E1E" : "#FFFFFF" },
+          ]}
+        >
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Text style={styles.closeButtonText}>×</Text>
+            <Text
+              style={[
+                styles.closeButtonText,
+                { color: isDark ? "#ccc" : "#888" },
+              ]}
+            >
+              ×
+            </Text>
           </TouchableOpacity>
 
           <Dropdown
-            style={styles.dropdown}
+            style={[
+              styles.dropdown,
+              {
+                borderColor: isDark ? "#555" : "#ccc",
+                backgroundColor: isDark ? "#2c2c2c" : "#fff",
+              },
+            ]}
+            placeholderStyle={{ color: isDark ? "#999" : "#999" }}
+            selectedTextStyle={{ color: isDark ? "#fff" : "#000" }}
+            itemTextStyle={{ color: isDark ? "#fff" : "#000" }} 
+            containerStyle={{ backgroundColor: isDark ? "#2a2a2a" : "#fff" }}
             data={data}
             labelField="label"
             valueField="value"
@@ -120,20 +173,40 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
             }}
           />
 
-          <Text style={styles.label}>Room Number</Text>
+          <Text style={[styles.label, { color: isDark ? "#eee" : "#333" }]}>
+            Room Number
+          </Text>
           <TextInput
             placeholder="Room #"
+            placeholderTextColor={isDark ? "#888" : "#aaa"}
             value={roomNumber}
             onChangeText={setRoomNumber}
-            style={styles.input}
+            style={[
+              styles.input,
+              {
+                backgroundColor: isDark ? "#2c2c2c" : "#fff",
+                color: isDark ? "#fff" : "#000",
+                borderColor: isDark ? "#555" : "#ccc",
+              },
+            ]}
           />
 
-          <Text style={styles.label}>Description</Text>
+          <Text style={[styles.label, { color: isDark ? "#eee" : "#333" }]}>
+            Description
+          </Text>
           <TextInput
             placeholder="Description"
+            placeholderTextColor={isDark ? "#888" : "#aaa"}
             value={taskDescription}
             onChangeText={setTaskDescription}
-            style={styles.input}
+            style={[
+              styles.input,
+              {
+                backgroundColor: isDark ? "#2c2c2c" : "#fff",
+                color: isDark ? "#fff" : "#000",
+                borderColor: isDark ? "#555" : "#ccc",
+              },
+            ]}
           />
 
           <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
@@ -150,13 +223,12 @@ export default TaskModal;
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.2)",
+    backgroundColor: "rgba(0,0,0,0.3)",
     justifyContent: "center",
     alignItems: "center",
   },
   modalContainer: {
     width: "85%",
-    backgroundColor: "#FFFFFF",
     borderRadius: 16,
     padding: 24,
     shadowColor: "#000",
@@ -171,11 +243,9 @@ const styles = StyleSheet.create({
   },
   closeButtonText: {
     fontSize: 24,
-    color: "#888",
   },
   dropdown: {
     borderWidth: 1,
-    borderColor: "#ccc",
     borderRadius: 10,
     padding: 12,
     marginBottom: 16,
@@ -183,12 +253,10 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#333",
     marginBottom: 6,
   },
   input: {
     borderWidth: 1,
-    borderColor: "#ccc",
     borderRadius: 10,
     padding: 12,
     marginBottom: 16,

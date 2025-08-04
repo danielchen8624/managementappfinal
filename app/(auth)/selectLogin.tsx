@@ -1,7 +1,11 @@
 import { Text, View, TouchableOpacity, StyleSheet, SafeAreaView } from "react-native";
 import { router } from "expo-router";
+import { useTheme } from "../ThemeContext"; // 👈 Import theme
 
 function SelectLogin() {
+  const { theme, toggleTheme } = useTheme(); // 👈 Use theme and toggle
+  const isDark = theme === "dark";
+
   const handleSelect = (role: string) => {
     router.replace({
       pathname: "../login",
@@ -10,9 +14,16 @@ function SelectLogin() {
   };
 
   return (
-    <SafeAreaView style = {{flex: 1, backgroundColor:"#F9FAFB"}}>
-    <View style={styles.container}>
-        <Text style={styles.title}>Select Login Method</Text>
+    <SafeAreaView style={{ flex: 1, backgroundColor: isDark ? "#111827" : "#F9FAFB" }}>
+      <View
+        style={[
+          styles.container,
+          { backgroundColor: isDark ? "#111827" : "#F9FAFB" },
+        ]}
+      >
+        <Text style={[styles.title, { color: isDark ? "#f9fafb" : "#111827" }]}>
+          Select Login Method
+        </Text>
 
         <TouchableOpacity style={styles.button} onPress={() => handleSelect("employee")}>
           <Text style={styles.buttonText}>👷 Login as Employee</Text>
@@ -25,6 +36,7 @@ function SelectLogin() {
         <TouchableOpacity style={styles.button} onPress={() => handleSelect("customer")}>
           <Text style={styles.buttonText}>🧍 Login as Customer</Text>
         </TouchableOpacity>
+
       </View>
     </SafeAreaView>
   );
@@ -35,17 +47,14 @@ export default SelectLogin;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
   },
- 
   title: {
     fontSize: 24,
     fontWeight: "700",
     marginBottom: 28,
-    color: "#111827",
     textAlign: "center",
   },
   button: {

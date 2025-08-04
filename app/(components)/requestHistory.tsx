@@ -21,6 +21,7 @@ import {
   doc,
 } from "firebase/firestore";
 import { router } from "expo-router";
+import { useTheme } from "../ThemeContext";
 
 type Request = {
   id: string;
@@ -33,6 +34,8 @@ type Request = {
 };
 
 function RequestHistory() {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
   const [requests, setRequests] = useState<Request[]>([]);
   const [editingRequest, setEditingRequest] = useState<Request | null>(null);
   const [editDescription, setEditDescription] = useState("");
@@ -46,7 +49,6 @@ function RequestHistory() {
     if (!userId) return;
 
     const q = query(collection(db, "tasks"), where("createdBy", "==", userId));
-
     try {
       const snapshot = await getDocs(q);
       const userRequests: Request[] = snapshot.docs.map((doc) => {
@@ -111,26 +113,43 @@ function RequestHistory() {
   const goBack = () => router.back();
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? "#121212" : "#F9FAFB" }]}>
       <TouchableOpacity onPress={goBack} style={styles.historyButton}>
         <Text style={styles.historyButtonText}>Back</Text>
       </TouchableOpacity>
 
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         {requests.length === 0 ? (
-          <Text style={styles.emptyText}>You haven’t submitted any requests yet.</Text>
+          <Text style={[styles.emptyText, { color: isDark ? "#aaa" : "#888" }]}>
+            You haven’t submitted any requests yet.
+          </Text>
         ) : (
           requests.map((item) => (
-            <View key={item.id} style={styles.taskCard}>
-              <Text style={styles.taskTitle}>Type: {item.type}</Text>
-              <Text style={styles.taskText}>Description: {item.description}</Text>
-              <Text style={styles.taskText}>Status: {item.status}</Text>
-              <Text style={styles.taskText}>
+            <View
+              key={item.id}
+              style={[
+                styles.taskCard,
+                {
+                  backgroundColor: isDark ? "#1e1e1e" : "#fff",
+                  shadowColor: isDark ? "#000" : "#ccc",
+                },
+              ]}
+            >
+              <Text style={[styles.taskTitle, { color: isDark ? "#fff" : "#000" }]}>
+                Type: {item.type}
+              </Text>
+              <Text style={[styles.taskText, { color: isDark ? "#ddd" : "#444" }]}>
+                Description: {item.description}
+              </Text>
+              <Text style={[styles.taskText, { color: isDark ? "#ccc" : "#444" }]}>
+                Status: {item.status}
+              </Text>
+              <Text style={[styles.taskText, { color: isDark ? "#bbb" : "#444" }]}>
                 Submitted: {item.createdAt?.toDate()?.toLocaleString() ?? "Unknown"}
               </Text>
               <View style={styles.cardActions}>
                 <TouchableOpacity onPress={() => handleEdit(item)} style={styles.actionButton}>
-                  <Text style={styles.actionText}>Edit</Text>
+                  <Text style={[styles.actionText, { color: "#007AFF" }]}>Edit</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.actionButton}>
                   <Text style={[styles.actionText, { color: "red" }]}>Delete</Text>
@@ -144,17 +163,33 @@ function RequestHistory() {
       {/* Edit Modal */}
       <Modal visible={!!editingRequest} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Edit Request</Text>
+          <View
+            style={[
+              styles.modalContent,
+              {
+                backgroundColor: isDark ? "#1e1e1e" : "white",
+              },
+            ]}
+          >
+            <Text style={[styles.modalTitle, { color: isDark ? "#fff" : "#000" }]}>
+              Edit Request
+            </Text>
             <TextInput
-              style={styles.modalInput}
+              style={[
+                styles.modalInput,
+                {
+                  backgroundColor: isDark ? "#333" : "#fff",
+                  color: isDark ? "#fff" : "#000",
+                  borderColor: isDark ? "#555" : "#ccc",
+                },
+              ]}
               value={editDescription}
               onChangeText={setEditDescription}
               multiline
             />
             <View style={styles.modalActions}>
               <TouchableOpacity onPress={() => setEditingRequest(null)}>
-                <Text>Cancel</Text>
+                <Text style={{ color: isDark ? "#aaa" : "#000" }}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={saveEdit}>
                 <Text style={{ color: "#007AFF" }}>Save</Text>
@@ -172,7 +207,6 @@ export default RequestHistory;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
   },
   scrollContainer: {
     padding: 16,
@@ -193,11 +227,9 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   taskCard: {
-    backgroundColor: "#FFFFFF",
     borderRadius: 16,
     padding: 20,
     marginBottom: 16,
-    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 6,
@@ -210,7 +242,6 @@ const styles = StyleSheet.create({
   },
   taskText: {
     fontSize: 14,
-    color: "#444",
     marginBottom: 2,
   },
   cardActions: {
@@ -224,13 +255,11 @@ const styles = StyleSheet.create({
   actionText: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#007AFF",
   },
   emptyText: {
     textAlign: "center",
     marginTop: 32,
     fontSize: 16,
-    color: "#888",
   },
   modalOverlay: {
     flex: 1,
@@ -239,7 +268,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   modalContent: {
-    backgroundColor: "white",
     padding: 24,
     borderRadius: 12,
     width: "80%",
@@ -251,7 +279,6 @@ const styles = StyleSheet.create({
   },
   modalInput: {
     borderWidth: 1,
-    borderColor: "#ccc",
     borderRadius: 8,
     padding: 12,
     minHeight: 60,

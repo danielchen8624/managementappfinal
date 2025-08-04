@@ -9,8 +9,12 @@ import {
 import { db, auth } from "../../firebaseConfig";
 import { router, useLocalSearchParams } from "expo-router";
 import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { useTheme } from "../ThemeContext"; 
 
 function ToDoScreen() {
+  const { theme } = useTheme(); 
+  const isDark = theme === "dark";
+
   const params = useLocalSearchParams();
   const taskDescription = params.taskDescription as string;
   const createdBy = params.createdBy as string;
@@ -56,32 +60,74 @@ function ToDoScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#F9FAFB" }}>
-      <View style={styles.container}>
-        <View style={styles.card}>
-          <Text style={styles.heading}>Task Details</Text>
-          <Text style={styles.label}>Description:</Text>
-          <Text style={styles.value}>{taskDescription}</Text>
+    <SafeAreaView
+      style={{
+        flex: 1,
+        backgroundColor: isDark ? "#121212" : "#F9FAFB",
+      }}
+    >
+      <View style={[styles.container, { backgroundColor: isDark ? "#121212" : "#F9FAFB" }]}>
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: isDark ? "#1E1E1E" : "#FFFFFF" },
+          ]}
+        >
+          <Text
+            style={[
+              styles.heading,
+              { color: isDark ? "#FFFFFF" : "#000000" },
+            ]}
+          >
+            Task Details
+          </Text>
 
-          <Text style={styles.label}>Created By:</Text>
-          <Text style={styles.value}>{createdBy}</Text>
+          <Text style={[styles.label, { color: isDark ? "#BBBBBB" : "#444" }]}>
+            Description:
+          </Text>
+          <Text style={[styles.value, { color: isDark ? "#E0E0E0" : "#333" }]}>
+            {taskDescription}
+          </Text>
 
-          <Text style={styles.question}>Do you want to accept this task?</Text>
+          <Text style={[styles.label, { color: isDark ? "#BBBBBB" : "#444" }]}>
+            Created By:
+          </Text>
+          <Text style={[styles.value, { color: isDark ? "#E0E0E0" : "#333" }]}>
+            {createdBy}
+          </Text>
+
+          <Text
+            style={[
+              styles.question,
+              { color: isDark ? "#CCCCCC" : "#000000" },
+            ]}
+          >
+            Do you want to accept this task?
+          </Text>
 
           <View style={styles.buttonRow}>
             {taskStatus === "pending" ? (
               <>
-                <TouchableOpacity onPress={handleAccept} style={styles.acceptButton}>
+                <TouchableOpacity
+                  onPress={handleAccept}
+                  style={styles.acceptButton}
+                >
                   <Text style={styles.buttonText}>Yes</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => router.back()} style={styles.declineButton}>
+                <TouchableOpacity
+                  onPress={() => router.back()}
+                  style={styles.declineButton}
+                >
                   <Text style={styles.buttonText}>No</Text>
                 </TouchableOpacity>
               </>
             ) : (
-              <TouchableOpacity style={styles.acceptButton} onPress ={handleCompleteTask}>
-              <Text style={styles.buttonText}>I've Completed This Task</Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.acceptButton}
+                onPress={handleCompleteTask}
+              >
+                <Text style={styles.buttonText}>I've Completed This Task</Text>
+              </TouchableOpacity>
             )}
           </View>
         </View>
@@ -95,13 +141,11 @@ export default ToDoScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
     padding: 16,
     justifyContent: "center",
   },
   card: {
     flex: 0.8,
-    backgroundColor: "#FFFFFF",
     borderRadius: 16,
     padding: 24,
     shadowColor: "#000",
@@ -119,12 +163,10 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#444",
     marginTop: 8,
   },
   value: {
     fontSize: 16,
-    color: "#333",
     marginBottom: 4,
   },
   question: {
