@@ -24,7 +24,12 @@ function HomePage() {
 
   if (loading) {
     return (
-      <View style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
+      <View
+        style={[
+          styles.container,
+          { justifyContent: "center", alignItems: "center" },
+        ]}
+      >
         <ActivityIndicator size="large" color="#2563EB" />
         <Text style={styles.loadingText}>Loading...</Text>
       </View>
@@ -35,9 +40,17 @@ function HomePage() {
     <View style={styles.container}>
       <Text style={styles.welcomeText}>Welcome{role ? `, ${role}` : ""}!</Text>
 
-      {(role === "manager") && (
-        <TouchableOpacity onPress={() => router.push("/requestHistory")} style={styles.grayButton}>
-          <MaterialIcons name="history" size={20} color="white" style={styles.icon} />
+      {role === "manager" && (
+        <TouchableOpacity
+          onPress={() => router.push("/requestHistory")}
+          style={styles.grayButton}
+        >
+          <MaterialIcons
+            name="history"
+            size={20}
+            color="white"
+            style={styles.icon}
+          />
           <Text style={styles.buttonText}>View Request History</Text>
         </TouchableOpacity>
       )}
@@ -48,30 +61,60 @@ function HomePage() {
             onPress={() => router.push("/manageEmployees")}
             style={styles.purpleButton}
           >
-            <Ionicons name="people" size={20} color="white" style={styles.icon} />
+            <Ionicons
+              name="people"
+              size={20}
+              color="white"
+              style={styles.icon}
+            />
             <Text style={styles.buttonText}>Manage Employees</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={() => setProjectModal(true)} style={styles.primaryButton}>
-            <FontAwesome5 name="project-diagram" size={18} color="white" style={styles.icon} />
+          <TouchableOpacity
+            onPress={() => setProjectModal(true)}
+            style={styles.primaryButton}
+          >
+            <FontAwesome5
+              name="project-diagram"
+              size={18}
+              color="white"
+              style={styles.icon}
+            />
             <Text style={styles.buttonText}>Add New Project</Text>
           </TouchableOpacity>
+          <Text>
+            view reports. like if an employee reports there being dog poo it will show here.
+          </Text>
         </>
       )}
 
       {role === "employee" && (
-        <TouchableOpacity onPress={() => setCurrentTaskModal(true)} style={styles.primaryButton}>
-          <MaterialIcons name="assignment" size={20} color="white" style={styles.icon} />
+        <TouchableOpacity
+          onPress={() => setCurrentTaskModal(true)}
+          style={styles.primaryButton}
+        >
+          <MaterialIcons
+            name="assignment"
+            size={20}
+            color="white"
+            style={styles.icon}
+          />
           <Text style={styles.buttonText}>View Current Task</Text>
         </TouchableOpacity>
       )}
 
       {/* Modals */}
       {projectModal && (
-        <ProjectModal visible={projectModal} onClose={() => setProjectModal(false)} />
+        <ProjectModal
+          visible={projectModal}
+          onClose={() => setProjectModal(false)}
+        />
       )}
       {currentTaskModal && (
-        <CurrentTaskModal visible={currentTaskModal} onClose={() => setCurrentTaskModal(false)} />
+        <CurrentTaskModal
+          visible={currentTaskModal}
+          onClose={() => setCurrentTaskModal(false)}
+        />
       )}
     </View>
   );
