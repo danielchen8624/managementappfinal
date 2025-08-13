@@ -15,10 +15,16 @@ import { useUser } from "../UserContext";
 import { useTheme } from "../ThemeContext";
 
 function TaskPage() {
-  const [currentTasks, setCurrentTasks] = useState<any[]>([]);
+  const [currentTaskP1, setCurrentTaskP1] = useState<any[]>([]);
+  const [currentTaskP2, setCurrentTaskP2] = useState<any[]>([]);
+  const [currentTaskP3, setCurrentTaskP3] = useState<any[]>([]);
   const [currentProjects, setCurrentProjects] = useState<any[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
   const [showTasks, setShowTasks] = useState(true);
+  const [showP1, setShowP1] = useState(true);
+  const [showP2, setShowP2] = useState(true);
+  const [showP3, setShowP3] = useState(true);
   const [showProjects, setShowProjects] = useState(true);
 
   const { theme } = useTheme();
@@ -27,18 +33,42 @@ function TaskPage() {
   const { role, loading } = useUser();
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    const tasksQ1 = query(
+      collection(db, "tasks"),
+      where("status", "==", "pending"),
+      where("priority", "==", 1)
+    );
+    const tasksQ2 = query(
+      collection(db, "tasks"),
+      where("status", "==", "pending"),
+      where("priority", "==", 2)
+    );
+    const tasksQ3 = query(
+      collection(db, "tasks"),
+      where("status", "==", "pending"),
+      where("priority", "==", 3)
+    );
+    const projectsQ = query(
+      collection(db, "projects"),
+      where("status", "==", "pending")
+    );
 
-  const fetchData = () => {
-    const tasksQ = query(collection(db, "tasks"), where("status", "==", "pending"));
-    const projectsQ = query(collection(db, "projects"), where("status", "==", "pending"));
-
-    const unsubTasks = onSnapshot(tasksQ, (snap) => {
+    const unsubTasks1 = onSnapshot(tasksQ1, (snap) => {
       const items: any[] = [];
       snap.forEach((d) => items.push({ id: d.id, ...d.data() }));
-      items.sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99));
-      setCurrentTasks(items);
+      setCurrentTaskP1(items);
+    });
+
+    const unsubTasks2 = onSnapshot(tasksQ2, (snap) => {
+      const items: any[] = [];
+      snap.forEach((d) => items.push({ id: d.id, ...d.data() }));
+      setCurrentTaskP2(items);
+    });
+
+    const unsubTasks3 = onSnapshot(tasksQ3, (snap) => {
+      const items: any[] = [];
+      snap.forEach((d) => items.push({ id: d.id, ...d.data() }));
+      setCurrentTaskP3(items);
     });
 
     const unsubProjects = onSnapshot(projectsQ, (snap) => {
@@ -49,27 +79,32 @@ function TaskPage() {
     });
 
     return () => {
-      unsubTasks();
+      unsubTasks1();
+      unsubTasks2();
+      unsubTasks3();
       unsubProjects();
     };
-  };
+  }, []);
 
   const handleRefresh = () => {
     setIsRefreshing(true);
-    fetchData();
-    setTimeout(() => setIsRefreshing(false), 800);
+    // onSnapshot keeps things live; spinner is cosmetic
+    setTimeout(() => setIsRefreshing(false), 500);
   };
 
   if (loading) {
     return (
-      <View style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
+      <View
+        style={[
+          styles.container,
+          { justifyContent: "center", alignItems: "center" },
+        ]}
+      >
         <ActivityIndicator />
         <Text style={styles.text}>Loading...</Text>
       </View>
     );
   }
-
-  if (role === "customer") return null;
 
   const openScreen = (item: any) => {
     router.push({
@@ -88,60 +123,139 @@ function TaskPage() {
   };
 
   const renderCard = (item: any) => (
-    <TouchableOpacity key={item.id} onPress={() => openScreen(item)} style={styles.taskCard}>
+    <TouchableOpacity
+      key={item.id}
+      onPress={() => openScreen(item)}
+      style={styles.taskCard}
+    >
       <Text style={styles.taskTitle}>Type: {item.taskType}</Text>
       <Text style={styles.taskText}>Room: {item.roomNumber || "N/A"}</Text>
-      <Text style={styles.taskText}>Priority: {item.priority ?? "Unassigned"}</Text>
-      <Text style={styles.taskText}>Date: {item.createdAt?.toDate().toLocaleString()}</Text>
+      <Text style={styles.taskText}>
+        Priority: {item.priority ?? "Unassigned"}
+      </Text>
+      <Text style={styles.taskText}>
+        Date: {item.createdAt?.toDate().toLocaleString()}
+      </Text>
     </TouchableOpacity>
   );
 
-  const openHistory = () => {
-    router.push("/completedTasks");
-  };
+  const openHistory = () => router.push("/completedTasks");
 
   return (
     <SafeAreaView style={styles.container}>
-      <TouchableOpacity onPress={openHistory} style={styles.historyButton}>
-        <Text style={styles.historyButtonText}>Task History</Text>
-      </TouchableOpacity>
+      {role === "manager" ? (
+        <>
+          <TouchableOpacity onPress={openHistory} style={styles.historyButton}>
+            <Text style={styles.historyButtonText}>Task History</Text>
+          </TouchableOpacity>
 
-      <FlatList
-        data={[]} // dummy to prevent errors
-        renderItem={() => null}
-        keyExtractor={() => Math.random().toString()}
-        contentContainerStyle={styles.scrollContainer}
-        refreshing={isRefreshing}
-        onRefresh={handleRefresh}
-        ListHeaderComponent={
-          <>
-            <TouchableOpacity onPress={() => setShowTasks(!showTasks)} style={styles.header}>
-              <Text style={styles.headerText}>Tasks {showTasks ? "▲" : "▼"}</Text>
-            </TouchableOpacity>
-            {showTasks &&
-              (currentTasks.length === 0 ? (
-                <Text style={styles.emptyText}>No pending tasks available.</Text>
-              ) : (
-                currentTasks.map((item) => renderCard(item))
-              ))}
+          <FlatList
+            data={[]}
+            renderItem={() => null}
+            keyExtractor={() => Math.random().toString()}
+            contentContainerStyle={styles.scrollContainer}
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            ListHeaderComponent={
+              <>
+                {/* Tasks main dropdown */}
+                <TouchableOpacity
+                  onPress={() => setShowTasks(!showTasks)}
+                  style={styles.header}
+                >
+                  <Text style={styles.headerText}>
+                    Tasks {showTasks ? "▲" : "▼"}
+                  </Text>
+                </TouchableOpacity>
 
-            <TouchableOpacity onPress={() => setShowProjects(!showProjects)} style={styles.header}>
-              <Text style={styles.headerText}>Projects {showProjects ? "▲" : "▼"}</Text>
-            </TouchableOpacity>
-            {showProjects &&
-              (currentProjects.length === 0 ? (
-                <Text style={styles.emptyText}>No pending projects available.</Text>
-              ) : (
-                currentProjects.map((item) => renderCard(item))
-              ))}
-          </>
-        }
-        showsVerticalScrollIndicator={false}
-      />
+                {showTasks && (
+                  <View>
+                    {/* Priority 1 */}
+                    <TouchableOpacity
+                      onPress={() => setShowP1(!showP1)}
+                      style={styles.subHeader}
+                    >
+                      <Text style={styles.subHeaderText}>
+                        Priority 1 {showP1 ? "▲" : "▼"}
+                      </Text>
+                    </TouchableOpacity>
+                    {showP1 &&
+                      (currentTaskP1.length === 0 ? (
+                        <Text style={styles.emptyText}>
+                          No pending tasks for Priority 1.
+                        </Text>
+                      ) : (
+                        currentTaskP1.map((item) => renderCard(item))
+                      ))}
+
+                    {/* Priority 2 */}
+                    <TouchableOpacity
+                      onPress={() => setShowP2(!showP2)}
+                      style={styles.subHeader}
+                    >
+                      <Text style={styles.subHeaderText}>
+                        Priority 2 {showP2 ? "▲" : "▼"}
+                      </Text>
+                    </TouchableOpacity>
+                    {showP2 &&
+                      (currentTaskP2.length === 0 ? (
+                        <Text style={styles.emptyText}>
+                          No pending tasks for Priority 2.
+                        </Text>
+                      ) : (
+                        currentTaskP2.map((item) => renderCard(item))
+                      ))}
+
+                    {/* Priority 3 */}
+                    <TouchableOpacity
+                      onPress={() => setShowP3(!showP3)}
+                      style={styles.subHeader}
+                    >
+                      <Text style={styles.subHeaderText}>
+                        Priority 3 {showP3 ? "▲" : "▼"}
+                      </Text>
+                    </TouchableOpacity>
+                    {showP3 &&
+                      (currentTaskP3.length === 0 ? (
+                        <Text style={styles.emptyText}>
+                          No pending tasks for Priority 3.
+                        </Text>
+                      ) : (
+                        currentTaskP3.map((item) => renderCard(item))
+                      ))}
+                  </View>
+                )}
+
+                {/* Projects dropdown */}
+                <TouchableOpacity
+                  onPress={() => setShowProjects(!showProjects)}
+                  style={styles.header}
+                >
+                  <Text style={styles.headerText}>
+                    Projects {showProjects ? "▲" : "▼"}
+                  </Text>
+                </TouchableOpacity>
+                {showProjects &&
+                  (currentProjects.length === 0 ? (
+                    <Text style={styles.emptyText}>
+                      No pending projects available.
+                    </Text>
+                  ) : (
+                    currentProjects.map((item) => renderCard(item))
+                  ))}
+              </>
+            }
+            showsVerticalScrollIndicator={false}
+          />
+        </>
+      ) : (
+        <View style={{ padding: 16 }}>
+          <Text style={styles.text}>Employee view goes here</Text>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
-
 export default TaskPage;
 
 const getStyles = (isDark: boolean) =>
@@ -158,12 +272,11 @@ const getStyles = (isDark: boolean) =>
       width: "100%",
       paddingVertical: 16,
       paddingHorizontal: 20,
-      marginBottom: 5,
+      marginBottom: 8,
       backgroundColor: isDark ? "#3B82F6" : "#2563EB",
       alignItems: "center",
       justifyContent: "center",
-      borderBottomLeftRadius: 16,
-      borderBottomRightRadius: 16,
+      borderRadius: 16,
       shadowColor: "#000",
       shadowOffset: { width: 0, height: 3 },
       shadowOpacity: 0.2,
@@ -175,6 +288,26 @@ const getStyles = (isDark: boolean) =>
       fontWeight: "700",
       color: "#FFFFFF",
       letterSpacing: 0.5,
+    },
+    subHeader: {
+      marginTop: 4,
+      marginBottom: 4,
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      backgroundColor: isDark ? "#1D4ED8" : "#3B82F6",
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.15,
+      shadowRadius: 3,
+      elevation: 3,
+    },
+    subHeaderText: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: "#FFFFFF",
     },
     historyButton: {
       backgroundColor: isDark ? "#1D4ED8" : "#007AFF",
@@ -219,9 +352,9 @@ const getStyles = (isDark: boolean) =>
     emptyText: {
       fontSize: 16,
       textAlign: "center",
-      marginTop: 32,
-      marginBottom: 32,
-      color: isDark ? "#9CA3AF" : "#999",
+      marginTop: 16,
+      marginBottom: 16,
+      color: isDark ? "#9CA3AF" : "#777",
     },
     text: {
       color: isDark ? "#E5E7EB" : "#111",

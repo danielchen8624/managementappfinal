@@ -13,83 +13,107 @@ import {
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  fetchSignInMethodsForEmail,
 } from "firebase/auth";
-import { auth } from "../../firebaseConfig";
+import { auth, db } from "../../firebaseConfig";
 import { router, useLocalSearchParams } from "expo-router";
-import { db } from "../../firebaseConfig";
-import {
-  collection,
-  addDoc,
-  doc,
-  setDoc,
-  getDocs,
-  query,
-  where,
-} from "firebase/firestore";
-import { useTheme } from "../ThemeContext"; 
+import { doc, setDoc, getDoc } from "firebase/firestore";
+import { useTheme } from "../ThemeContext";
 
 export default function LoginScreen() {
   const params = useLocalSearchParams();
-  const userType = params.role as string;
+  const userType = (params.role as string) || "worker";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const { theme, toggleTheme } = useTheme();
-
+  const { theme } = useTheme();
   const isDark = theme === "dark";
 
   const handleSignUp = async () => {
-    console.log(userType);
-    try {
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        email,
-        password
-      );
-      const user = userCredential.user;
+    const e = email.trim();
+    const p = password.trim();
+    if (!e || !p) {
+      Alert.alert("Error", "Please enter email and password.");
+      return;
+    }
 
-      await setDoc(doc(db, "users", user.uid), {
-        userID: user.uid,
-        role: userType,
-        email: email,
-        createdAt: new Date(),
-      });
+    try {
+      const methods = await fetchSignInMethodsForEmail(auth, e);
+      if (methods.length && !methods.includes("password")) {
+        Alert.alert(
+          "Email in use",
+          `This email is linked to ${methods.join(", ")}. Sign in with that provider, then set a password from your profile.`
+        );
+        return;
+      }
+
+      const { user } = await createUserWithEmailAndPassword(auth, e, p);
+
+      await setDoc(
+        doc(db, "users", user.uid),
+        {
+          userID: user.uid,
+          role: userType,
+          email: e,
+          createdAt: new Date(),
+        },
+        { merge: true }
+      );
 
       Alert.alert("Success!", "User registered.");
     } catch (error: any) {
-      Alert.alert("Error", error.message);
+      Alert.alert("Sign Up Failed", error.code || error.message);
     }
   };
 
   const handleLogin = async () => {
-    if (!email || !password) {
+    const e = email.trim();
+    const p = password.trim();
+    if (!e || !p) {
       Alert.alert("Error", "Please enter both email and password.");
       return;
     }
 
     try {
-      const q = query(collection(db, "users"), where("email", "==", email));
-      const querySnapshot = await getDocs(q);
+      const { user } = await signInWithEmailAndPassword(auth, e, p);
 
-      if (querySnapshot.empty) {
-        Alert.alert("Error", "No user found with this email.");
-        return;
-      }
-
-      const userDoc = querySnapshot.docs[0];
-      const firestoreRole = userDoc.data().role;
-
-      if (firestoreRole !== userType) {
-        Alert.alert(
-          "Access Denied",
-          `This user is registered as "${firestoreRole}", not "${userType}". Please use the correct login option.`
+      // get/create profile AFTER Auth
+      const ref = doc(db, "users", user.uid);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) {
+        await setDoc(
+          ref,
+          {
+            userID: user.uid,
+            email: e,
+            role: userType,
+            createdAt: new Date(),
+          },
+          { merge: true }
         );
-        return;
+      } else {
+        const firestoreRole = snap.data()?.role;
+        if (firestoreRole && firestoreRole !== userType) {
+          Alert.alert(
+            "Access Denied",
+            `This user is registered as "${firestoreRole}", not "${userType}". Use the correct login option.`
+          );
+          return;
+        }
       }
 
-      await signInWithEmailAndPassword(auth, email, password);
-      Alert.alert("Success!", `Logged in as ${firestoreRole}.`);
-    } catch (error: any) {
-      Alert.alert("Login Failed", error.message);
+      Alert.alert("Success!", "Logged in.");
+    } catch (err: any) {
+      if (err.code === "auth/user-not-found") {
+        const methods = await fetchSignInMethodsForEmail(auth, e);
+        if (methods.length && !methods.includes("password")) {
+          Alert.alert(
+            "Use other provider",
+            `This email is linked to ${methods.join(", ")}. Sign in with that provider.`
+          );
+          return;
+        }
+      }
+      Alert.alert("Login Failed", err.code || err.message);
     }
   };
 
@@ -145,13 +169,9 @@ export default function LoginScreen() {
             >
               <Text style={styles.buttonText}>Login</Text>
             </TouchableOpacity>
-
           </View>
 
-          <TouchableOpacity
-            onPress={() => router.replace("/selectLogin")}
-            style={styles.backTextContainer}
-          >
+          <TouchableOpacity onPress={() => router.replace("/selectLogin")} style={styles.backTextContainer}>
             <Text style={[styles.backText, { color: isDark ? "#93c5fd" : "#007AFF" }]}>
               Back to Select Login
             </Text>
@@ -163,9 +183,7 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   scroll: {
     padding: 20,
     paddingTop: 30,
@@ -212,17 +230,9 @@ const styles = StyleSheet.create({
     marginTop: 8,
     elevation: 3,
   },
-  secondaryButton: {
-    backgroundColor: "#4CAF50",
-  },
-  buttonText: {
-    color: "white",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  backTextContainer: {
-    marginTop: 20,
-  },
+  secondaryButton: { backgroundColor: "#4CAF50" },
+  buttonText: { color: "white", fontSize: 16, fontWeight: "600" },
+  backTextContainer: { marginTop: 20 },
   backText: {
     fontSize: 14,
     textDecorationLine: "underline",

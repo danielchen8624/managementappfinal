@@ -1,5 +1,6 @@
 // ThemeContext.tsx
-import React, { createContext, useContext, useState } from "react";
+import React, { createContext, useContext, useState, useEffect } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 type Theme = "light" | "dark";
 
@@ -16,8 +17,30 @@ const ThemeContext = createContext<ThemeContextType>({
 export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
   const [theme, setTheme] = useState<Theme>("light");
 
-  const toggleTheme = () => {
-    setTheme((prev) => (prev === "light" ? "dark" : "light"));
+  // Load theme from storage on first mount
+  useEffect(() => {
+    const loadTheme = async () => {
+      try {
+        const storedTheme = await AsyncStorage.getItem("theme");
+        if (storedTheme === "dark" || storedTheme === "light") {
+          setTheme(storedTheme);
+        }
+      } catch (e) {
+        console.error("Failed to load theme:", e);
+      }
+    };
+
+    loadTheme();
+  }, []);
+
+  const toggleTheme = async () => {
+    const newTheme = theme === "light" ? "dark" : "light";
+    try {
+      await AsyncStorage.setItem("theme", newTheme);
+      setTheme(newTheme);
+    } catch (e) {
+      console.error("Failed to save theme:", e);
+    }
   };
 
   return (

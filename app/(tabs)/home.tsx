@@ -6,9 +6,8 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from "react-native";
-import TaskModal from "../(components)/taskModal";
-import ProjectModal from "../(components)/projectModal";
-import CurrentTaskModal from "../(components)/currentTask";
+import ProjectModal from "../(components)/taskModal";
+import CurrentTaskModal from "../(components)/currentTaskModal";
 import { router } from "expo-router";
 import { useUser } from "../UserContext";
 import { Ionicons, MaterialIcons, FontAwesome5 } from "@expo/vector-icons";
@@ -36,7 +35,7 @@ function HomePage() {
     <View style={styles.container}>
       <Text style={styles.welcomeText}>Welcome{role ? `, ${role}` : ""}!</Text>
 
-      {(role === "customer" || role === "manager") && (
+      {(role === "manager") && (
         <TouchableOpacity onPress={() => router.push("/requestHistory")} style={styles.grayButton}>
           <MaterialIcons name="history" size={20} color="white" style={styles.icon} />
           <Text style={styles.buttonText}>View Request History</Text>
@@ -67,17 +66,7 @@ function HomePage() {
         </TouchableOpacity>
       )}
 
-      {role === "customer" && (
-        <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.primaryButton}>
-          <Ionicons name="create" size={20} color="white" style={styles.icon} />
-          <Text style={styles.buttonText}>Submit Request</Text>
-        </TouchableOpacity>
-      )}
-
       {/* Modals */}
-      {modalVisible && (
-        <TaskModal visible={modalVisible} onClose={() => setModalVisible(false)} />
-      )}
       {projectModal && (
         <ProjectModal visible={projectModal} onClose={() => setProjectModal(false)} />
       )}

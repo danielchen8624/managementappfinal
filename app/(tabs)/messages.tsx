@@ -9,7 +9,7 @@ import {
   FlatList,
 } from "react-native";
 import { router } from "expo-router";
-import { db } from "../../firebaseConfig";
+import { db, auth } from "../../firebaseConfig";
 import {
   collection,
   onSnapshot,
@@ -28,6 +28,7 @@ type Message = {
 };
 
 function MessagePage() {
+  const currentUserName = auth.currentUser?.displayName; //use this when displaying who writes message
   const { theme } = useTheme();
   const isDark = theme === "dark";
   const styles = getStyles(isDark);

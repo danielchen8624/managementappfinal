@@ -8,11 +8,16 @@ import {
 } from "react-native";
 import { db, auth } from "../../firebaseConfig";
 import { router, useLocalSearchParams } from "expo-router";
-import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
-import { useTheme } from "../ThemeContext"; 
+import {
+  doc,
+  updateDoc,
+  serverTimestamp,
+  arrayUnion,
+} from "firebase/firestore";
+import { useTheme } from "../ThemeContext";
 
 function ToDoScreen() {
-  const { theme } = useTheme(); 
+  const { theme } = useTheme();
   const isDark = theme === "dark";
 
   const params = useLocalSearchParams();
@@ -25,7 +30,7 @@ function ToDoScreen() {
     if (!taskId) {
       console.error("No task ID found!");
       return;
-    }   
+    }
     try {
       const taskRef = doc(db, "tasks", taskId);
       await updateDoc(taskRef, {
@@ -48,8 +53,8 @@ function ToDoScreen() {
     try {
       const taskRef = doc(db, "tasks", taskId);
       await updateDoc(taskRef, {
-        status: "in progress",
-        assignedWorker: auth.currentUser?.uid,
+        status: "assigned",
+        assignedWorker: arrayUnion(auth.currentUser?.uid),
         startTime: serverTimestamp(),
       });
       console.log("Updated task to in progress!");
@@ -66,7 +71,12 @@ function ToDoScreen() {
         backgroundColor: isDark ? "#121212" : "#F9FAFB",
       }}
     >
-      <View style={[styles.container, { backgroundColor: isDark ? "#121212" : "#F9FAFB" }]}>
+      <View
+        style={[
+          styles.container,
+          { backgroundColor: isDark ? "#121212" : "#F9FAFB" },
+        ]}
+      >
         <View
           style={[
             styles.card,
@@ -74,10 +84,7 @@ function ToDoScreen() {
           ]}
         >
           <Text
-            style={[
-              styles.heading,
-              { color: isDark ? "#FFFFFF" : "#000000" },
-            ]}
+            style={[styles.heading, { color: isDark ? "#FFFFFF" : "#000000" }]}
           >
             Task Details
           </Text>
@@ -97,10 +104,7 @@ function ToDoScreen() {
           </Text>
 
           <Text
-            style={[
-              styles.question,
-              { color: isDark ? "#CCCCCC" : "#000000" },
-            ]}
+            style={[styles.question, { color: isDark ? "#CCCCCC" : "#000000" }]}
           >
             Do you want to accept this task?
           </Text>

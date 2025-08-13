@@ -46,12 +46,12 @@ function CurrentTaskModal({ visible, onClose }: TaskModalProps) {
 
   useEffect(() => {
     const uid = auth.currentUser?.uid;
-    if (!uid || role === "customer") return;
+    if (!uid) return;
 
     const tasksQ = query(
       collection(db, "tasks"),
-      where("assignedWorker", "==", uid),
-      where("status", "==", "in progress")
+      where("assignedWorkers", "array-contains", uid),
+      where("status", "==", "assigned")
     );
     const unsubTasks = onSnapshot(
       tasksQ,

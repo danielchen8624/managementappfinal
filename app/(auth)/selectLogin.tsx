@@ -1,9 +1,9 @@
 import { Text, View, TouchableOpacity, StyleSheet, SafeAreaView } from "react-native";
 import { router } from "expo-router";
-import { useTheme } from "../ThemeContext"; // 👈 Import theme
+import { useTheme } from "../ThemeContext"; //  Import theme
 
 function SelectLogin() {
-  const { theme, toggleTheme } = useTheme(); // 👈 Use theme and toggle
+  const { theme, toggleTheme } = useTheme(); //  Use theme and toggle
   const isDark = theme === "dark";
 
   const handleSelect = (role: string) => {
@@ -26,16 +26,13 @@ function SelectLogin() {
         </Text>
 
         <TouchableOpacity style={styles.button} onPress={() => handleSelect("employee")}>
-          <Text style={styles.buttonText}>👷 Login as Employee</Text>
+          <Text style={styles.buttonText}>👷 Employee Login</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.button} onPress={() => handleSelect("manager")}>
-          <Text style={styles.buttonText}>👨‍💼 Login as Manager</Text>
+          <Text style={styles.buttonText}>👨‍💼 Manager Login</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.button} onPress={() => handleSelect("customer")}>
-          <Text style={styles.buttonText}>🧍 Login as Customer</Text>
-        </TouchableOpacity>
 
       </View>
     </SafeAreaView>
