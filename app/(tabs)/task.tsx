@@ -35,7 +35,7 @@ function TaskPage() {
   useEffect(() => {
     const tasksQ1 = query(
       collection(db, "tasks"),
-      where("status", "==", "pending"),
+      where ("status", "==", "pending"),
       where("priority", "==", 1)
     );
     const tasksQ2 = query(
@@ -88,7 +88,6 @@ function TaskPage() {
 
   const handleRefresh = () => {
     setIsRefreshing(true);
-    // onSnapshot keeps things live; spinner is cosmetic
     setTimeout(() => setIsRefreshing(false), 500);
   };
 
@@ -122,20 +121,54 @@ function TaskPage() {
     });
   };
 
+  // ---------- NEW: status helpers ----------
+  const isComplete = (item: any) => {
+    const s = String(item.status ?? "").toLowerCase();
+    return s === "completed";
+  };
+
+  const hasAssignee = (item: any) => {
+    // works if assignedTo is a string, object, or array
+    const v = item.assignedWorkers ?? null;
+    if (Array.isArray(v)) return v.length > 0;
+    return !!v;
+  };
+
+  const getStatusColor = (item: any) => {
+    if (isComplete(item)) return "#22C55E"; // green
+    if (hasAssignee(item)) return "#EAB308"; // yellow
+    return "#EF4444"; // red
+  };
+  // ----------------------------------------
+
   const renderCard = (item: any) => (
     <TouchableOpacity
       key={item.id}
       onPress={() => openScreen(item)}
       style={styles.taskCard}
+      activeOpacity={0.8}
     >
-      <Text style={styles.taskTitle}>Type: {item.taskType}</Text>
-      <Text style={styles.taskText}>Room: {item.roomNumber || "N/A"}</Text>
-      <Text style={styles.taskText}>
-        Priority: {item.priority ?? "Unassigned"}
-      </Text>
-      <Text style={styles.taskText}>
-        Date: {item.createdAt?.toDate().toLocaleString()}
-      </Text>
+      {/* content */}
+      <View style={{ paddingRight: 14 }}>
+        <Text style={styles.taskTitle}>Type: {item.taskType}</Text>
+        <Text style={styles.taskText}>Room: {item.roomNumber || "N/A"}</Text>
+        <Text style={styles.taskText}>
+          Priority: {item.priority ?? "Unassigned"}
+        </Text>
+        <Text style={styles.taskText}>
+          Date: {item.createdAt?.toDate().toLocaleString()}
+        </Text>
+      </View>
+
+      {/* vertical status pill on the right */}
+      <View style={styles.pillRail}>
+        <View
+          style={[
+            styles.pill,
+            { backgroundColor: getStatusColor(item) },
+          ]}
+        />
+      </View>
     </TouchableOpacity>
   );
 
@@ -331,12 +364,32 @@ const getStyles = (isDark: boolean) =>
       backgroundColor: isDark ? "#334155" : "#FFFFFF",
       borderRadius: 16,
       padding: 20,
+      paddingRight: 28, // little extra space so text doesn’t collide with pill rail
       marginBottom: 16,
       shadowColor: "#000",
       shadowOffset: { width: 0, height: 4 },
       shadowOpacity: 0.1,
       shadowRadius: 6,
       elevation: 6,
+      position: "relative",
+      overflow: "hidden",
+    },
+    // right-side rail that holds the pill
+    pillRail: {
+      position: "absolute",
+      right: 8,
+      top: 8,
+      bottom: 8,
+      width: 10,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    // vertical pill itself
+    pill: {
+      width: 8,
+      borderRadius: 8,
+      // make it roughly 80% of the card height visually
+      height: "80%",
     },
     taskTitle: {
       fontSize: 16,
