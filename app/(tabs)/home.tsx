@@ -7,6 +7,8 @@ import {
   ActivityIndicator,
 } from "react-native";
 import ProjectModal from "../(components)/taskModal";
+import ReportModal from "../(components)/reportModal";
+import ManagerViewReportsModal from "../(components)/managerViewReportModal"
 import CurrentTaskModal from "../(components)/currentTaskModal";
 import { router } from "expo-router";
 import { useUser } from "../UserContext";
@@ -15,8 +17,10 @@ import { useTheme } from "../ThemeContext";
 
 function HomePage() {
   const [modalVisible, setModalVisible] = useState(false);
-  const [projectModal, setProjectModal] = useState(false);
+  const [taskModal, setTaskModal] = useState(false);
+  const [reportModal, setReportModal] = useState(false);
   const [currentTaskModal, setCurrentTaskModal] = useState(false);
+  const [managerViewReportModal, setManagerViewReportModal] = useState(false);
   const { role, loading } = useUser();
   const { theme } = useTheme();
   const isDark = theme === "dark";
@@ -57,6 +61,7 @@ function HomePage() {
 
       {role === "manager" && (
         <>
+          {/* manage Employees button*/}
           <TouchableOpacity
             onPress={() => router.push("/manageEmployees")}
             style={styles.purpleButton}
@@ -70,8 +75,10 @@ function HomePage() {
             <Text style={styles.buttonText}>Manage Employees</Text>
           </TouchableOpacity>
 
+          {/* add task button*/}
+
           <TouchableOpacity
-            onPress={() => setProjectModal(true)}
+            onPress={() => setTaskModal(true)}
             style={styles.primaryButton}
           >
             <FontAwesome5
@@ -80,35 +87,60 @@ function HomePage() {
               color="white"
               style={styles.icon}
             />
-            <Text style={styles.buttonText}>Add New Project</Text>
+            <Text style={styles.buttonText}>Add New Task</Text>
           </TouchableOpacity>
-          <Text>
-            view reports. like if an employee reports there being dog poo it will show here.
-          </Text>
+          {/* submit reports button */}
+
+          <TouchableOpacity
+            onPress={() => setManagerViewReportModal(true)}
+            style={styles.primaryButton}
+          ><Text style = {styles.buttonText}>View Reports</Text></TouchableOpacity>
         </>
       )}
 
       {role === "employee" && (
-        <TouchableOpacity
-          onPress={() => setCurrentTaskModal(true)}
-          style={styles.primaryButton}
-        >
-          <MaterialIcons
-            name="assignment"
-            size={20}
-            color="white"
-            style={styles.icon}
-          />
-          <Text style={styles.buttonText}>View Current Task</Text>
-        </TouchableOpacity>
+        <>
+          <TouchableOpacity
+            onPress={() => setCurrentTaskModal(true)}
+            style={styles.primaryButton}
+          >
+            <MaterialIcons
+              name="assignment"
+              size={20}
+              color="white"
+              style={styles.icon}
+            />
+            <Text style={styles.buttonText}>View Current Task</Text>
+          </TouchableOpacity>
+          {/* submit reports button */}
+
+          <TouchableOpacity
+            onPress={() => setReportModal(true)}
+            style={[styles.reportButton, isDark && styles.reportButtonDark]}
+            activeOpacity={0.85}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <MaterialIcons
+              name="report-problem"
+              size={20}
+              color={isDark ? "#0B1220" : "#FFFFFF"}
+              style={styles.reportIcon}
+            />
+            <Text
+              style={[
+                styles.reportButtonText,
+                isDark && styles.reportButtonTextDark,
+              ]}
+            >
+              Report Issue
+            </Text>
+          </TouchableOpacity>
+        </>
       )}
 
       {/* Modals */}
-      {projectModal && (
-        <ProjectModal
-          visible={projectModal}
-          onClose={() => setProjectModal(false)}
-        />
+      {taskModal && (
+        <ProjectModal visible={taskModal} onClose={() => setTaskModal(false)} />
       )}
       {currentTaskModal && (
         <CurrentTaskModal
@@ -116,6 +148,21 @@ function HomePage() {
           onClose={() => setCurrentTaskModal(false)}
         />
       )}
+      {reportModal && (
+        <ReportModal
+          visible={reportModal}
+          onClose={() => setReportModal(false)}
+        />
+      )}
+
+      {managerViewReportModal && (
+        <ManagerViewReportsModal
+          visible={managerViewReportModal}
+          onClose={() => setManagerViewReportModal(false)}
+        />
+      )}
+
+      {/* Navigation Buttons */}
     </View>
   );
 }
@@ -183,5 +230,36 @@ const getStyles = (isDark: boolean) =>
       marginTop: 10,
       fontSize: 16,
       color: isDark ? "#D1D5DB" : "#6B7280",
+    },
+    reportButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      alignSelf: "center",
+      gap: 8,
+      paddingVertical: 12,
+      paddingHorizontal: 18,
+      borderRadius: 12,
+      backgroundColor: "#EF4444", // red-500
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.15,
+      shadowRadius: 6,
+      elevation: 5,
+    },
+    reportButtonDark: {
+      backgroundColor: "#F87171", // red-400 for better contrast on dark bg
+    },
+    reportIcon: {
+      marginRight: 6,
+    },
+    reportButtonText: {
+      color: "#FFFFFF",
+      fontSize: 15,
+      fontWeight: "700",
+      letterSpacing: 0.3,
+    },
+    reportButtonTextDark: {
+      color: "#0B1220", // very dark blue-gray for contrast on lighter red
+      fontWeight: "800",
     },
   });
