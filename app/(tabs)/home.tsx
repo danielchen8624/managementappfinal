@@ -197,7 +197,7 @@ function HomePage() {
             onPress={handleClockIn}
             style={styles.primaryButton}
           >
-            <Text style={styles.buttonText}>Clock In</Text>
+            <Text style={styles.buttonText}> {currentShiftId? "Clock Out" : "Clock In"}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => setCurrentTaskModal(true)}
