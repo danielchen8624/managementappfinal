@@ -28,6 +28,7 @@ import { router } from "expo-router";
 import { useUser } from "../UserContext";
 import { Ionicons, MaterialIcons, FontAwesome5 } from "@expo/vector-icons";
 import { useTheme } from "../ThemeContext";
+import { useShiftTimer } from "../(hooks)/secondsCounter";
 
 function HomePage() {
   const [taskModal, setTaskModal] = useState(false);
@@ -39,6 +40,8 @@ function HomePage() {
   const { theme } = useTheme();
   const isDark = theme === "dark";
   const styles = getStyles(isDark);
+  const uid = auth.currentUser?.uid;
+  const { running, hhmmss } = useShiftTimer(uid); // new
 
   // --- AsyncStorage helpers. allows clocking to work even if app is restarted --- //
   const shiftKey = (uid: string) => `currentShiftId:${uid}`;
@@ -63,7 +66,6 @@ function HomePage() {
   };
 
   // Restore shift state on mount and when user changes
-  const uid = auth.currentUser?.uid;
   useEffect(() => {
     (async () => {
       if (!uid) return;
@@ -116,6 +118,11 @@ function HomePage() {
         clockIn: serverTimestamp(),
         clockOut: null,
       });
+      await updateDoc(doc(db, "users", uid), {
+        onShift: true,
+        openShiftId: docRef.id,
+      });
+
       setCurrentShiftId(docRef.id);
       await saveShiftId(uid, docRef.id); // persist to asyncstorage
       Alert.alert("Clocked In!");
@@ -123,6 +130,11 @@ function HomePage() {
       // Clock out
       await updateDoc(doc(db, "users", uid, "shifts", currentShiftId), {
         clockOut: serverTimestamp(),
+        shiftDuration: hhmmss,
+      });
+      await updateDoc(doc(db, "users", uid), {
+        onShift: false,
+        openShiftId: null,
       });
       setCurrentShiftId("");
       await clearShiftId(uid); // removes from asynctorage
@@ -197,8 +209,19 @@ function HomePage() {
             onPress={handleClockIn}
             style={styles.primaryButton}
           >
-            <Text style={styles.buttonText}> {currentShiftId? "Clock Out" : "Clock In"}</Text>
+            <Text style={styles.buttonText}>
+              {currentShiftId ? "Clock Out" : "Clock In"}
+            </Text>
           </TouchableOpacity>
+
+          {/** Timer display under the button **/}
+          {running ? ( // new
+            <Text style={styles.timerText}>On shift: {hhmmss}</Text> // new
+          ) : (
+            // new
+            <Text style={styles.timerTextMuted}>Not clocked in</Text> // new
+          )}
+
           <TouchableOpacity
             onPress={() => setCurrentTaskModal(true)}
             style={styles.primaryButton}
@@ -290,7 +313,7 @@ const getStyles = (isDark: boolean) =>
       paddingHorizontal: 24,
       borderRadius: 12,
       alignItems: "center",
-      marginBottom: 16,
+      marginBottom: 12, // new (slightly tighter to make room for timer)
       shadowColor: "#000",
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.1,
@@ -344,6 +367,7 @@ const getStyles = (isDark: boolean) =>
       shadowOpacity: 0.15,
       shadowRadius: 6,
       elevation: 5,
+      marginTop: 4, // new
     },
     reportButtonDark: {
       backgroundColor: "#F87171", // red-400 for better contrast on dark bg
@@ -361,4 +385,18 @@ const getStyles = (isDark: boolean) =>
       color: "#0B1220", // very dark blue-gray for contrast on lighter red
       fontWeight: "800",
     },
+    timerText: {
+      // new
+      marginBottom: 16, // new
+      fontSize: 16, // new
+      fontWeight: "700", // new
+      color: isDark ? "#E5E7EB" : "#111827", // new
+    }, // new
+    timerTextMuted: {
+      // new
+      marginBottom: 16, // new
+      fontSize: 14, // new
+      color: isDark ? "#9CA3AF" : "#6B7280", // new
+      fontStyle: "italic", // new
+    }, // new
   });
