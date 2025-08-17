@@ -1,14 +1,28 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Text,
   View,
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  Alert,
 } from "react-native";
+import {
+  addDoc,
+  collection,
+  serverTimestamp,
+  doc,
+  updateDoc,
+  query,
+  where,
+  limit,
+  getDocs,
+} from "firebase/firestore";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { db, auth } from "../../firebaseConfig";
 import ProjectModal from "../(components)/taskModal";
 import ReportModal from "../(components)/reportModal";
-import ManagerViewReportsModal from "../(components)/managerViewReportModal"
+import ManagerViewReportsModal from "../(components)/managerViewReportModal";
 import CurrentTaskModal from "../(components)/currentTaskModal";
 import { router } from "expo-router";
 import { useUser } from "../UserContext";
@@ -16,15 +30,64 @@ import { Ionicons, MaterialIcons, FontAwesome5 } from "@expo/vector-icons";
 import { useTheme } from "../ThemeContext";
 
 function HomePage() {
-  const [modalVisible, setModalVisible] = useState(false);
   const [taskModal, setTaskModal] = useState(false);
   const [reportModal, setReportModal] = useState(false);
   const [currentTaskModal, setCurrentTaskModal] = useState(false);
   const [managerViewReportModal, setManagerViewReportModal] = useState(false);
+  const [currentShiftId, setCurrentShiftId] = useState("");
   const { role, loading } = useUser();
   const { theme } = useTheme();
   const isDark = theme === "dark";
   const styles = getStyles(isDark);
+
+  // --- AsyncStorage helpers. allows clocking to work even if app is restarted --- //
+  const shiftKey = (uid: string) => `currentShiftId:${uid}`;
+  const saveShiftId = async (uid: string, id: string) => {
+    try {
+      await AsyncStorage.setItem(shiftKey(uid), id);
+    } catch {}
+  };
+  const loadShiftId = async (uid: string) => {
+    // new
+    try {
+      return await AsyncStorage.getItem(shiftKey(uid));
+    } catch {
+      return null;
+    }
+  };
+  const clearShiftId = async (uid: string) => {
+    // new
+    try {
+      await AsyncStorage.removeItem(shiftKey(uid));
+    } catch {}
+  };
+
+  // Restore shift state on mount and when user changes
+  const uid = auth.currentUser?.uid;
+  useEffect(() => {
+    (async () => {
+      if (!uid) return;
+      const stored = await loadShiftId(uid);
+      if (stored) {
+        // new
+        setCurrentShiftId(stored);
+        return;
+      }
+      // Fallback: query Firestore for any open shift if storage empty
+      const q = query(
+        collection(db, "users", uid, "shifts"),
+        where("clockOut", "==", null),
+        limit(1)
+      );
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        // new
+        const openId = snap.docs[0].id;
+        setCurrentShiftId(openId);
+        await saveShiftId(uid, openId);
+      }
+    })();
+  }, [uid]);
 
   if (loading) {
     return (
@@ -39,6 +102,34 @@ function HomePage() {
       </View>
     );
   }
+  //-----------------------   HANDLE CLOCK IN FUNCTION -------------------------------------------------------------------
+
+  const handleClockIn = async () => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) {
+      Alert.alert("Please Sign In.");
+      return;
+    }
+    if (!currentShiftId) {
+      // Clock in
+      const docRef = await addDoc(collection(db, "users", uid, "shifts"), {
+        clockIn: serverTimestamp(),
+        clockOut: null,
+      });
+      setCurrentShiftId(docRef.id);
+      await saveShiftId(uid, docRef.id); // persist to asyncstorage
+      Alert.alert("Clocked In!");
+    } else {
+      // Clock out
+      await updateDoc(doc(db, "users", uid, "shifts", currentShiftId), {
+        clockOut: serverTimestamp(),
+      });
+      setCurrentShiftId("");
+      await clearShiftId(uid); // removes from asynctorage
+      Alert.alert("Clocked Out!");
+    }
+  };
+  //--------------------------------------------------------------------------------------------------------------------
 
   return (
     <View style={styles.container}>
@@ -94,12 +185,20 @@ function HomePage() {
           <TouchableOpacity
             onPress={() => setManagerViewReportModal(true)}
             style={styles.primaryButton}
-          ><Text style = {styles.buttonText}>View Reports</Text></TouchableOpacity>
+          >
+            <Text style={styles.buttonText}>View Reports</Text>
+          </TouchableOpacity>
         </>
       )}
 
       {role === "employee" && (
         <>
+          <TouchableOpacity
+            onPress={handleClockIn}
+            style={styles.primaryButton}
+          >
+            <Text style={styles.buttonText}>Clock In</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             onPress={() => setCurrentTaskModal(true)}
             style={styles.primaryButton}
