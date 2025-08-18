@@ -1,5 +1,13 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, SafeAreaView, ActivityIndicator } from "react-native";
+import { router } from "expo-router";
+import {
+  View,
+  Text,
+  StyleSheet,
+  SafeAreaView,
+  ActivityIndicator,
+  TouchableOpacity,
+} from "react-native";
 import { useTheme } from "../ThemeContext";
 import { db } from "../../firebaseConfig";
 import { query, where, onSnapshot, collection } from "firebase/firestore";
@@ -18,7 +26,10 @@ function ManageEmployees() {
       where("onShift", "==", true)
     );
     const unsub = onSnapshot(q, (snapshot) => {
-      const employees = snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+      const employees = snapshot.docs.map((d) => ({
+        id: d.id,
+        ...(d.data() as any),
+      }));
       setOnShiftEmployees(employees);
     });
     return unsub;
@@ -32,7 +43,32 @@ function ManageEmployees() {
         </View>
 
         {onShiftEmployees.length > 0 ? (
-          onShiftEmployees.map((emp) => <EmployeeRow key={emp.id} emp={emp} styles={styles} isDark={isDark} />)
+          onShiftEmployees.map((emp) => (
+            <TouchableOpacity
+              key={emp.id}
+              onPress={() => {
+                console.log(`Selected employee: ${emp.name || emp.id}`);
+                router.push({
+                  pathname: "/employeeOpened[id]",
+                  params: {
+                    empId: emp.id,
+                    name: emp.name ?? "",
+                    email: emp.email ?? "",
+                    currentTask: emp.currentTask ?? "",
+                    pendingTasks: emp.pendingTasks ?? [],
+                  },
+                });
+              }}
+              style={{ marginBottom: 16 }}
+            >
+              <EmployeeRow
+                key={emp.id}
+                emp={emp}
+                styles={styles}
+                isDark={isDark}
+              />
+            </TouchableOpacity>
+          ))
         ) : (
           <Text style={styles.emptyText}>No employees currently on shift.</Text>
         )}
@@ -41,13 +77,23 @@ function ManageEmployees() {
   );
 }
 
-function EmployeeRow({ emp, styles, isDark }: { emp: any; styles: any; isDark: boolean }) {
+function EmployeeRow({
+  emp,
+  styles,
+  isDark,
+}: {
+  emp: any;
+  styles: any;
+  isDark: boolean;
+}) {
   const { loading, running, hhmmss } = useShiftTimer(emp.id);
 
   return (
     <View style={styles.taskCard}>
       <View style={{ paddingRight: 14 }}>
-        <Text style={styles.taskTitle}>{emp.name || emp.displayName || emp.email || emp.id}</Text>
+        <Text style={styles.taskTitle}>
+          {emp.name || emp.displayName || emp.email || emp.id}
+        </Text>
         <Text style={styles.taskText}>Role: {emp.role}</Text>
         {loading ? (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -66,7 +112,13 @@ function EmployeeRow({ emp, styles, isDark }: { emp: any; styles: any; isDark: b
         <View
           style={[
             styles.pill,
-            { backgroundColor: running ? "#22C55E" : isDark ? "#475569" : "#E5E7EB" },
+            {
+              backgroundColor: running
+                ? "#22C55E"
+                : isDark
+                ? "#475569"
+                : "#E5E7EB",
+            },
           ]}
         />
       </View>
