@@ -6,6 +6,8 @@ import { router } from "expo-router";
 import { User } from "firebase/auth";
 import { UserProvider } from "./UserContext";
 import {ThemeProvider} from "./ThemeContext";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+
 export default function RootLayout() {
   const [user, setUser] = useState<User | null>(null);
 
@@ -24,6 +26,7 @@ export default function RootLayout() {
   }, []);
 
   return (
+    <GestureHandlerRootView style = {{flex: 1}}>
     <UserProvider>
       <ThemeProvider>
     <Stack screenOptions={{headerShown: false}}>
@@ -32,5 +35,7 @@ export default function RootLayout() {
     </Stack>
     </ThemeProvider>
     </UserProvider>
+    </GestureHandlerRootView>
+    
   );
 }

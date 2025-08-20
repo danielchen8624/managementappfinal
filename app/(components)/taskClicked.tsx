@@ -95,7 +95,7 @@ function ToDoScreen() {
           <Text style={[styles.value, { color: isDark ? "#E0E0E0" : "#333" }]}>
             {taskDescription}
           </Text>
-
+          
           <Text style={[styles.label, { color: isDark ? "#BBBBBB" : "#444" }]}>
             Created By:
           </Text>

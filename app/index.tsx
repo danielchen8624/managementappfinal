@@ -4,6 +4,7 @@ import { UserProvider } from "./UserContext";
 import {ThemeProvider} from "./ThemeContext"
 export default function Index() {
   return (
+
     <UserProvider>
       <ThemeProvider>
         <Stack>
@@ -11,6 +12,7 @@ export default function Index() {
         </Stack>
       </ThemeProvider>
     </UserProvider>
+
   );
 }
   

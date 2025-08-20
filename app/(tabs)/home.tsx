@@ -202,6 +202,19 @@ function HomePage() {
           </TouchableOpacity>
         </>
       )}
+      {/*scheduler*/}
+      <TouchableOpacity
+            onPress={() => router.push("/scheduler")}
+            style={styles.purpleButton}
+          >
+            <Ionicons
+              name="people"
+              size={20}
+              color="white"
+              style={styles.icon}
+            />
+            <Text style={styles.buttonText}>Scheduler</Text>
+          </TouchableOpacity>
 
       {role === "employee" && (
         <>

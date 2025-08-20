@@ -16,6 +16,11 @@ function EmployeeDetailPage () {
         <SafeAreaView style={styles.container}>
             <View style={styles.container}>
                 <Text style={styles.buttonText}>Employee Details</Text>
+                <Text style={styles.welcomeText}>Name: {name}</Text>
+                <Text style={styles.welcomeText}>Email: {email}</Text>
+                <Text style={styles.welcomeText}>Current Task: {currentTask}</Text>
+                <Text style={styles.welcomeText}>Pending Tasks: {Array.isArray(pendingTasks) ? pendingTasks.join(", ") : pendingTasks}</Text>
+                <Text style={styles.welcomeText}>Employee ID: {empId}</Text>    
             </View>   
             </SafeAreaView>    
     )    
