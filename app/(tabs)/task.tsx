@@ -6,6 +6,7 @@ import {
   FlatList,
   SafeAreaView,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { router } from "expo-router";
 import { db } from "../../firebaseConfig";
@@ -14,11 +15,14 @@ import {
   query,
   where,
   onSnapshot,
+  doc,
+  deleteDoc,
   // orderBy, // optional: uncomment if you have an index on "order"
 } from "firebase/firestore";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useUser } from "../UserContext";
 import { useTheme } from "../ThemeContext";
+import { Swipeable } from "react-native-gesture-handler";
 
 /** Helper to sort by optional `order` field */
 function sortByOrder<T extends { order?: number }>(arr: T[]) {
@@ -139,25 +143,84 @@ function TaskPage() {
     const v = item.assignedWorkers ?? item.assignedTo ?? null;
     if (Array.isArray(v)) return v.length > 0;
     return !!v;
-    };
+  };
   const getStatusColor = (item: any) => {
     if (isComplete(item)) return "#22C55E"; // green
     if (hasAssignee(item)) return "#EAB308"; // yellow
     return "#EF4444"; // red
   };
 
-  const renderCard = (item: any) => (
-    <TouchableOpacity key={item.id} onPress={() => openScreen(item)} style={styles.taskCard} activeOpacity={0.8}>
-      <View style={{ paddingRight: 14 }}>
-        <Text style={styles.taskTitle}>{item.taskType || item.title || "Untitled"}</Text>
-        <Text style={styles.taskText}>Room: {item.roomNumber || "N/A"}</Text>
-        <Text style={styles.taskText}>Priority: {item.priority ?? "Unassigned"}</Text>
-      </View>
-      <View style={styles.pillRail}>
-        <View style={[styles.pill, { backgroundColor: getStatusColor(item) }]} />
-      </View>
-    </TouchableOpacity>
+  // Delete action
+  const confirmDeleteTask = (id: string, swipeRef?: React.RefObject<Swipeable>) => {
+    Alert.alert(
+      "Delete this task?",
+      "This cannot be undone.",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+          onPress: () => swipeRef?.current?.close?.(),
+        },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteDoc(doc(db, "tasks", id));
+            } catch (e: any) {
+              Alert.alert("Error", e?.message || "Failed to delete task.");
+              swipeRef?.current?.close?.();
+            }
+          },
+        },
+      ],
+      { cancelable: true }
+    );
+  };
+
+  // Right (revealed when you swipe LEFT) underlay UI
+  const RightActions = () => (
+    <View style={styles.rightAction}>
+      <Text style={styles.rightActionText}>Delete</Text>
+    </View>
   );
+
+  const SwipeableCard = ({ item }: { item: any }) => {
+    const swipeRef = useRef<Swipeable>(null);
+
+    return (
+      <Swipeable
+        ref={swipeRef}
+        renderRightActions={RightActions}
+        // Swiping LEFT opens the RIGHT actions; trigger confirm when opened to the right
+        onSwipeableOpen={(direction) => {
+          if (direction === "right") {
+            // Ask before deleting
+            confirmDeleteTask(item.id, swipeRef);
+          }
+        }}
+        rightThreshold={64}
+        overshootRight={false}
+      >
+        <TouchableOpacity
+          onPress={() => openScreen(item)}
+          style={styles.taskCard}
+          activeOpacity={0.8}
+        >
+          <View style={{ paddingRight: 14 }}>
+            <Text style={styles.taskTitle}>{item.taskType || item.title || "Untitled"}</Text>
+            <Text style={styles.taskText}>Room: {item.roomNumber || "N/A"}</Text>
+            <Text style={styles.taskText}>Priority: {item.priority ?? "Unassigned"}</Text>
+          </View>
+          <View style={styles.pillRail}>
+            <View style={[styles.pill, { backgroundColor: getStatusColor(item) }]} />
+          </View>
+        </TouchableOpacity>
+      </Swipeable>
+    );
+  };
+
+  const renderCard = (item: any) => <SwipeableCard key={item.id} item={item} />;
 
   const openHistory = () => router.push("/completedTasks");
 
@@ -328,6 +391,7 @@ const getStyles = (isDark: boolean) =>
       position: "relative",
       overflow: "hidden",
     },
+    // Right-side rail that holds the status pill
     pillRail: {
       position: "absolute",
       right: 8,
@@ -362,5 +426,19 @@ const getStyles = (isDark: boolean) =>
     },
     text: {
       color: isDark ? "#E5E7EB" : "#111",
+    },
+    // Swipe right actions (shown when user swipes left)
+    rightAction: {
+      backgroundColor: "#EF4444",
+      justifyContent: "center",
+      alignItems: "flex-end",
+      paddingHorizontal: 20,
+      marginBottom: 16,
+      borderRadius: 16,
+    },
+    rightActionText: {
+      color: "#fff",
+      fontWeight: "700",
+      fontSize: 16,
     },
   });
