@@ -13,13 +13,15 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Alert, // NEW: for validation alerts like your sample
+  Animated, // NEW: for the toggle thumb animation like your sample
 } from "react-native";
 import SwipeableItem, { UnderlayParams } from "react-native-swipeable-item";
 import DraggableFlatList, {
   RenderItemParams,
 } from "react-native-draggable-flatlist";
 import { Ionicons } from "@expo/vector-icons";
-import { useTheme } from "../ThemeContext"; 
+import { useTheme } from "../ThemeContext";
 import { db } from "../../firebaseConfig";
 import {
   collection,
@@ -28,8 +30,11 @@ import {
   query,
   writeBatch,
   doc,
+  where,
+  getDoc,
+  serverTimestamp,
 } from "firebase/firestore";
-import { Dropdown } from "react-native-element-dropdown";
+import { Dropdown, MultiSelect } from "react-native-element-dropdown";
 
 /* ---------- Location options ---------- */
 const locationOptions = [
@@ -89,13 +94,19 @@ const DAY_LABEL: Record<DayKey, string> = {
   fri: "Fri",
 };
 
+type Worker = {
+  id: string;
+  name: string;
+  email?: string;
+};
+
 type TemplateItem = {
   id: string;
   title: string;
   description?: string;
-  defaultPriority?: number;
+  defaultPriority?: number; // 1 both, 2 important, 3 urgent, 4 none
   roleNeeded?: string | null;
-  estimatedMinutes?: number;
+  assignedWorkerIds?: string[];
   order: number;
   active: boolean;
   [key: string]: any;
@@ -127,8 +138,27 @@ function deepClone<T>(arr: T[]): T[] {
 const { height: SCREEN_H } = Dimensions.get("window");
 const CARD_HEIGHT = Math.max(100, Math.floor(SCREEN_H / 8));
 
+const ymd = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate()
+  ).padStart(2, "0")}`;
+
+const dateToDayKey = (d: Date): DayKey | null => {
+  const idx = d.getDay();
+  const map: Record<number, DayKey | null> = {
+    0: null,
+    1: "mon",
+    2: "tue",
+    3: "wed",
+    4: "thu",
+    5: "fri",
+    6: null,
+  };
+  return map[idx] ?? null;
+};
+
 export default function Scheduler() {
-  const { theme } = useTheme(); // <--- if your ThemeContext exports default, change import to: import useTheme from "../ThemeContext"
+  const { theme } = useTheme();
   const isDark = theme === "dark";
   const styles = getStyles(isDark);
 
@@ -147,13 +177,26 @@ export default function Scheduler() {
 
   const [addOpen, setAddOpen] = useState(false);
 
-  // Subscribe to Firestore per day
+  // workers
+  const [workers, setWorkers] = useState<Worker[]>([]);
+  useEffect(() => {
+    const qy = query(collection(db, "users"), where("role", "==", "employee"));
+    return onSnapshot(qy, (snap) => {
+      const arr: Worker[] = snap.docs.map((d) => {
+        const data = d.data() as any;
+        return { id: d.id, name: data.firstName || data.name || data.email || d.id, email: data.email };
+      });
+      setWorkers(arr);
+    });
+  }, []);
+
+  // subscribe per-day
   useEffect(() => {
     const unsubs = DAYS.map((day) => {
       const qy = query(collection(db, "scheduler", day, "items"), orderBy("order"));
       return onSnapshot(qy, (snap) => {
         setLoadingByDay((prev) => ({ ...prev, [day]: false }));
-        if (dirtyDaysRef.current.has(day)) return; // don't overwrite unsaved local edits
+        if (dirtyDaysRef.current.has(day)) return;
         const arr = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as TemplateItem[];
         setItemsByDay((prev) => ({ ...prev, [day]: arr }));
         originalRef.current = { ...originalRef.current, [day]: deepClone(arr) };
@@ -161,6 +204,60 @@ export default function Scheduler() {
     });
     return () => unsubs.forEach((u) => u());
   }, []);
+
+  // rollout
+  const rolloutAttemptedRef = useRef(false);
+  useEffect(() => {
+    const doRollout = async () => {
+      if (rolloutAttemptedRef.current) return;
+      const today = new Date();
+      const dayKey = dateToDayKey(today);
+      if (!dayKey) return;
+      if (loadingByDay[dayKey]) return;
+
+      const todayStr = ymd(today);
+      const guardRef = doc(db, "scheduler_rollouts", todayStr);
+      const guardSnap = await getDoc(guardRef);
+      if (guardSnap.exists()) {
+        rolloutAttemptedRef.current = true;
+        return;
+      }
+
+      const templates = itemsByDay[dayKey] || [];
+      const batch = writeBatch(db);
+
+      templates.forEach((tpl) => {
+        if (!tpl.active) return;
+        const workerIds = tpl.assignedWorkerIds || [];
+        if (workerIds.length === 0) return;
+        workerIds.forEach((wid) => {
+          const ref = doc(collection(db, "tasks"));
+          batch.set(ref, {
+            title: tpl.title || "Untitled",
+            description: tpl.description || "",
+            priority: tpl.defaultPriority ?? 3,
+            dayKey,
+            dateYYYYMMDD: todayStr,
+            templateId: tpl.id,
+            assignedTo: wid,
+            status: "pending",
+            createdAt: serverTimestamp(),
+          });
+        });
+      });
+
+      batch.set(guardRef, {
+        dayKey,
+        dateYYYYMMDD: todayStr,
+        createdAt: serverTimestamp(),
+      });
+
+      await batch.commit();
+      rolloutAttemptedRef.current = true;
+    };
+
+    doRollout();
+  }, [itemsByDay, loadingByDay]);
 
   const selectedListRaw = itemsByDay[selectedDay] ?? [];
   const selectedList = React.useMemo(() => {
@@ -177,12 +274,10 @@ export default function Scheduler() {
   const hasDirty = dirtyDays.size > 0;
 
   const markDirty = (day: DayKey) => setDirtyDays((prev) => new Set(prev).add(day));
-
   const onReorderDay = (day: DayKey, next: TemplateItem[]) => {
     setItemsByDay((prev) => ({ ...prev, [day]: next }));
     markDirty(day);
   };
-
   const deleteItem = (day: DayKey, id: string) => {
     setItemsByDay((prev) => ({
       ...prev,
@@ -203,23 +298,31 @@ export default function Scheduler() {
       const curr = itemsByDay[day] ?? [];
       const currIds = new Set(curr.map((i) => i.id));
 
-      // Deletes
       for (const it of orig) {
         if (!currIds.has(it.id)) {
           batch.delete(doc(db, "scheduler", day, "items", it.id));
         }
       }
 
-      // Upserts
       curr.forEach((it, idx) => {
         const isTemp = it.id.startsWith("temp_");
         const ref = isTemp
           ? doc(collection(db, "scheduler", day, "items"))
           : doc(db, "scheduler", day, "items", it.id);
 
-        batch.set(ref, { ...it, id: ref.id, order: idx }, { merge: true });
+        batch.set(
+          ref,
+          {
+            ...it,
+            id: ref.id,
+            order: idx,
+            assignedWorkerIds: Array.isArray(it.assignedWorkerIds) ? it.assignedWorkerIds : [],
+            // defaultPriority is already computed in the modal submit // NEW
+          },
+          { merge: true }
+        );
 
-        if (isTemp) it.id = ref.id; // keep local ids coherent
+        if (isTemp) it.id = ref.id;
       });
     }
 
@@ -243,49 +346,62 @@ export default function Scheduler() {
   const prevDay = () => setDayIndex((i) => (i === 0 ? DAYS.length - 1 : i - 1));
   const nextDay = () => setDayIndex((i) => (i === DAYS.length - 1 ? 0 : i + 1));
 
-  // Row with swipe-to-delete underlay
-  const renderRow = ({ item, drag, isActive }: RenderItemParams<TemplateItem>) => (
-    <SwipeableItem
-      item={item}
-      snapPointsLeft={[96]}
-      overSwipe={32}
-      renderUnderlayLeft={({ close }: UnderlayParams<TemplateItem>) => (
-        <View style={styles.underlayLeft}>
-          <TouchableOpacity
-            onPress={() => {
-              deleteItem(selectedDay, item.id);
-              close();
-            }}
-            style={styles.underlayButton}
-            activeOpacity={0.9}
-          >
-            <Ionicons name="trash-outline" size={28} color="#fff" />
-            <Text style={styles.underlayText}>Delete</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-      onChange={({ openDirection }) => {
-        if (openDirection === "left") {
-          deleteItem(selectedDay, item.id);
-        }
-      }}
-    >
-      <TouchableOpacity
-        onLongPress={drag}
-        delayLongPress={50}
-        activeOpacity={0.9}
-        style={[styles.card, isActive && { opacity: 0.9 }]}
+  const nameById = React.useMemo(() => {
+    const m: Record<string, string> = {};
+    workers.forEach((w) => (m[w.id] = w.name));
+    return m;
+  }, [workers]);
+
+  const renderRow = ({ item, drag, isActive }: RenderItemParams<TemplateItem>) => {
+    const assignedNames =
+      (item.assignedWorkerIds || [])
+        .map((id) => nameById[id] || id)
+        .filter(Boolean)
+        .join(", ") || "Unassigned";
+
+    return (
+      <SwipeableItem
+        item={item}
+        snapPointsLeft={[96]}
+        overSwipe={32}
+        renderUnderlayLeft={({ close }: UnderlayParams<TemplateItem>) => (
+          <View style={styles.underlayLeft}>
+            <TouchableOpacity
+              onPress={() => {
+                deleteItem(selectedDay, item.id);
+                close();
+              }}
+              style={styles.underlayButton}
+              activeOpacity={0.9}
+            >
+              <Ionicons name="trash-outline" size={28} color="#fff" />
+              <Text style={styles.underlayText}>Delete</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        onChange={({ openDirection }) => {
+          if (openDirection === "left") {
+            deleteItem(selectedDay, item.id);
+          }
+        }}
       >
-        <Text style={styles.title}>{item.title || "Untitled"}</Text>
-        {!!item.description && <Text style={styles.meta}>{item.description}</Text>}
-        <Text style={styles.meta}>
-          Priority {item.defaultPriority ?? 3}
-          {item.roleNeeded ? ` • ${item.roleNeeded}` : ""}
-          {item.estimatedMinutes ? ` • ~${item.estimatedMinutes}m` : ""}
-        </Text>
-      </TouchableOpacity>
-    </SwipeableItem>
-  );
+        <TouchableOpacity
+          onLongPress={drag}
+          delayLongPress={50}
+          activeOpacity={0.9}
+          style={[styles.card, isActive && { opacity: 0.9 }]}
+        >
+          <Text style={styles.title}>{item.title || "Untitled"}</Text>
+          {!!item.description && <Text style={styles.meta}>{item.description}</Text>}
+          <Text style={styles.meta}>
+            Priority {item.defaultPriority ?? 3}
+            {item.roleNeeded ? ` • ${item.roleNeeded}` : ""}
+          </Text>
+          <Text style={styles.meta}>Assigned: {assignedNames}</Text>
+        </TouchableOpacity>
+      </SwipeableItem>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -351,6 +467,7 @@ export default function Scheduler() {
           markDirty(selectedDay);
         }}
         isDark={isDark}
+        workers={workers}
       />
     </View>
   );
@@ -362,33 +479,54 @@ function AddSchedulerItemModal({
   onClose,
   onCreate,
   isDark,
+  workers,
 }: {
   visible: boolean;
   onClose: () => void;
   onCreate: (item: Partial<TemplateItem>) => Promise<void> | void;
   isDark: boolean;
+  workers: Worker[];
 }) {
   const [title, setTitle] = useState("");
   const [desc, setDesc] = useState("");
-  const [priority, setPriority] = useState<string>("3");
-  const [minutes, setMinutes] = useState<string>("");
+  // const [priority, setPriority] = useState<string>("3"); // REMOVED: typed priority
+  const [urgent, setUrgent] = useState(false); // NEW
+  const [important, setImportant] = useState(false); // NEW
+  const [selectedWorkerIds, setSelectedWorkerIds] = useState<string[]>([]);
 
   const reset = () => {
     setTitle("");
     setDesc("");
-    setPriority("3");
-    setMinutes("");
+    // setPriority("3"); // REMOVED
+    setUrgent(false); // NEW
+    setImportant(false); // NEW
+    setSelectedWorkerIds([]);
   };
 
+  const computePriorityFromFlags = (u: boolean, i: boolean) => {
+    // SAME MAPPING as your example:
+    // both = 1, important only = 2, urgent only = 3, none = 4
+    if (u && i) return 1;
+    if (!u && i) return 2;
+    if (u && !i) return 3;
+    return 4;
+  }; // NEW
+
   const submit = async () => {
-    const p = parseInt(priority || "3", 10);
-    const m = minutes ? parseInt(minutes, 10) : undefined;
+    const finalPriority = computePriorityFromFlags(urgent, important); // NEW
+
+    if (finalPriority === 4) {
+      // mimic your validation: require at least one
+      Alert.alert("Please select Urgent and/or Important."); // NEW
+      return;
+    }
+
     const payload: Partial<TemplateItem> = {
       id: makeTempId(),
       title: title || "Untitled",
       description: desc || "",
-      defaultPriority: Number.isFinite(p) ? p : 3,
-      estimatedMinutes: m && Number.isFinite(m) ? m : undefined,
+      defaultPriority: finalPriority, // NEW
+      assignedWorkerIds: selectedWorkerIds,
       order: 9_999,
       active: true,
     };
@@ -397,6 +535,45 @@ function AddSchedulerItemModal({
     onClose();
   };
 
+  const workerOptions = workers.map((w) => ({ label: w.name, value: w.id }));
+
+  // NEW: ToggleSwitch component (styled like your sample)
+  const ToggleSwitch = ({
+    label,
+    value,
+    onToggle,
+  }: {
+    label: string;
+    value: boolean;
+    onToggle: () => void;
+  }) => (
+    <View style={modalStyles.toggleRow}>
+      <Text
+        style={[
+          modalStyles.label,
+          { flex: 1, color: isDark ? "#E5E7EB" : "#333" },
+        ]}
+      >
+        {label}
+      </Text>
+      <TouchableOpacity
+        activeOpacity={0.8}
+        onPress={onToggle}
+        style={[
+          modalStyles.toggleContainer,
+          { backgroundColor: value ? "#22C55E" : isDark ? "#374151" : "#ccc" },
+        ]}
+      >
+        <Animated.View
+          style={[
+            modalStyles.toggleCircle,
+            { transform: [{ translateX: value ? 22 : 0 }] },
+          ]}
+        />
+      </TouchableOpacity>
+    </View>
+  ); // NEW
+
   return (
     <Modal visible={visible} transparent animationType="slide">
       <KeyboardAvoidingView
@@ -404,7 +581,7 @@ function AddSchedulerItemModal({
         style={modalStyles.overlay}
       >
         <View style={[modalStyles.sheet, { backgroundColor: isDark ? "#121826" : "#FFFFFF" }]}>
-          <View style={modalStyles.headerRow}>
+          <View className="header" style={modalStyles.headerRow}>
             <Text style={[modalStyles.headerText, { color: isDark ? "#E5E7EB" : "#111827" }]}>
               Add Scheduler Item
             </Text>
@@ -451,6 +628,28 @@ function AddSchedulerItemModal({
                 },
               ]}
             />
+            <Text style={[modalStyles.label, { color: isDark ? "#CBD5E1" : "#374151", marginTop: 8 }]}>
+              Default worker(s)
+            </Text>
+            <MultiSelect
+              style={[
+                modalStyles.dropdown,
+                {
+                  borderColor: isDark ? "#374151" : "#D1D5DB",
+                  backgroundColor: isDark ? "#1F2937" : "#FFF",
+                },
+              ]}
+              placeholderStyle={{ color: isDark ? "#9CA3AF" : "#9CA3AF" }}
+              selectedTextStyle={{ color: isDark ? "#F9FAFB" : "#111827" }}
+              itemTextStyle={{ color: isDark ? "#F9FAFB" : "#111827" }}
+              containerStyle={{ backgroundColor: isDark ? "#111827" : "#FFF" }}
+              data={workerOptions}
+              labelField="label"
+              valueField="value"
+              placeholder="Assign default worker(s)"
+              value={selectedWorkerIds}
+              onChange={(vals: string[]) => setSelectedWorkerIds(vals)}
+            />
 
             <Text style={[modalStyles.label, { color: isDark ? "#CBD5E1" : "#374151" }]}>
               Description
@@ -470,43 +669,19 @@ function AddSchedulerItemModal({
               ]}
             />
 
-            <Text style={[modalStyles.label, { color: isDark ? "#CBD5E1" : "#374151" }]}>
-              Priority
-            </Text>
-            <TextInput
-              keyboardType="number-pad"
-              value={priority}
-              onChangeText={setPriority}
-              placeholder="1 (highest) - 3 (lowest)"
-              placeholderTextColor={isDark ? "#9CA3AF" : "#9CA3AF"}
-              style={[
-                modalStyles.input,
-                {
-                  backgroundColor: isDark ? "#1F2937" : "#FFF",
-                  color: isDark ? "#FFF" : "#111",
-                  borderColor: isDark ? "#374151" : "#D1D5DB",
-                },
-              ]}
+            {/* NEW: Urgent / Important toggles (replace typed priority) */}
+            <ToggleSwitch
+              label="Urgent"
+              value={urgent}
+              onToggle={() => setUrgent((prev) => !prev)}
+            />
+            <ToggleSwitch
+              label="Important"
+              value={important}
+              onToggle={() => setImportant((prev) => !prev)}
             />
 
-            <Text style={[modalStyles.label, { color: isDark ? "#CBD5E1" : "#374151" }]}>
-              Estimated minutes (optional)
-            </Text>
-            <TextInput
-              keyboardType="number-pad"
-              value={minutes}
-              onChangeText={setMinutes}
-              placeholder="e.g. 30"
-              placeholderTextColor={isDark ? "#9CA3AF" : "#9CA3AF"}
-              style={[
-                modalStyles.input,
-                {
-                  backgroundColor: isDark ? "#1F2937" : "#FFF",
-                  color: isDark ? "#FFF" : "#111",
-                  borderColor: isDark ? "#374151" : "#D1D5DB",
-                },
-              ]}
-            />
+            
           </ScrollView>
 
           <TouchableOpacity style={modalStyles.submitButton} onPress={submit}>
@@ -688,4 +863,24 @@ const modalStyles = StyleSheet.create({
     alignItems: "center",
   },
   submitText: { color: "#fff", fontSize: 16, fontWeight: "700" },
-});
+
+  // NEW: toggle styles (mirroring your TaskModal look)
+  toggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 8,
+  },
+  toggleContainer: {
+    width: 44,
+    height: 24,
+    borderRadius: 12,
+    padding: 2,
+    justifyContent: "center",
+  },
+  toggleCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "#fff",
+  },
+}); 
