@@ -13,8 +13,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Alert, // NEW: for validation alerts like your sample
-  Animated, // NEW: for the toggle thumb animation like your sample
+  Alert, // for validation alerts
+  Animated, // for the toggle thumb animation
 } from "react-native";
 import SwipeableItem, { UnderlayParams } from "react-native-swipeable-item";
 import DraggableFlatList, {
@@ -31,7 +31,7 @@ import {
   writeBatch,
   doc,
   where,
-  getDoc,
+  getDoc, // still imported in case you want the guard back later
   serverTimestamp,
 } from "firebase/firestore";
 import { Dropdown, MultiSelect } from "react-native-element-dropdown";
@@ -67,7 +67,10 @@ const locationOptions = [
   { label: "Mail Boxes", value: "Mail Boxes" },
   { label: "Maintenance of all floors", value: "Maintenance of all floors" },
   { label: "Manager Office", value: "Manager Office" },
-  { label: "Men & Women Washroom & Sauna", value: "Men & Women Washroom & Sauna" },
+  {
+    label: "Men & Women Washroom & Sauna",
+    value: "Men & Women Washroom & Sauna",
+  },
   { label: "Men's & Women's Gym", value: "Men's & Women's Gym" },
   { label: "Moving Room", value: "Moving Room" },
   { label: "Other", value: "Other" },
@@ -80,7 +83,10 @@ const locationOptions = [
   { label: "Staircase", value: "Staircase" },
   { label: "Telecom Room", value: "Telecom Room" },
   { label: "Waiting Room", value: "Waiting Room" },
-  { label: "Washroom (Men,Women & Security)", value: "Washroom (Men,Women & Security)" },
+  {
+    label: "Washroom (Men,Women & Security)",
+    value: "Washroom (Men,Women & Security)",
+  },
   { label: "Windows & Mirrors", value: "Windows & Mirrors" },
 ];
 
@@ -143,6 +149,7 @@ const ymd = (d: Date) =>
     d.getDate()
   ).padStart(2, "0")}`;
 
+// NOTE: keeping this in case you need it elsewhere; rollout now uses selectedDay, not today.
 const dateToDayKey = (d: Date): DayKey | null => {
   const idx = d.getDay();
   const map: Record<number, DayKey | null> = {
@@ -165,9 +172,13 @@ export default function Scheduler() {
   const [dayIndex, setDayIndex] = useState(0);
   const selectedDay: DayKey = DAYS[dayIndex];
 
-  const [itemsByDay, setItemsByDay] = useState<Record<DayKey, TemplateItem[]>>(makeEmpty());
+  const [itemsByDay, setItemsByDay] = useState<Record<DayKey, TemplateItem[]>>(
+    makeEmpty()
+  );
   const originalRef = useRef<Record<DayKey, TemplateItem[]>>(makeEmpty());
-  const [loadingByDay, setLoadingByDay] = useState<Record<DayKey, boolean>>(makeLoading());
+  const [loadingByDay, setLoadingByDay] = useState<Record<DayKey, boolean>>(
+    makeLoading()
+  );
 
   const [dirtyDays, setDirtyDays] = useState<Set<DayKey>>(new Set());
   const dirtyDaysRef = useRef<Set<DayKey>>(new Set());
@@ -184,7 +195,11 @@ export default function Scheduler() {
     return onSnapshot(qy, (snap) => {
       const arr: Worker[] = snap.docs.map((d) => {
         const data = d.data() as any;
-        return { id: d.id, name: data.firstName || data.name || data.email || d.id, email: data.email };
+        return {
+          id: d.id,
+          name: data.firstName || data.name || data.email || d.id,
+          email: data.email,
+        };
       });
       setWorkers(arr);
     });
@@ -193,11 +208,17 @@ export default function Scheduler() {
   // subscribe per-day
   useEffect(() => {
     const unsubs = DAYS.map((day) => {
-      const qy = query(collection(db, "scheduler", day, "items"), orderBy("order"));
+      const qy = query(
+        collection(db, "scheduler", day, "items"),
+        orderBy("order")
+      );
       return onSnapshot(qy, (snap) => {
         setLoadingByDay((prev) => ({ ...prev, [day]: false }));
         if (dirtyDaysRef.current.has(day)) return;
-        const arr = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as TemplateItem[];
+        const arr = snap.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as any),
+        })) as TemplateItem[];
         setItemsByDay((prev) => ({ ...prev, [day]: arr }));
         originalRef.current = { ...originalRef.current, [day]: deepClone(arr) };
       });
@@ -205,59 +226,79 @@ export default function Scheduler() {
     return () => unsubs.forEach((u) => u());
   }, []);
 
-  // rollout
-  const rolloutAttemptedRef = useRef(false);
-  useEffect(() => {
-    const doRollout = async () => {
-      if (rolloutAttemptedRef.current) return;
-      const today = new Date();
-      const dayKey = dateToDayKey(today);
-      if (!dayKey) return;
-      if (loadingByDay[dayKey]) return;
+  // ===========================
+  // MANUAL ROLLOUT (selected day)
+  // ===========================
+  // ===========================
+  // MANUAL ROLLOUT (selected day)
+  // ===========================
+  const rolloutToday = async () => {
+    // Use the currently selected day (NOT the actual current weekday)
+    const dayKey = selectedDay;
+    const todayStr = ymd(new Date());
 
-      const todayStr = ymd(today);
-      const guardRef = doc(db, "scheduler_rollouts", todayStr);
-      const guardSnap = await getDoc(guardRef);
-      if (guardSnap.exists()) {
-        rolloutAttemptedRef.current = true;
-        return;
-      }
+    // --------- DUP GUARD DISABLED ----------
+    // const guardRef = doc(db, "task_rollouts", todayStr);
+    // const guardSnap = await getDoc(guardRef);
+    // if (guardSnap.exists()) {
+    //   Alert.alert("Already rolled out", "Today's tasks are already created.");
+    //   return;
+    // }
+    // ---------------------------------------
 
-      const templates = itemsByDay[dayKey] || [];
-      const batch = writeBatch(db);
+    // Ensure selected day’s templates are loaded
+    if (loadingByDay[dayKey]) {
+      Alert.alert(
+        "Please wait",
+        "Scheduler is still loading. Try again in a moment."
+      );
+      return;
+    }
 
-      templates.forEach((tpl) => {
-        if (!tpl.active) return;
-        const workerIds = tpl.assignedWorkerIds || [];
-        if (workerIds.length === 0) return;
-        workerIds.forEach((wid) => {
-          const ref = doc(collection(db, "tasks"));
-          batch.set(ref, {
-            title: tpl.title || "Untitled",
-            description: tpl.description || "",
-            priority: tpl.defaultPriority ?? 3,
-            dayKey,
-            dateYYYYMMDD: todayStr,
-            templateId: tpl.id,
-            assignedTo: wid,
-            status: "pending",
-            createdAt: serverTimestamp(),
-          });
-        });
-      });
+    const templates = itemsByDay[dayKey] || [];
+    const batch = writeBatch(db);
+    let createdCount = 0;
 
-      batch.set(guardRef, {
-        dayKey,
-        dateYYYYMMDD: todayStr,
+    templates.forEach((tpl) => {
+      if (!tpl?.active) return;
+
+      const workerIds = Array.isArray(tpl.assignedWorkerIds)
+        ? tpl.assignedWorkerIds
+        : [];
+      if (workerIds.length === 0) return;
+
+      // ONE doc per template item, with all workers in an array
+      const ref = doc(collection(db, "tasks"));
+      batch.set(ref, {
+        title: tpl.title || "Untitled",
+        description: tpl.description || "",
+        priority: tpl.defaultPriority ?? 3,
+        dayKey, // which schedule set was used
+        dateYYYYMMDD: todayStr, // date you rolled out
+        templateId: tpl.id,
+        assignedWorkers: workerIds, // <-- the array you wanted
+        status: "assigned",
+        order: tpl.order ?? 999, // optional: carry over sort order
         createdAt: serverTimestamp(),
       });
 
-      await batch.commit();
-      rolloutAttemptedRef.current = true;
-    };
+      createdCount += 1; // one per template item
+    });
 
-    doRollout();
-  }, [itemsByDay, loadingByDay]);
+    // --------- DUP GUARD WRITE DISABLED ----------
+    // batch.set(guardRef, {
+    //   dayKey,
+    //   dateYYYYMMDD: todayStr,
+    //   createdAt: serverTimestamp(),
+    // });
+    // ---------------------------------------------
+
+    await batch.commit();
+    Alert.alert(
+      "Success",
+      `Rolled out ${createdCount} task${createdCount === 1 ? "" : "s"}!`
+    );
+  };
 
   const selectedListRaw = itemsByDay[selectedDay] ?? [];
   const selectedList = React.useMemo(() => {
@@ -273,7 +314,8 @@ export default function Scheduler() {
   const selectedLoading = loadingByDay[selectedDay];
   const hasDirty = dirtyDays.size > 0;
 
-  const markDirty = (day: DayKey) => setDirtyDays((prev) => new Set(prev).add(day));
+  const markDirty = (day: DayKey) =>
+    setDirtyDays((prev) => new Set(prev).add(day));
   const onReorderDay = (day: DayKey, next: TemplateItem[]) => {
     setItemsByDay((prev) => ({ ...prev, [day]: next }));
     markDirty(day);
@@ -316,8 +358,10 @@ export default function Scheduler() {
             ...it,
             id: ref.id,
             order: idx,
-            assignedWorkerIds: Array.isArray(it.assignedWorkerIds) ? it.assignedWorkerIds : [],
-            // defaultPriority is already computed in the modal submit // NEW
+            assignedWorkerIds: Array.isArray(it.assignedWorkerIds)
+              ? it.assignedWorkerIds
+              : [],
+            // defaultPriority is already computed in the modal submit
           },
           { merge: true }
         );
@@ -352,7 +396,11 @@ export default function Scheduler() {
     return m;
   }, [workers]);
 
-  const renderRow = ({ item, drag, isActive }: RenderItemParams<TemplateItem>) => {
+  const renderRow = ({
+    item,
+    drag,
+    isActive,
+  }: RenderItemParams<TemplateItem>) => {
     const assignedNames =
       (item.assignedWorkerIds || [])
         .map((id) => nameById[id] || id)
@@ -392,7 +440,9 @@ export default function Scheduler() {
           style={[styles.card, isActive && { opacity: 0.9 }]}
         >
           <Text style={styles.title}>{item.title || "Untitled"}</Text>
-          {!!item.description && <Text style={styles.meta}>{item.description}</Text>}
+          {!!item.description && (
+            <Text style={styles.meta}>{item.description}</Text>
+          )}
           <Text style={styles.meta}>
             Priority {item.defaultPriority ?? 3}
             {item.roleNeeded ? ` • ${item.roleNeeded}` : ""}
@@ -421,8 +471,18 @@ export default function Scheduler() {
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity style={styles.addBtn} onPress={() => setAddOpen(true)}>
+          <TouchableOpacity
+            style={styles.addBtn}
+            onPress={() => setAddOpen(true)}
+          >
             <Text style={styles.addBtnText}>Add</Text>
+          </TouchableOpacity>
+
+          {/* Always enabled rollout */}
+          <TouchableOpacity style={styles.rolloutBtn} onPress={rolloutToday}>
+            <Text style={styles.rolloutText}>
+              Rollout {DAY_LABEL[selectedDay]}
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -435,7 +495,9 @@ export default function Scheduler() {
         ) : (
           <DraggableFlatList
             data={selectedList}
-            keyExtractor={(it, idx) => (it?.id ? `k_${it.id}` : `fallback_${idx}`)}
+            keyExtractor={(it, idx) =>
+              it?.id ? `k_${it.id}` : `fallback_${idx}`
+            }
             onDragEnd={({ data }) => onReorderDay(selectedDay, data)}
             renderItem={renderRow}
             activationDistance={16}
@@ -447,7 +509,10 @@ export default function Scheduler() {
         {/* Save/discard bar */}
         {hasDirty && (
           <View style={styles.saveBar}>
-            <TouchableOpacity style={styles.discardBtn} onPress={discardChanges}>
+            <TouchableOpacity
+              style={styles.discardBtn}
+              onPress={discardChanges}
+            >
               <Text style={styles.discardText}>Discard</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.saveBtn} onPress={saveChanges}>
@@ -490,34 +555,31 @@ function AddSchedulerItemModal({
   const [title, setTitle] = useState("");
   const [desc, setDesc] = useState("");
   // const [priority, setPriority] = useState<string>("3"); // REMOVED: typed priority
-  const [urgent, setUrgent] = useState(false); // NEW
-  const [important, setImportant] = useState(false); // NEW
+  const [urgent, setUrgent] = useState(false);
+  const [important, setImportant] = useState(false);
   const [selectedWorkerIds, setSelectedWorkerIds] = useState<string[]>([]);
 
   const reset = () => {
     setTitle("");
     setDesc("");
-    // setPriority("3"); // REMOVED
-    setUrgent(false); // NEW
-    setImportant(false); // NEW
+    setUrgent(false);
+    setImportant(false);
     setSelectedWorkerIds([]);
   };
 
   const computePriorityFromFlags = (u: boolean, i: boolean) => {
-    // SAME MAPPING as your example:
     // both = 1, important only = 2, urgent only = 3, none = 4
     if (u && i) return 1;
     if (!u && i) return 2;
     if (u && !i) return 3;
     return 4;
-  }; // NEW
+  };
 
   const submit = async () => {
-    const finalPriority = computePriorityFromFlags(urgent, important); // NEW
+    const finalPriority = computePriorityFromFlags(urgent, important);
 
     if (finalPriority === 4) {
-      // mimic your validation: require at least one
-      Alert.alert("Please select Urgent and/or Important."); // NEW
+      Alert.alert("Please select Urgent and/or Important.");
       return;
     }
 
@@ -525,7 +587,7 @@ function AddSchedulerItemModal({
       id: makeTempId(),
       title: title || "Untitled",
       description: desc || "",
-      defaultPriority: finalPriority, // NEW
+      defaultPriority: finalPriority,
       assignedWorkerIds: selectedWorkerIds,
       order: 9_999,
       active: true,
@@ -537,7 +599,6 @@ function AddSchedulerItemModal({
 
   const workerOptions = workers.map((w) => ({ label: w.name, value: w.id }));
 
-  // NEW: ToggleSwitch component (styled like your sample)
   const ToggleSwitch = ({
     label,
     value,
@@ -572,7 +633,7 @@ function AddSchedulerItemModal({
         />
       </TouchableOpacity>
     </View>
-  ); // NEW
+  );
 
   return (
     <Modal visible={visible} transparent animationType="slide">
@@ -580,18 +641,37 @@ function AddSchedulerItemModal({
         behavior={Platform.select({ ios: "padding", android: undefined })}
         style={modalStyles.overlay}
       >
-        <View style={[modalStyles.sheet, { backgroundColor: isDark ? "#121826" : "#FFFFFF" }]}>
+        <View
+          style={[
+            modalStyles.sheet,
+            { backgroundColor: isDark ? "#121826" : "#FFFFFF" },
+          ]}
+        >
           <View className="header" style={modalStyles.headerRow}>
-            <Text style={[modalStyles.headerText, { color: isDark ? "#E5E7EB" : "#111827" }]}>
+            <Text
+              style={[
+                modalStyles.headerText,
+                { color: isDark ? "#E5E7EB" : "#111827" },
+              ]}
+            >
               Add Scheduler Item
             </Text>
             <TouchableOpacity onPress={onClose}>
-              <Text style={{ fontSize: 22, color: isDark ? "#93A4B3" : "#6B7280" }}>×</Text>
+              <Text
+                style={{ fontSize: 22, color: isDark ? "#93A4B3" : "#6B7280" }}
+              >
+                ×
+              </Text>
             </TouchableOpacity>
           </View>
 
           <ScrollView keyboardShouldPersistTaps="handled">
-            <Text style={[modalStyles.label, { color: isDark ? "#CBD5E1" : "#374151" }]}>
+            <Text
+              style={[
+                modalStyles.label,
+                { color: isDark ? "#CBD5E1" : "#374151" },
+              ]}
+            >
               Location / Title
             </Text>
             <Dropdown
@@ -628,7 +708,12 @@ function AddSchedulerItemModal({
                 },
               ]}
             />
-            <Text style={[modalStyles.label, { color: isDark ? "#CBD5E1" : "#374151", marginTop: 8 }]}>
+            <Text
+              style={[
+                modalStyles.label,
+                { color: isDark ? "#CBD5E1" : "#374151", marginTop: 8 },
+              ]}
+            >
               Default worker(s)
             </Text>
             <MultiSelect
@@ -651,7 +736,12 @@ function AddSchedulerItemModal({
               onChange={(vals: string[]) => setSelectedWorkerIds(vals)}
             />
 
-            <Text style={[modalStyles.label, { color: isDark ? "#CBD5E1" : "#374151" }]}>
+            <Text
+              style={[
+                modalStyles.label,
+                { color: isDark ? "#CBD5E1" : "#374151" },
+              ]}
+            >
               Description
             </Text>
             <TextInput
@@ -669,7 +759,7 @@ function AddSchedulerItemModal({
               ]}
             />
 
-            {/* NEW: Urgent / Important toggles (replace typed priority) */}
+            {/* Urgent / Important toggles */}
             <ToggleSwitch
               label="Urgent"
               value={urgent}
@@ -680,8 +770,6 @@ function AddSchedulerItemModal({
               value={important}
               onToggle={() => setImportant((prev) => !prev)}
             />
-
-            
           </ScrollView>
 
           <TouchableOpacity style={modalStyles.submitButton} onPress={submit}>
@@ -737,6 +825,15 @@ const getStyles = (isDark: boolean) =>
       borderRadius: 10,
     },
     addBtnText: { color: "#FFF", fontWeight: "700" },
+
+    rolloutBtn: {
+      backgroundColor: "#10B981",
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 8,
+      marginLeft: 8,
+    },
+    rolloutText: { color: "#fff", fontWeight: "700" },
 
     center: { flex: 1, alignItems: "center", justifyContent: "center" },
     loadingText: { marginTop: 8, color: isDark ? "#E5E7EB" : "#111827" },
@@ -883,4 +980,4 @@ const modalStyles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: "#fff",
   },
-}); 
+});
