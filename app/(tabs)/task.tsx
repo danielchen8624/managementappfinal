@@ -19,10 +19,13 @@ import {
   deleteDoc,
   // orderBy, // optional: uncomment if you have an index on "order"
 } from "firebase/firestore";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { useUser } from "../UserContext";
 import { useTheme } from "../ThemeContext";
-import { Swipeable } from "react-native-gesture-handler";
+
+// NEW: same swipe lib you’re using in scheduler
+import SwipeableItem, { UnderlayParams } from "react-native-swipeable-item";
+import { Ionicons } from "@expo/vector-icons";
 
 /** Helper to sort by optional `order` field */
 function sortByOrder<T extends { order?: number }>(arr: T[]) {
@@ -150,17 +153,12 @@ function TaskPage() {
     return "#EF4444"; // red
   };
 
-  // Delete action
-  const confirmDeleteTask = (id: string, swipeRef?: React.RefObject<Swipeable>) => {
+  const confirmDeleteTask = (id: string, close?: () => void) => {
     Alert.alert(
       "Delete this task?",
       "This cannot be undone.",
       [
-        {
-          text: "Cancel",
-          style: "cancel",
-          onPress: () => swipeRef?.current?.close?.(),
-        },
+        { text: "Cancel", style: "cancel", onPress: () => close?.() },
         {
           text: "Delete",
           style: "destructive",
@@ -169,7 +167,8 @@ function TaskPage() {
               await deleteDoc(doc(db, "tasks", id));
             } catch (e: any) {
               Alert.alert("Error", e?.message || "Failed to delete task.");
-              swipeRef?.current?.close?.();
+            } finally {
+              close?.();
             }
           },
         },
@@ -178,49 +177,47 @@ function TaskPage() {
     );
   };
 
-  // Right (revealed when you swipe LEFT) underlay UI
-  const RightActions = () => (
-    <View style={styles.rightAction}>
-      <Text style={styles.rightActionText}>Delete</Text>
-    </View>
-  );
-
-  const SwipeableCard = ({ item }: { item: any }) => {
-    const swipeRef = useRef<Swipeable>(null);
-
-    return (
-      <Swipeable
-        ref={swipeRef}
-        renderRightActions={RightActions}
-        // Swiping LEFT opens the RIGHT actions; trigger confirm when opened to the right
-        onSwipeableOpen={(direction) => {
-          if (direction === "right") {
-            // Ask before deleting
-            confirmDeleteTask(item.id, swipeRef);
-          }
-        }}
-        rightThreshold={64}
-        overshootRight={false}
+  const renderCard = (item: any) => (
+    <SwipeableItem
+      key={item.id}
+      item={item}
+      snapPointsLeft={[96]}       // swipe LEFT to reveal delete
+      overSwipe={32}
+      renderUnderlayLeft={({ close }: UnderlayParams<any>) => (
+        <View style={styles.underlayLeft}>
+          <TouchableOpacity
+            onPress={() => confirmDeleteTask(item.id, close)}
+            style={styles.underlayButton}
+            activeOpacity={0.9}
+          >
+            <Ionicons name="trash-outline" size={28} color="#fff" />
+            <Text style={styles.underlayText}>Delete</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      onChange={({ openDirection }) => {
+        if (openDirection === "left") {
+          // Immediately ask as soon as user swipes left
+          confirmDeleteTask(item.id);
+        }
+      }}
+    >
+      <TouchableOpacity
+        onPress={() => openScreen(item)}
+        style={styles.taskCard}
+        activeOpacity={0.8}
       >
-        <TouchableOpacity
-          onPress={() => openScreen(item)}
-          style={styles.taskCard}
-          activeOpacity={0.8}
-        >
-          <View style={{ paddingRight: 14 }}>
-            <Text style={styles.taskTitle}>{item.taskType || item.title || "Untitled"}</Text>
-            <Text style={styles.taskText}>Room: {item.roomNumber || "N/A"}</Text>
-            <Text style={styles.taskText}>Priority: {item.priority ?? "Unassigned"}</Text>
-          </View>
-          <View style={styles.pillRail}>
-            <View style={[styles.pill, { backgroundColor: getStatusColor(item) }]} />
-          </View>
-        </TouchableOpacity>
-      </Swipeable>
-    );
-  };
-
-  const renderCard = (item: any) => <SwipeableCard key={item.id} item={item} />;
+        <View style={{ paddingRight: 14 }}>
+          <Text style={styles.taskTitle}>{item.taskType || item.title || "Untitled"}</Text>
+          <Text style={styles.taskText}>Room: {item.roomNumber || "N/A"}</Text>
+          <Text style={styles.taskText}>Priority: {item.priority ?? "Unassigned"}</Text>
+        </View>
+        <View style={styles.pillRail}>
+          <View style={[styles.pill, { backgroundColor: getStatusColor(item) }]} />
+        </View>
+      </TouchableOpacity>
+    </SwipeableItem>
+  );
 
   const openHistory = () => router.push("/completedTasks");
 
@@ -427,18 +424,28 @@ const getStyles = (isDark: boolean) =>
     text: {
       color: isDark ? "#E5E7EB" : "#111",
     },
-    // Swipe right actions (shown when user swipes left)
-    rightAction: {
+
+    /* Swipe underlay (left) */
+    underlayLeft: {
+      flex: 1,
+      marginVertical: 8,
+      borderRadius: 16,
+      overflow: "hidden",
       backgroundColor: "#EF4444",
       justifyContent: "center",
-      alignItems: "flex-end",
-      paddingHorizontal: 20,
-      marginBottom: 16,
-      borderRadius: 16,
+      alignItems: "center",
     },
-    rightActionText: {
+    underlayButton: {
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 12,
+      width: "100%",
+      height: "100%",
+    },
+    underlayText: {
+      marginTop: 6,
       color: "#fff",
       fontWeight: "700",
-      fontSize: 16,
     },
   });
