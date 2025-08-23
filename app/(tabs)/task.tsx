@@ -1,3 +1,4 @@
+import React, { useMemo, useRef, useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -11,7 +12,7 @@ import {
   Easing,
 } from "react-native";
 import { router } from "expo-router";
-import { db, auth } from "../../firebaseConfig"; // <-- auth used for employee UID
+import { db, auth } from "../../firebaseConfig";
 import {
   collection,
   query,
@@ -20,7 +21,6 @@ import {
   doc,
   deleteDoc,
 } from "firebase/firestore";
-import React, { useMemo, useRef, useState, useEffect } from "react";
 import { useUser } from "../UserContext";
 import { useTheme } from "../ThemeContext";
 import { useServerTime, priorityWindows } from "../serverTimeContext";
@@ -221,17 +221,16 @@ const PriorityToggle = ({
    Main Page
    ========================================================= */
 function TaskPage() {
-  // Manager buckets (renamed)
+  // Manager buckets
   const [MP1, setMP1] = useState<any[]>([]);
   const [MP2, setMP2] = useState<any[]>([]);
   const [MP3, setMP3] = useState<any[]>([]);
 
-  // for employee: buckets only containing tasks assigned to current user
-  const [EP1, setEP1] = useState<any[]>([]); // for employee
-  const [EP2, setEP2] = useState<any[]>([]); // for employee
-  const [EP3, setEP3] = useState<any[]>([]); // for employee
+  // Employee buckets (only tasks assigned to current user)
+  const [EP1, setEP1] = useState<any[]>([]);
+  const [EP2, setEP2] = useState<any[]>([]);
+  const [EP3, setEP3] = useState<any[]>([]);
 
-  // Projects (unchanged)
   const [currentProjects, setCurrentProjects] = useState<any[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -250,7 +249,7 @@ function TaskPage() {
   const { activePriority, tzNow, nextBoundary } = useServerTime();
   const todayISO = useMemo(() => tzNow().toISODate(), [tzNow]);
 
-  const uid = auth.currentUser?.uid || null; // for employee
+  const uid = auth.currentUser?.uid || null;
 
   /* ---------- theme crossfade ---------- */
   const themeAnim = useRef(new Animated.Value(isDark ? 1 : 0)).current;
@@ -266,7 +265,6 @@ function TaskPage() {
 
   /* ---------- data subscriptions: MANAGER (see all) ---------- */
   useEffect(() => {
-
     const q1 = query(
       collection(db, "tasks"),
       where("priority", "==", 1),
@@ -320,9 +318,8 @@ function TaskPage() {
 
   /* ---------- data subscriptions: EMPLOYEE (assigned only) ---------- */
   useEffect(() => {
-    if (role !== "employee" || !uid) return; // for employee
+    if (role !== "employee" || !uid) return;
 
-    // helper to merge two snapshots (assignedWorkers contains uid OR assignedTo == uid)
     const subscribeEmployeeBucket = (
       priority: 1 | 2 | 3,
       setBucket: (xs: any[]) => void
@@ -343,9 +340,6 @@ function TaskPage() {
       );
       unsubs.push(
         onSnapshot(qAW, (snap) => {
-          // refresh this slice
-          // first remove old entries from this source (keep simple: rebuild all)
-          // We'll rebuild map entirely from both queries on each change
           map.clear();
           snap.forEach((d) => map.set(d.id, { id: d.id, ...d.data() }));
           collectAndSet();
@@ -361,7 +355,6 @@ function TaskPage() {
       );
       unsubs.push(
         onSnapshot(qAT, (snap) => {
-          // merge on top
           snap.forEach((d) => map.set(d.id, { id: d.id, ...d.data() }));
           collectAndSet();
         })
@@ -379,7 +372,7 @@ function TaskPage() {
       off2?.();
       off3?.();
     };
-  }, [todayISO, role, uid]); // for employee
+  }, [todayISO, role, uid]);
 
   const handleRefresh = () => {
     setIsRefreshing(true);
@@ -432,16 +425,19 @@ function TaskPage() {
     const prefix = "Next window: ";
     if (!nb) return `${prefix}${priorityWindows[0].start}`;
     if (nb.hasSame(now, "day")) return `${prefix}${nb.toFormat("HH:mm")}`;
-
     const tomorrow = now.plus({ days: 1 }).startOf("day");
     if (nb.startOf("day").equals(tomorrow)) {
       return `${prefix}Tomorrow ${nb.toFormat("HH:mm")}`;
     }
-
     return `${prefix}${nb.toFormat("ccc HH:mm")}`;
   };
 
+  //  Manager-only delete UI + guard. Employees can't even trigger it.
   const confirmDeleteTask = (id: string, close?: () => void) => {
+    if (role !== "manager") {
+      Alert.alert("Not allowed", "Only managers can delete tasks.");
+      return;
+    }
     Alert.alert(
       "Delete this task?",
       "This cannot be undone.",
@@ -452,7 +448,7 @@ function TaskPage() {
           style: "destructive",
           onPress: async () => {
             try {
-              await deleteDoc(doc(db, "tasks", id));
+              await deleteDoc(doc(db, "tasks", id)); // Rules enforce this too
             } catch (e: any) {
               Alert.alert("Error", e?.message || "Failed to delete task.");
             } finally {
@@ -506,35 +502,40 @@ function TaskPage() {
 
   const renderCard = (item: any) => {
     const isActive = item.priority === activePriority;
+    const canDelete = role === "manager"; // 👈 only managers can swipe-delete
+
     return (
       <SwipeableItem
         key={item.id}
         item={item}
-        snapPointsLeft={[96]}
-        overSwipe={32}
-        renderUnderlayLeft={({ close }: UnderlayParams<any>) => (
-          <View style={styles.underlayLeft}>
-            <TouchableOpacity
-              onPress={() => confirmDeleteTask(item.id, close)}
-              style={styles.underlayButton}
-              activeOpacity={0.9}
-            >
-              <Ionicons name="trash-outline" size={28} color="#fff" />
-              <Text style={styles.underlayText}>Delete</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-        onChange={({ openDirection }) => {
-          if (openDirection === "left") {
-            confirmDeleteTask(item.id);
-          }
-        }}
+        snapPointsLeft={canDelete ? [96] : []}
+        overSwipe={canDelete ? 32 : 0}
+        renderUnderlayLeft={
+          canDelete
+            ? ({ close }: UnderlayParams<any>) => (
+                <View style={styles.underlayLeft}>
+                  <TouchableOpacity
+                    onPress={() => confirmDeleteTask(item.id, close)}
+                    style={styles.underlayButton}
+                    activeOpacity={0.9}
+                  >
+                    <Ionicons name="trash-outline" size={28} color="#fff" />
+                    <Text style={styles.underlayText}>Delete</Text>
+                  </TouchableOpacity>
+                </View>
+              )
+            : undefined
+        }
+        onChange={
+          canDelete
+            ? ({ openDirection }) => {
+                if (openDirection === "left") confirmDeleteTask(item.id);
+              }
+            : undefined
+        }
       >
         <Animated.View style={[styles.taskCard, glowStyle(isActive)]}>
-          <TouchableOpacity
-            onPress={() => openScreen(item)}
-            activeOpacity={0.86}
-          >
+          <TouchableOpacity onPress={() => openScreen(item)} activeOpacity={0.86}>
             <View style={{ paddingRight: 14 }}>
               <View style={styles.titleRow}>
                 <Text style={styles.taskTitle}>
@@ -547,22 +548,14 @@ function TaskPage() {
                   </View>
                 )}
               </View>
-              <Text style={styles.taskText}>
-                Room: {item.roomNumber || "N/A"}
-              </Text>
-              <Text style={styles.taskText}>
-                Priority: {item.priority ?? "Unassigned"}
-              </Text>
+              <Text style={styles.taskText}>Room: {item.roomNumber || "N/A"}</Text>
+              <Text style={styles.taskText}>Priority: {item.priority ?? "Unassigned"}</Text>
               {typeof item.estimatedMinutes === "number" && (
-                <Text style={styles.taskSubtle}>
-                  ETA: ~{item.estimatedMinutes} min
-                </Text>
+                <Text style={styles.taskSubtle}>ETA: ~{item.estimatedMinutes} min</Text>
               )}
             </View>
             <View style={styles.pillRail}>
-              <View
-                style={[styles.pill, { backgroundColor: getStatusColor(item) }]}
-              />
+              <View style={[styles.pill, { backgroundColor: getStatusColor(item) }]} />
             </View>
           </TouchableOpacity>
         </Animated.View>
@@ -624,9 +617,7 @@ function TaskPage() {
       <View style={styles.banner}>
         {activePriority ? (
           <>
-            <Text style={styles.bannerTitle}>
-              Priority {activePriority} window
-            </Text>
+            <Text style={styles.bannerTitle}>Priority {activePriority} window</Text>
             <Text style={styles.bannerSubtitle}>
               {windowLabel(activePriority)}
               {countdown !== null ? `  ·  ${countdown} min left` : ""}
@@ -664,7 +655,7 @@ function TaskPage() {
               {showTasks && (
                 <View>
                   <PriorityToggle
-                    label="Priority 1 (MP1)"
+                    label="Priority 1"
                     open={showP1}
                     onPress={() => setShowP1(!showP1)}
                     isActiveNow={activePriority === 1}
@@ -673,15 +664,13 @@ function TaskPage() {
                   />
                   {showP1 &&
                     (MP1.length === 0 ? (
-                      <Text style={styles.emptyText}>
-                        No items for Priority 1.
-                      </Text>
+                      <Text style={styles.emptyText}>No items for Priority 1.</Text>
                     ) : (
                       MP1.map((item) => renderCard(item))
                     ))}
 
                   <PriorityToggle
-                    label="Priority 2 (MP2)"
+                    label="Priority 2"
                     open={showP2}
                     onPress={() => setShowP2(!showP2)}
                     isActiveNow={activePriority === 2}
@@ -690,15 +679,13 @@ function TaskPage() {
                   />
                   {showP2 &&
                     (MP2.length === 0 ? (
-                      <Text style={styles.emptyText}>
-                        No items for Priority 2.
-                      </Text>
+                      <Text style={styles.emptyText}>No items for Priority 2.</Text>
                     ) : (
                       MP2.map((item) => renderCard(item))
                     ))}
 
                   <PriorityToggle
-                    label="Priority 3 (MP3)"
+                    label="Priority 3"
                     open={showP3}
                     onPress={() => setShowP3(!showP3)}
                     isActiveNow={activePriority === 3}
@@ -707,9 +694,7 @@ function TaskPage() {
                   />
                   {showP3 &&
                     (MP3.length === 0 ? (
-                      <Text style={styles.emptyText}>
-                        No items for Priority 3.
-                      </Text>
+                      <Text style={styles.emptyText}>No items for Priority 3.</Text>
                     ) : (
                       MP3.map((item) => renderCard(item))
                     ))}
@@ -724,9 +709,7 @@ function TaskPage() {
               />
               {showProjects &&
                 (currentProjects.length === 0 ? (
-                  <Text style={styles.emptyText}>
-                    No pending projects available.
-                  </Text>
+                  <Text style={styles.emptyText}>No pending projects available.</Text>
                 ) : (
                   currentProjects.map((item) => renderCard(item))
                 ))}
@@ -747,7 +730,7 @@ function TaskPage() {
             <>
               <SectionToggle
                 title="My Tasks"
-                pillText="Assigned to me" // for employee
+                pillText="Assigned to me"
                 open={showTasks}
                 onPress={() => setShowTasks(!showTasks)}
                 isDark={isDark}
@@ -755,9 +738,8 @@ function TaskPage() {
 
               {showTasks && (
                 <View>
-                  {/* for employee */}
                   <PriorityToggle
-                    label="Priority 1 (EP1)" // for employee
+                    label="Priority 1"
                     open={showP1}
                     onPress={() => setShowP1(!showP1)}
                     isActiveNow={activePriority === 1}
@@ -766,16 +748,13 @@ function TaskPage() {
                   />
                   {showP1 &&
                     (EP1.length === 0 ? (
-                      <Text style={styles.emptyText}>
-                        No items for Priority 1.
-                      </Text>
+                      <Text style={styles.emptyText}>No items for Priority 1.</Text>
                     ) : (
                       EP1.map((item) => renderCard(item))
                     ))}
 
-                  {/* for employee */}
                   <PriorityToggle
-                    label="Priority 2 (EP2)" // for employee
+                    label="Priority 2"
                     open={showP2}
                     onPress={() => setShowP2(!showP2)}
                     isActiveNow={activePriority === 2}
@@ -784,16 +763,13 @@ function TaskPage() {
                   />
                   {showP2 &&
                     (EP2.length === 0 ? (
-                      <Text style={styles.emptyText}>
-                        No items for Priority 2.
-                      </Text>
+                      <Text style={styles.emptyText}>No items for Priority 2.</Text>
                     ) : (
                       EP2.map((item) => renderCard(item))
                     ))}
 
-                  {/* for employee */}
                   <PriorityToggle
-                    label="Priority 3 (EP3)" // for employee
+                    label="Priority 3"
                     open={showP3}
                     onPress={() => setShowP3(!showP3)}
                     isActiveNow={activePriority === 3}
@@ -802,9 +778,7 @@ function TaskPage() {
                   />
                   {showP3 &&
                     (EP3.length === 0 ? (
-                      <Text style={styles.emptyText}>
-                        No items for Priority 3.
-                      </Text>
+                      <Text style={styles.emptyText}>No items for Priority 3.</Text>
                     ) : (
                       EP3.map((item) => renderCard(item))
                     ))}
@@ -952,22 +926,20 @@ const getStyles = (isDark: boolean) =>
     text: {
       color: isDark ? "#E5E7EB" : "#111",
     },
+
+    /* Underlay only behind the row (not full page) */
     underlayLeft: {
-      flex: 1,
-      marginVertical: 8,
-      borderRadius: 16,
-      overflow: "hidden",
+      ...StyleSheet.absoluteFillObject, // fill just the row area
       backgroundColor: "#EF4444",
-      justifyContent: "center",
+      borderRadius: 16,
       alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 16,
     },
     underlayButton: {
       flexDirection: "column",
       alignItems: "center",
       justifyContent: "center",
-      paddingVertical: 12,
-      width: "100%",
-      height: "100%",
     },
     underlayText: {
       marginTop: 6,
