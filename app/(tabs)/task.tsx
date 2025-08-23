@@ -95,21 +95,24 @@ function TaskPage() {
     const q1 = query(
       collection(db, "tasks"),
       where("priority", "==", 1),
-      where("status", "in", statuses)
+      where("status", "in", statuses),
+      where("forToday", "==", true) // NEW: filter to today’s tasks only
       // where("taskDate", "==", todayISO) // NEW: optional if you store dates
       // orderBy("order") // optional if you have an index
     );
     const q2 = query(
       collection(db, "tasks"),
       where("priority", "==", 2),
-      where("status", "in", statuses)
+      where("status", "in", statuses),
+      where("forToday", "==", true) // NEW: filter to today’s tasks only
       // where("taskDate", "==", todayISO) // NEW: optional
       // orderBy("order")
     );
     const q3 = query(
       collection(db, "tasks"),
       where("priority", "==", 3),
-      where("status", "in", statuses)
+      where("status", "in", statuses),
+      where("forToday", "==", true) // NEW: filter to today’s tasks only
       // where("taskDate", "==", todayISO) // NEW: optional
       // orderBy("order")
     );

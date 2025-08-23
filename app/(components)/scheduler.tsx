@@ -1,3 +1,5 @@
+// THIS PAGE HAS THE HANDLING FOR TASK ROLLOUT. THIS INCLUDES DELETING/RESETTING TASKS AFTER EACH NEW DAY.
+// MOVE THIS TO A CLOUD FUNCTION LATER.
 // app/(manager)/scheduler.tsx
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -33,6 +35,7 @@ import {
   where,
   getDoc, // still imported in case you want the guard back later
   serverTimestamp,
+  getDocs, // NEW
 } from "firebase/firestore";
 import { Dropdown, MultiSelect } from "react-native-element-dropdown";
 
@@ -227,13 +230,42 @@ export default function Scheduler() {
   }, []);
 
   // ===========================
-  // MANUAL ROLLOUT (selected day)
+  // NEW: helper to flip existing "today" tasks off
   // ===========================
+  async function markExistingTasksNotForToday(todayStr: string) {
+    const ids = new Set<string>();
+    const tasksRef = collection(db, "tasks");
+
+    // Prefer explicit flag for today
+    const qFlag = query(tasksRef, where("forToday", "==", true));
+    const snapFlag = await getDocs(qFlag);
+    snapFlag.forEach((d) => ids.add(d.id));
+
+    // Fallback: same business date (covers older docs created before `forToday` existed)
+    const qDate = query(tasksRef, where("dateYYYYMMDD", "==", todayStr));
+    const snapDate = await getDocs(qDate);
+    snapDate.forEach((d) => ids.add(d.id));
+
+    const allIds = Array.from(ids);
+    if (allIds.length === 0) return 0;
+
+    // Chunk to respect Firestore's 500 writes per batch
+    const CHUNK = 450;
+    for (let i = 0; i < allIds.length; i += CHUNK) {
+      const batch = writeBatch(db);
+      const slice = allIds.slice(i, i + CHUNK);
+      slice.forEach((id) => {
+        batch.update(doc(db, "tasks", id), { forToday: false });
+      });
+      await batch.commit();
+    }
+    return allIds.length;
+  }
+
   // ===========================
   // MANUAL ROLLOUT (selected day)
   // ===========================
   const rolloutToday = async () => {
-    // Use the currently selected day (NOT the actual current weekday)
     const dayKey = selectedDay;
     const todayStr = ymd(new Date());
 
@@ -248,12 +280,12 @@ export default function Scheduler() {
 
     // Ensure selected day’s templates are loaded
     if (loadingByDay[dayKey]) {
-      Alert.alert(
-        "Please wait",
-        "Scheduler is still loading. Try again in a moment."
-      );
+      Alert.alert("Please wait", "Scheduler is still loading. Try again in a moment.");
       return;
     }
+
+    // NEW: flip any existing "today" tasks off before creating new ones
+    const cleared = await markExistingTasksNotForToday(todayStr); // NEW
 
     const templates = itemsByDay[dayKey] || [];
     const batch = writeBatch(db);
@@ -280,6 +312,7 @@ export default function Scheduler() {
         status: "assigned",
         order: tpl.order ?? 999, // optional: carry over sort order
         createdAt: serverTimestamp(),
+        forToday: true, // NEW: mark as today's batch
       });
 
       createdCount += 1; // one per template item
@@ -296,7 +329,7 @@ export default function Scheduler() {
     await batch.commit();
     Alert.alert(
       "Success",
-      `Rolled out ${createdCount} task${createdCount === 1 ? "" : "s"}!`
+      `Cleared ${cleared} existing task${cleared === 1 ? "" : "s"} from today.\nRolled out ${createdCount} new task${createdCount === 1 ? "" : "s"}!`
     );
   };
 

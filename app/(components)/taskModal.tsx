@@ -146,6 +146,7 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
         createdBy: currentUser.uid,
         createdAt: new Date(),
         assignedWorkers: selectedAssignees,
+        forToday: true,
       });
       Alert.alert("Request Submitted!");
     } catch (error) {
