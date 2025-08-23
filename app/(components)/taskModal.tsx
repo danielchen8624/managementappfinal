@@ -1,3 +1,4 @@
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Modal,
   View,
@@ -7,13 +8,19 @@ import {
   Alert,
   StyleSheet,
   Animated,
+  Easing,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  ScrollView,
+  Platform,
 } from "react-native";
-import React, { useState, useEffect } from "react";
 import { Dropdown, MultiSelect } from "react-native-element-dropdown";
 import { db, auth } from "../../firebaseConfig";
 import { collection, addDoc, getDocs, query, where } from "firebase/firestore";
 import { useTheme } from "../ThemeContext";
+import { Ionicons } from "@expo/vector-icons";
 
+/* ---------- Location options ---------- */
 const data = [
   { label: "Area of children", value: "Area of children" },
   { label: "Basket Ball", value: "Basket Ball" },
@@ -73,43 +80,93 @@ type TaskModalProps = {
 };
 
 function TaskModal({ visible, onClose }: TaskModalProps) {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+  const s = getStyles(isDark);
+
   const [taskAddress, setTaskAddress] = useState("");
   const [taskType, setTaskType] = useState("");
   const [taskDescription, setTaskDescription] = useState("");
   const [roomNumber, setRoomNumber] = useState("");
-  const [priority, setPriority] = useState<number | null>(null);
   const [urgent, setUrgent] = useState(false);
   const [important, setImportant] = useState(false);
-  const [employees, setEmployees] = useState<
-    { label: string; value: string }[]
-  >([]);
+  const [employees, setEmployees] = useState<{ label: string; value: string }[]>(
+    []
+  );
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
-  const { theme } = useTheme();
-  const isDark = theme === "dark";
+  const [submitting, setSubmitting] = useState(false);
 
+  // only avoid keyboard when description is focused
+  const [isDescFocused, setIsDescFocused] = useState(false);
+
+  // entry animation
+  const sheetY = useRef(new Animated.Value(40)).current;
+  const sheetOpacity = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    const fetchEmployees = async () => {
+    if (visible) {
+      Animated.parallel([
+        Animated.timing(sheetY, {
+          toValue: 0,
+          duration: 220,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(sheetOpacity, {
+          toValue: 1,
+          duration: 220,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      sheetY.setValue(40);
+      sheetOpacity.setValue(0);
+    }
+  }, [visible, sheetY, sheetOpacity]);
+
+  // employees options
+  useEffect(() => {
+    (async () => {
       try {
-        const q = query(
-          collection(db, "users"),
-          where("role", "==", "employee")
-        );
-        const snapshot = await getDocs(q);
+        const qy = query(collection(db, "users"), where("role", "==", "employee"));
+        const snapshot = await getDocs(qy);
         const list = snapshot.docs.map((doc) => {
-          const data = doc.data();
+          const d = doc.data() as any;
           return {
-            label: data.firstName || data.email || "Unnamed",
-            value: doc.id, // user ID
+            label: d.firstName || d.name || d.email || "Unnamed",
+            value: doc.id,
           };
         });
         setEmployees(list);
-      } catch (error) {
-        console.error("Error fetching employees:", error);
+      } catch (e) {
+        console.error("Error fetching employees:", e);
       }
-    };
-
-    fetchEmployees();
+    })();
   }, []);
+
+  const finalPriority = useMemo(() => {
+    if (urgent && important) return 1;
+    if (!urgent && important) return 2;
+    if (urgent && !important) return 3;
+    return 4; // none
+  }, [urgent, important]);
+
+  const canSubmit =
+    (taskType || "").trim().length > 0 &&
+    (taskDescription || "").trim().length > 0 &&
+    (roomNumber || "").trim().length > 0 &&
+    finalPriority !== 4 &&
+    !submitting;
+
+  const resetForm = () => {
+    setTaskAddress("");
+    setTaskType("");
+    setTaskDescription("");
+    setRoomNumber("");
+    setUrgent(false);
+    setImportant(false);
+    setSelectedAssignees([]);
+  };
 
   const handleSubmit = async () => {
     const currentUser = auth.currentUser;
@@ -117,53 +174,37 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
       Alert.alert("You must be logged in to submit a request.");
       return;
     }
-
-    let finalPriority = priority;
-    if (urgent && important) finalPriority = 1;
-    else if (important && !urgent) finalPriority = 2;
-    else if (urgent && !important) finalPriority = 3;
-    else if (!urgent && !important) finalPriority = 4;
-
-    if (!taskType.trim() || !taskDescription.trim() || !roomNumber.trim()) {
-      Alert.alert("Please fill in all fields.");
-      return;
-    } else if (finalPriority === 4) {
-      Alert.alert("Please select at least one priority option.");
+    if (!canSubmit) {
+      Alert.alert("Please complete all required fields.");
       return;
     }
 
     try {
+      setSubmitting(true);
       await addDoc(collection(db, "tasks"), {
         taskAddress,
         taskType,
         description: taskDescription,
         roomNumber,
         priority: finalPriority,
-        status:
-          selectedAssignees.length > 0
-            ? "assigned"
-            : "pending",
+        status: selectedAssignees.length > 0 ? "assigned" : "pending",
         createdBy: currentUser.uid,
         createdAt: new Date(),
         assignedWorkers: selectedAssignees,
         forToday: true,
       });
       Alert.alert("Request Submitted!");
+      resetForm();
+      onClose();
     } catch (error) {
       console.error("Error adding document: ", error);
+      Alert.alert("Error", "Could not submit. Try again.");
     } finally {
-      setTaskAddress("");
-      setTaskType("");
-      setTaskDescription("");
-      setRoomNumber("");
-      setPriority(null);
-      setUrgent(false);
-      setImportant(false);
-      onClose();
+      setSubmitting(false);
     }
   };
 
-  const ToggleSwitch = ({
+  const Toggle = ({
     label,
     value,
     onToggle,
@@ -172,23 +213,19 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
     value: boolean;
     onToggle: () => void;
   }) => (
-    <View style={styles.toggleRow}>
-      <Text
-        style={[styles.label, { flex: 1, color: isDark ? "#eee" : "#333" }]}
-      >
-        {label}
-      </Text>
+    <View style={s.toggleRow}>
+      <Text style={s.fieldLabel}>{label}</Text>
       <TouchableOpacity
-        activeOpacity={0.8}
+        activeOpacity={0.85}
         onPress={onToggle}
         style={[
-          styles.toggleContainer,
-          { backgroundColor: value ? "#22C55E" : isDark ? "#374151" : "#ccc" },
+          s.toggleTrack,
+          { backgroundColor: value ? "#22C55E" : isDark ? "#374151" : "#D1D5DB" },
         ]}
       >
         <Animated.View
           style={[
-            styles.toggleCircle,
+            s.toggleThumb,
             { transform: [{ translateX: value ? 22 : 0 }] },
           ]}
         />
@@ -197,137 +234,159 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
   );
 
   return (
-    <Modal animationType="slide" transparent={true} visible={visible}>
-      <View style={styles.modalOverlay}>
-        <View
-          style={[
-            styles.modalContainer,
-            { backgroundColor: isDark ? "#1E1E1E" : "#FFFFFF" },
-          ]}
+    <Modal animationType="fade" transparent visible={visible}>
+      <View style={s.overlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.select({ ios: "padding", android: "height" })}
+          keyboardVerticalOffset={Platform.select({ ios: 12, android: 0 })}
+          style={{ width: "100%" }}
+          enabled={isDescFocused} // <-- only avoid when description focused
         >
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Text
-              style={[
-                styles.closeButtonText,
-                { color: isDark ? "#ccc" : "#888" },
-              ]}
+          <Animated.View
+            style={[
+              s.sheet,
+              { transform: [{ translateY: sheetY }], opacity: sheetOpacity },
+            ]}
+          >
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={s.sheetContent}
+              showsVerticalScrollIndicator={false}
             >
-              ×
-            </Text>
-          </TouchableOpacity>
-          <Text style={[styles.label, { color: isDark ? "#eee" : "#333" }]}>
-            Address
-          </Text>
-          <TextInput
-            placeholder="Address"
-            placeholderTextColor={isDark ? "#888" : "#aaa"}
-            value={taskAddress}
-            onChangeText={setTaskAddress}
-            style={[
-              styles.input,
-              {
-                backgroundColor: isDark ? "#2c2c2c" : "#fff",
-                color: isDark ? "#fff" : "#000",
-                borderColor: isDark ? "#555" : "#ccc",
-              },
-            ]}
-          />
+              {/* header */}
+              <View style={s.sheetHeader}>
+                <Text style={s.sheetTitle}>Add New Task</Text>
+                <TouchableOpacity
+                  onPress={onClose}
+                  style={s.closeBtn}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons
+                    name="close"
+                    size={20}
+                    color={isDark ? "#93A4B3" : "#6B7280"}
+                  />
+                </TouchableOpacity>
+              </View>
 
-          <Dropdown
-            style={[
-              styles.dropdown,
-              {
-                borderColor: isDark ? "#555" : "#ccc",
-                backgroundColor: isDark ? "#2c2c2c" : "#fff",
-              },
-            ]}
-            placeholderStyle={{ color: isDark ? "#999" : "#999" }}
-            selectedTextStyle={{ color: isDark ? "#fff" : "#000" }}
-            itemTextStyle={{ color: isDark ? "#fff" : "#000" }}
-            containerStyle={{ backgroundColor: isDark ? "#2a2a2a" : "#fff" }}
-            data={data}
-            labelField="label"
-            valueField="value"
-            placeholder="Select location"
-            value={taskType}
-            onChange={(item) => setTaskType(item.value)}
-          />
-          <Text style={{ color: isDark ? "#fff" : "#000", marginBottom: 8 }}>
-            Assign to
-          </Text>
-          <MultiSelect
-            style={{
-              borderWidth: 1,
-              borderColor: isDark ? "#555" : "#ccc",
-              borderRadius: 8,
-              padding: 10,
-              backgroundColor: isDark ? "#2c2c2c" : "#fff",
-              marginBottom: 16,
-            }}
-            placeholderStyle={{ color: isDark ? "#aaa" : "#999" }}
-            selectedTextStyle={{ color: isDark ? "#fff" : "#000" }}
-            itemTextStyle={{ color: isDark ? "#fff" : "#000" }}
-            containerStyle={{ backgroundColor: isDark ? "#2a2a2a" : "#fff" }}
-            data={employees}
-            labelField="label"
-            valueField="value"
-            placeholder="Select employee(s)"
-            value={selectedAssignees}
-            onChange={(items) => setSelectedAssignees(items)}
-          />
+              {/* Address (optional) */}
+              <Text style={s.label}>Address (optional)</Text>
+              <TextInput
+                placeholder="Address"
+                placeholderTextColor={isDark ? "#9CA3AF" : "#9AA1AA"}
+                value={taskAddress}
+                onChangeText={setTaskAddress}
+                style={s.input}
+                returnKeyType="done"
+                blurOnSubmit
+              />
 
-          <Text style={[styles.label, { color: isDark ? "#eee" : "#333" }]}>
-            Room Number
-          </Text>
-          <TextInput
-            placeholder="Room #"
-            placeholderTextColor={isDark ? "#888" : "#aaa"}
-            value={roomNumber}
-            onChangeText={setRoomNumber}
-            style={[
-              styles.input,
-              {
-                backgroundColor: isDark ? "#2c2c2c" : "#fff",
-                color: isDark ? "#fff" : "#000",
-                borderColor: isDark ? "#555" : "#ccc",
-              },
-            ]}
-          />
+              {/* Location / Task Type */}
+              <Text style={s.label}>Location</Text>
+              <Dropdown
+                style={s.dropdown}
+                placeholderStyle={{ color: isDark ? "#9CA3AF" : "#9AA1AA" }}
+                selectedTextStyle={{ color: isDark ? "#E5E7EB" : "#111827" }}
+                itemTextStyle={{ color: isDark ? "#E5E7EB" : "#111827" }}
+                containerStyle={{ backgroundColor: isDark ? "#0B1220" : "#FFFFFF" }}
+                data={data}
+                labelField="label"
+                valueField="value"
+                placeholder="Select location"
+                value={taskType}
+                onChange={(item: any) => setTaskType(item.value)}
+              />
 
-          <Text style={[styles.label, { color: isDark ? "#eee" : "#333" }]}>
-            Description
-          </Text>
-          <TextInput
-            placeholder="Description"
-            placeholderTextColor={isDark ? "#888" : "#aaa"}
-            value={taskDescription}
-            onChangeText={setTaskDescription}
-            style={[
-              styles.input,
-              {
-                backgroundColor: isDark ? "#2c2c2c" : "#fff",
-                color: isDark ? "#fff" : "#000",
-                borderColor: isDark ? "#555" : "#ccc",
-              },
-            ]}
-          />
+              {/* Assign to */}
+              <Text style={s.label}>
+                Assign to <Text style={s.labelHint}>(optional)</Text>
+              </Text>
+              <MultiSelect
+                style={s.multi}
+                placeholderStyle={{ color: isDark ? "#9CA3AF" : "#9AA1AA" }}
+                selectedTextStyle={{ color: isDark ? "#E5E7EB" : "#111827" }}
+                itemTextStyle={{ color: isDark ? "#E5E7EB" : "#111827" }}
+                containerStyle={{ backgroundColor: isDark ? "#0B1220" : "#FFFFFF" }}
+                data={employees}
+                labelField="label"
+                valueField="value"
+                placeholder="Select employee(s)"
+                value={selectedAssignees}
+                onChange={(vals: string[]) => setSelectedAssignees(vals)}
+              />
 
-          {/* Theme-aware toggles */}
-          <ToggleSwitch
-            label="Urgent"
-            value={urgent}
-            onToggle={() => setUrgent((prev) => !prev)}
-          />
-          <ToggleSwitch
-            label="Important"
-            value={important}
-            onToggle={() => setImportant((prev) => !prev)}
-          />
+              {/* Room */}
+              <Text style={s.label}>Room Number</Text>
+              <TextInput
+                placeholder="Room #"
+                placeholderTextColor={isDark ? "#9CA3AF" : "#9AA1AA"}
+                value={roomNumber}
+                onChangeText={setRoomNumber}
+                style={s.input}
+                returnKeyType="done"
+                blurOnSubmit
+              />
 
-          <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
-            <Text style={styles.submitButtonText}>Submit</Text>
-          </TouchableOpacity>
-        </View>
+              {/* Description */}
+              <Text style={s.label}>Description</Text>
+              <TextInput
+                placeholder="What needs to be done?"
+                placeholderTextColor={isDark ? "#9CA3AF" : "#9AA1AA"}
+                value={taskDescription}
+                onChangeText={setTaskDescription} // allow natural newlines
+                style={[s.input, { height: 112, textAlignVertical: "top" }]}
+                multiline
+                blurOnSubmit={false}           // keep keyboard up
+                returnKeyType="default"        // iOS: show return; Android: normal
+                onFocus={() => setIsDescFocused(true)}
+                onBlur={() => setIsDescFocused(false)}
+              />
+
+              {/* Toggles */}
+              <Toggle
+                label="Urgent"
+                value={urgent}
+                onToggle={() => setUrgent((v) => !v)}
+              />
+              <Toggle
+                label="Important"
+                value={important}
+                onToggle={() => setImportant((v) => !v)}
+              />
+
+              {/* Submit */}
+              <TouchableOpacity
+                style={[
+                  s.submitBtn,
+                  {
+                    backgroundColor:
+                      !canSubmit || submitting
+                        ? isDark
+                          ? "#1E3A8A"
+                          : "#93C5FD"
+                        : isDark
+                        ? "#2563EB"
+                        : "#1D4ED8",
+                    opacity: !canSubmit || submitting ? 0.9 : 1,
+                  },
+                ]}
+                onPress={handleSubmit}
+                disabled={!canSubmit || submitting}
+                activeOpacity={0.9}
+              >
+                {submitting ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="send-outline" size={18} color="#fff" />
+                    <Text style={s.submitText}>Submit</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+              <View style={{ height: 8 }} />
+            </ScrollView>
+          </Animated.View>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );
@@ -335,78 +394,147 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
 
 export default TaskModal;
 
-const styles = StyleSheet.create({
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.3)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalContainer: {
-    width: "85%",
-    borderRadius: 16,
-    padding: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 10,
-  },
-  closeButton: {
-    alignSelf: "flex-end",
-    marginBottom: 12,
-  },
-  closeButtonText: {
-    fontSize: 24,
-  },
-  dropdown: {
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 6,
-    // color set inline per-theme where used
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 16,
-    fontSize: 14,
-  },
-  toggleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginVertical: 8,
-  },
-  toggleContainer: {
-    width: 44,
-    height: 24,
-    borderRadius: 12,
-    padding: 2,
-    justifyContent: "center",
-  },
-  toggleCircle: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: "#fff",
-  },
-  submitButton: {
-    backgroundColor: "#007AFF",
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: "center",
-    marginTop: 12,
-    elevation: 3,
-  },
-  submitButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-});
+/* ---------- styles ---------- */
+const getStyles = (isDark: boolean) =>
+  StyleSheet.create({
+    overlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.35)",
+      justifyContent: "flex-end",
+      alignItems: "center",
+      paddingHorizontal: 12,
+      paddingBottom: 12,
+    },
+    sheet: {
+      width: "100%",
+      borderRadius: 16,
+      backgroundColor: isDark ? "#1F2937" : "#FFFFFF",
+      shadowColor: "#000",
+      shadowOpacity: 0.16,
+      shadowRadius: 10,
+      shadowOffset: { width: 0, height: 6 },
+      elevation: 10,
+      borderWidth: isDark ? 1 : 0,
+      borderColor: isDark ? "#111827" : "transparent",
+      overflow: "hidden",
+    },
+    sheetContent: {
+      padding: 14,
+      paddingBottom: 12,
+    },
+    sheetHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 6,
+    },
+    sheetTitle: {
+      fontSize: 16,
+      fontWeight: "800",
+      color: isDark ? "#F3F4F6" : "#0F172A",
+      letterSpacing: 0.2,
+    },
+    closeBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: 8,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: isDark ? "#111827" : "#E5E7EB",
+      borderWidth: isDark ? 1 : 0,
+      borderColor: isDark ? "#1F2937" : "transparent",
+    },
+
+    label: {
+      fontSize: 12,
+      fontWeight: "800",
+      marginTop: 8,
+      marginBottom: 6,
+      color: isDark ? "#C7D2FE" : "#1E3A8A",
+      letterSpacing: 0.2,
+    },
+    labelHint: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: isDark ? "#94A3B8" : "#64748B",
+    },
+
+    input: {
+      borderWidth: 1,
+      borderRadius: 12,
+      paddingHorizontal: 12,
+      paddingVertical: 12,
+      marginBottom: 8,
+      fontSize: 14,
+      backgroundColor: isDark ? "#111827" : "#FFFFFF",
+      borderColor: isDark ? "#1F2937" : "#E5E7EB",
+      color: isDark ? "#E5E7EB" : "#111827",
+    },
+
+    dropdown: {
+      borderWidth: 1,
+      borderRadius: 12,
+      paddingHorizontal: 12,
+      paddingVertical: 12,
+      marginBottom: 8,
+      backgroundColor: isDark ? "#111827" : "#FFFFFF",
+      borderColor: isDark ? "#1F2937" : "#E5E7EB",
+    },
+    multi: {
+      borderWidth: 1,
+      borderRadius: 12,
+      paddingHorizontal: 10,
+      paddingVertical: 10,
+      backgroundColor: isDark ? "#111827" : "#FFFFFF",
+      borderColor: isDark ? "#1F2937" : "#E5E7EB",
+      marginBottom: 8,
+    },
+
+    toggleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginTop: 6,
+      marginBottom: 4,
+      gap: 12,
+    },
+    fieldLabel: {
+      flex: 1,
+      fontSize: 13,
+      fontWeight: "800",
+      color: isDark ? "#E5E7EB" : "#111827",
+    },
+    toggleTrack: {
+      width: 44,
+      height: 24,
+      borderRadius: 12,
+      padding: 2,
+      justifyContent: "center",
+    },
+    toggleThumb: {
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      backgroundColor: "#fff",
+    },
+
+    submitBtn: {
+      marginTop: 10,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      paddingVertical: 14,
+      borderRadius: 12,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.12,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    submitText: {
+      color: "#fff",
+      fontSize: 16,
+      fontWeight: "800",
+      letterSpacing: 0.3,
+    },
+  });

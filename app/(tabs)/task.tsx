@@ -7,8 +7,9 @@ import {
   SafeAreaView,
   ActivityIndicator,
   Alert,
-  Animated, // NEW
-  Easing,   // NEW
+  Animated,
+  Easing,
+  StyleSheet as RNStyleSheet, // name guard if needed
 } from "react-native";
 import { router } from "expo-router";
 import { db } from "../../firebaseConfig";
@@ -19,17 +20,12 @@ import {
   onSnapshot,
   doc,
   deleteDoc,
-  // orderBy, // optional: uncomment if you have an index on "order"
 } from "firebase/firestore";
 import React, { useMemo, useRef, useState, useEffect } from "react";
 import { useUser } from "../UserContext";
-import { useTheme } from "../ThemeContext";
-// NEW: server-authoritative time + schedule
+import { useTheme } from "../ThemeContext"; // theme + toggleTheme()
 import { useServerTime, priorityWindows } from "../serverTimeContext";
-// NEW: luxon for countdown labels (already used in ServerTimeContext)
 import { DateTime } from "luxon";
-
-// same swipe lib you’re using in scheduler
 import SwipeableItem, { UnderlayParams } from "react-native-swipeable-item";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -38,13 +34,11 @@ function sortByOrder<T extends { order?: number }>(arr: T[]) {
   return [...arr].sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
 }
 
-// NEW: compute nice human label for a window
+/* ---------- window helpers ---------- */
 function windowLabel(p: number) {
   const w = priorityWindows.find((x) => x.priority === p);
   return w ? `${w.start}–${w.end}` : "";
 }
-
-// NEW: get end DateTime of active window, for countdown
 function getActiveWindowEnd(tzNow: DateTime) {
   const w = priorityWindows.find((x) => {
     const [sh, sm] = x.start.split(":").map(Number);
@@ -59,62 +53,235 @@ function getActiveWindowEnd(tzNow: DateTime) {
   return tzNow.set({ hour: eh, minute: em, second: 0, millisecond: 0 });
 }
 
+/* =========================================================
+   Clean, on-theme toggles
+   ========================================================= */
+const SectionToggle = ({
+  title,
+  open,
+  onPress,
+  pillText,
+  isDark,
+}: {
+  title: string;
+  open: boolean;
+  onPress: () => void;
+  pillText?: string;
+  isDark: boolean;
+}) => {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.88}
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        borderRadius: 16,
+        backgroundColor: isDark ? "#1F2937" : "#FFFFFF",
+        borderWidth: isDark ? 1 : 0,
+        borderColor: isDark ? "#111827" : "transparent",
+        // match card shadow
+        shadowColor: "#000",
+        shadowOpacity: 0.1,
+        shadowRadius: 6,
+        shadowOffset: { width: 0, height: 2 },
+        elevation: 6,
+        marginBottom: 12,
+      }}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center" }}>
+        <Text
+          style={{
+            fontSize: 16,
+            fontWeight: "800",
+            color: isDark ? "#F3F4F6" : "#0F172A",
+            letterSpacing: 0.2,
+          }}
+        >
+          {title}
+        </Text>
+        {pillText ? (
+          <View
+            style={{
+              marginLeft: 10,
+              paddingHorizontal: 8,
+              paddingVertical: 4,
+              borderRadius: 999,
+              backgroundColor: isDark ? "#111827" : "#F3F4F6",
+              borderWidth: isDark ? 1 : 0,
+              borderColor: isDark ? "#1F2937" : "transparent",
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: "700",
+                color: isDark ? "#E5E7EB" : "#111827",
+              }}
+            >
+              {pillText}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+
+      <Ionicons
+        name="chevron-down"
+        size={20}
+        color={isDark ? "#D1D5DB" : "#4B5563"}
+        style={{ transform: [{ rotate: open ? "180deg" : "0deg" }] }}
+      />
+    </TouchableOpacity>
+  );
+};
+
+const PriorityToggle = ({
+  label,
+  open,
+  onPress,
+  isActiveNow,
+  windowLabelText,
+  isDark,
+}: {
+  label: string;
+  open: boolean;
+  onPress: () => void;
+  isActiveNow?: boolean;
+  windowLabelText?: string;
+  isDark: boolean;
+}) => {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.9}
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        paddingVertical: 12,
+        paddingHorizontal: 14,
+        borderRadius: 14,
+        backgroundColor: isDark ? "#0F172A" : "#F8FAFC",
+        borderWidth: 1,
+        borderColor: isDark ? "#1E293B" : "#E5E7EB",
+        marginVertical: 6,
+      }}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+        <View
+          style={{
+            width: 10,
+            height: 10,
+            borderRadius: 5,
+            backgroundColor: isActiveNow
+              ? "#10B981"
+              : isDark
+              ? "#374151"
+              : "#CBD5E1",
+          }}
+        />
+        <View>
+          <Text
+            style={{
+              fontSize: 15,
+              fontWeight: "800",
+              color: isDark ? "#E5E7EB" : "#111827",
+            }}
+          >
+            {label}
+            {isActiveNow ? " · Now" : ""}
+          </Text>
+          {!!windowLabelText && (
+            <Text
+              style={{
+                marginTop: 1,
+                fontSize: 12,
+                fontWeight: "600",
+                color: isDark ? "#93A3B3" : "#4B5563",
+              }}
+            >
+              {windowLabelText}
+            </Text>
+          )}
+        </View>
+      </View>
+
+      <Ionicons
+        name="chevron-down"
+        size={18}
+        color={isDark ? "#C7D2FE" : "#1E3A8A"}
+        style={{ transform: [{ rotate: open ? "180deg" : "0deg" }] }}
+      />
+    </TouchableOpacity>
+  );
+};
+
+/* =========================================================
+   Main Page
+   ========================================================= */
 function TaskPage() {
-  // Buckets for tasks grouped by priority (instances only)
+  // Buckets
   const [p1, setP1] = useState<any[]>([]);
   const [p2, setP2] = useState<any[]>([]);
   const [p3, setP3] = useState<any[]>([]);
 
-  // Projects (unchanged)
+  // Projects
   const [currentProjects, setCurrentProjects] = useState<any[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Collapsible sections
+  // Collapsible
   const [showTasks, setShowTasks] = useState(true);
   const [showP1, setShowP1] = useState(true);
   const [showP2, setShowP2] = useState(true);
   const [showP3, setShowP3] = useState(true);
   const [showProjects, setShowProjects] = useState(true);
 
-  const { theme } = useTheme();
+  const { theme, toggleTheme } = useTheme();
   const isDark = theme === "dark";
   const styles = getStyles(isDark);
   const { role, loading } = useUser();
 
-  // NEW: server-authoritative time context
   const { activePriority, tzNow } = useServerTime();
-
-  // NEW: compute today (if you later add taskDate filter)
   const todayISO = useMemo(() => tzNow().toISODate(), [tzNow]);
 
+  /* ---------- theme crossfade ---------- */
+  const themeAnim = useRef(new Animated.Value(isDark ? 1 : 0)).current;
   useEffect(() => {
-    // Only read from `tasks`. We assume the collection already contains just today's items.
-    // If/when you add a `taskDate` string (YYYY-MM-DD), add where("taskDate","==",todayISO).
+    Animated.timing(themeAnim, {
+      toValue: isDark ? 1 : 0,
+      duration: 220,
+      easing: Easing.inOut(Easing.quad),
+      useNativeDriver: false,
+    }).start();
+  }, [isDark, themeAnim]);
+  const bgLight = { backgroundColor: "#F8FAFC" };
+  const bgDark = { backgroundColor: "#0F172A" };
+  const darkOpacity = themeAnim;
+
+  /* ---------- data subscriptions ---------- */
+  useEffect(() => {
     const statuses = ["pending", "assigned", "in_progress"];
 
     const q1 = query(
       collection(db, "tasks"),
       where("priority", "==", 1),
       where("status", "in", statuses),
-      where("forToday", "==", true) // NEW: filter to today’s tasks only
-      // where("taskDate", "==", todayISO) // NEW: optional if you store dates
-      // orderBy("order") // optional if you have an index
+      where("forToday", "==", true)
     );
     const q2 = query(
       collection(db, "tasks"),
       where("priority", "==", 2),
       where("status", "in", statuses),
-      where("forToday", "==", true) // NEW: filter to today’s tasks only
-      // where("taskDate", "==", todayISO) // NEW: optional
-      // orderBy("order")
+      where("forToday", "==", true)
     );
     const q3 = query(
       collection(db, "tasks"),
       where("priority", "==", 3),
       where("status", "in", statuses),
-      where("forToday", "==", true) // NEW: filter to today’s tasks only
-      // where("taskDate", "==", todayISO) // NEW: optional
-      // orderBy("order")
+      where("forToday", "==", true)
     );
 
     const u1 = onSnapshot(q1, (snap) => {
@@ -133,8 +300,10 @@ function TaskPage() {
       setP3(sortByOrder(items));
     });
 
-    // Projects (unchanged)
-    const projectsQ = query(collection(db, "projects"), where("status", "==", "pending"));
+    const projectsQ = query(
+      collection(db, "projects"),
+      where("status", "==", "pending")
+    );
     const uProj = onSnapshot(projectsQ, (snap) => {
       const items: any[] = [];
       snap.forEach((d) => items.push({ id: d.id, ...d.data() }));
@@ -148,9 +317,7 @@ function TaskPage() {
       u3();
       uProj();
     };
-    // NEW: todayISO in deps only if you add the taskDate filter
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [/* todayISO */]);
+  }, [todayISO]);
 
   const handleRefresh = () => {
     setIsRefreshing(true);
@@ -159,7 +326,12 @@ function TaskPage() {
 
   if (loading) {
     return (
-      <View style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
+      <View
+        style={[
+          styles.container,
+          { justifyContent: "center", alignItems: "center" },
+        ]}
+      >
         <ActivityIndicator />
         <Text style={styles.text}>Loading...</Text>
       </View>
@@ -182,17 +354,17 @@ function TaskPage() {
     });
   };
 
-  // status helpers
-  const isComplete = (item: any) => String(item.status ?? "").toLowerCase() === "completed";
+  const isComplete = (item: any) =>
+    String(item.status ?? "").toLowerCase() === "completed";
   const hasAssignee = (item: any) => {
     const v = item.assignedWorkers ?? item.assignedTo ?? null;
     if (Array.isArray(v)) return v.length > 0;
     return !!v;
   };
   const getStatusColor = (item: any) => {
-    if (isComplete(item)) return "#22C55E"; // green
-    if (hasAssignee(item)) return "#EAB308"; // yellow
-    return "#EF4444"; // red
+    if (isComplete(item)) return "#22C55E";
+    if (hasAssignee(item)) return "#EAB308";
+    return "#EF4444";
   };
 
   const confirmDeleteTask = (id: string, close?: () => void) => {
@@ -219,21 +391,35 @@ function TaskPage() {
     );
   };
 
-  // NEW: animated pulse for active tasks
+  // pulse for active tasks
   const pulse = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    Animated.loop(
+    const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulse, { toValue: 1, duration: 1200, easing: Easing.inOut(Easing.quad), useNativeDriver: false }),
-        Animated.timing(pulse, { toValue: 0, duration: 1200, easing: Easing.inOut(Easing.quad), useNativeDriver: false }),
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: 1200,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: false,
+        }),
+        Animated.timing(pulse, {
+          toValue: 0,
+          duration: 1200,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: false,
+        }),
       ])
-    ).start();
+    );
+    loop.start();
+    return () => loop.stop();
   }, [pulse]);
 
-  // NEW: glow styles derived from pulse
   const glowStyle = (isActive: boolean) => {
     if (!isActive) return {};
-    const intensity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.2, 0.65] });
+    const intensity = pulse.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.2, 0.65],
+    });
     return {
       borderWidth: 2,
       borderColor: isDark ? "rgba(59,130,246,0.8)" : "rgba(37,99,235,0.9)",
@@ -245,12 +431,12 @@ function TaskPage() {
   };
 
   const renderCard = (item: any) => {
-    const isActive = item.priority === activePriority; // NEW
+    const isActive = item.priority === activePriority;
     return (
       <SwipeableItem
         key={item.id}
         item={item}
-        snapPointsLeft={[96]}       // swipe LEFT to reveal delete
+        snapPointsLeft={[96]}
         overSwipe={32}
         renderUnderlayLeft={({ close }: UnderlayParams<any>) => (
           <View style={styles.underlayLeft}>
@@ -270,26 +456,34 @@ function TaskPage() {
           }
         }}
       >
-        <Animated.View style={[styles.taskCard, glowStyle(isActive)] /* NEW */}>
+        <Animated.View style={[styles.taskCard, glowStyle(isActive)]}>
           <TouchableOpacity onPress={() => openScreen(item)} activeOpacity={0.86}>
             <View style={{ paddingRight: 14 }}>
-              <View style={styles.titleRow /* NEW */}>
-                <Text style={styles.taskTitle}>{item.taskType || item.title || "Untitled"}</Text>
+              <View style={styles.titleRow}>
+                <Text style={styles.taskTitle}>
+                  {item.taskType || item.title || "Untitled"}
+                </Text>
                 {isActive && (
-                  <View style={styles.nowPill /* NEW */}>
+                  <View style={styles.nowPill}>
                     <Ionicons name="flash" size={14} color="#fff" />
                     <Text style={styles.nowPillText}>Now</Text>
                   </View>
                 )}
               </View>
-              <Text style={styles.taskText}>Room: {item.roomNumber || "N/A"}</Text>
-              <Text style={styles.taskText}>Priority: {item.priority ?? "Unassigned"}</Text>
+              <Text style={styles.taskText}>
+                Room: {item.roomNumber || "N/A"}
+              </Text>
+              <Text style={styles.taskText}>
+                Priority: {item.priority ?? "Unassigned"}
+              </Text>
               {typeof item.estimatedMinutes === "number" && (
                 <Text style={styles.taskSubtle}>ETA: ~{item.estimatedMinutes} min</Text>
               )}
             </View>
             <View style={styles.pillRail}>
-              <View style={[styles.pill, { backgroundColor: getStatusColor(item) }]} />
+              <View
+                style={[styles.pill, { backgroundColor: getStatusColor(item) }]}
+              />
             </View>
           </TouchableOpacity>
         </Animated.View>
@@ -299,7 +493,6 @@ function TaskPage() {
 
   const openHistory = () => router.push("/completedTasks");
 
-  // NEW: top banner (“Now” and countdown)
   const tz = tzNow();
   const end = getActiveWindowEnd(tz);
   const countdown =
@@ -307,14 +500,54 @@ function TaskPage() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* NEW: Current window banner */}
-      <View style={styles.banner /* NEW */}>
+      {/* crossfade layers */}
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: "#F8FAFC" }]} />
+      <Animated.View
+        style={[
+          StyleSheet.absoluteFill,
+          { backgroundColor: "#0F172A", opacity: darkOpacity },
+        ]}
+      />
+
+      {/* Header bar with theme + history */}
+      <View style={styles.headerBar}>
+        <Text style={styles.headerTitle}>Tasks</Text>
+        <View style={{ flexDirection: "row", gap: 10 }}>
+          <TouchableOpacity
+            onPress={openHistory}
+            style={styles.smallGreyBtn}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons
+              name="time-outline"
+              size={18}
+              color={isDark ? "#E5E7EB" : "#111827"}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={toggleTheme}
+            style={styles.smallGreyBtn}
+            accessibilityLabel="Toggle theme"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons
+              name={isDark ? "sunny-outline" : "moon-outline"}
+              size={18}
+              color={isDark ? "#FDE68A" : "#111827"}
+            />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* current window banner */}
+      <View style={styles.banner}>
         {activePriority ? (
           <>
-            <Text style={styles.bannerTitle /* NEW */}>
+            <Text style={styles.bannerTitle}>
               Priority {activePriority} window
             </Text>
-            <Text style={styles.bannerSubtitle /* NEW */}>
+            <Text style={styles.bannerSubtitle}>
               {windowLabel(activePriority)}
               {countdown !== null ? `  ·  ${countdown} min left` : ""}
             </Text>
@@ -330,88 +563,93 @@ function TaskPage() {
       </View>
 
       {role === "manager" ? (
-        <>
-          <TouchableOpacity onPress={openHistory} style={styles.historyButton}>
-            <Text style={styles.historyButtonText}>Task History</Text>
-          </TouchableOpacity>
+        <FlatList
+          data={[]}
+          renderItem={() => null}
+          keyExtractor={() => Math.random().toString()}
+          contentContainerStyle={styles.scrollContainer}
+          refreshing={isRefreshing}
+          onRefresh={handleRefresh}
+          ListHeaderComponent={
+            <>
+              {/* --- Section: Today’s Tasks --- */}
+              <SectionToggle
+                title="Today’s Tasks"
+                pillText="Live"
+                open={showTasks}
+                onPress={() => setShowTasks(!showTasks)}
+                isDark={isDark}
+              />
 
-          <FlatList
-            data={[]}
-            renderItem={() => null}
-            keyExtractor={() => Math.random().toString()}
-            contentContainerStyle={styles.scrollContainer}
-            refreshing={isRefreshing}
-            onRefresh={handleRefresh}
-            ListHeaderComponent={
-              <>
-                {/* Header */}
-                <TouchableOpacity onPress={() => setShowTasks(!showTasks)} style={styles.header}>
-                  <Text style={styles.headerText}>
-                    Today&apos;s Tasks {showTasks ? "▲" : "▼"}
-                  </Text>
-                </TouchableOpacity>
-
-                {showTasks && (
-                  <View>
-                    {/* Priority 1 */}
-                    <TouchableOpacity onPress={() => setShowP1(!showP1)} style={styles.subHeader}>
-                      <Text style={styles.subHeaderText}>
-                        Priority 1 {windowLabel(1)}
-                        {activePriority === 1 ? "  ·  Now" : ""}
-                        {showP1 ? "  ▲" : "  ▼"}
-                      </Text>
-                    </TouchableOpacity>
-                    {showP1 && (p1.length === 0 ? (
+              {showTasks && (
+                <View>
+                  {/* Priority 1 */}
+                  <PriorityToggle
+                    label="Priority 1"
+                    open={showP1}
+                    onPress={() => setShowP1(!showP1)}
+                    isActiveNow={activePriority === 1}
+                    windowLabelText={windowLabel(1)}
+                    isDark={isDark}
+                  />
+                  {showP1 &&
+                    (p1.length === 0 ? (
                       <Text style={styles.emptyText}>No items for Priority 1.</Text>
                     ) : (
                       p1.map((item) => renderCard(item))
                     ))}
 
-                    {/* Priority 2 */}
-                    <TouchableOpacity onPress={() => setShowP2(!showP2)} style={styles.subHeader}>
-                      <Text style={styles.subHeaderText}>
-                        Priority 2 {windowLabel(2)}
-                        {activePriority === 2 ? "  ·  Now" : ""}
-                        {showP2 ? "  ▲" : "  ▼"}
-                      </Text>
-                    </TouchableOpacity>
-                    {showP2 && (p2.length === 0 ? (
+                  {/* Priority 2 */}
+                  <PriorityToggle
+                    label="Priority 2"
+                    open={showP2}
+                    onPress={() => setShowP2(!showP2)}
+                    isActiveNow={activePriority === 2}
+                    windowLabelText={windowLabel(2)}
+                    isDark={isDark}
+                  />
+                  {showP2 &&
+                    (p2.length === 0 ? (
                       <Text style={styles.emptyText}>No items for Priority 2.</Text>
                     ) : (
                       p2.map((item) => renderCard(item))
                     ))}
 
-                    {/* Priority 3 */}
-                    <TouchableOpacity onPress={() => setShowP3(!showP3)} style={styles.subHeader}>
-                      <Text style={styles.subHeaderText}>
-                        Priority 3 {windowLabel(3)}
-                        {activePriority === 3 ? "  ·  Now" : ""}
-                        {showP3 ? "  ▲" : "  ▼"}
-                      </Text>
-                    </TouchableOpacity>
-                    {showP3 && (p3.length === 0 ? (
+                  {/* Priority 3 */}
+                  <PriorityToggle
+                    label="Priority 3"
+                    open={showP3}
+                    onPress={() => setShowP3(!showP3)}
+                    isActiveNow={activePriority === 3}
+                    windowLabelText={windowLabel(3)}
+                    isDark={isDark}
+                  />
+                  {showP3 &&
+                    (p3.length === 0 ? (
                       <Text style={styles.emptyText}>No items for Priority 3.</Text>
                     ) : (
                       p3.map((item) => renderCard(item))
                     ))}
-                  </View>
-                )}
+                </View>
+              )}
 
-                {/* Projects */}
-                <TouchableOpacity onPress={() => setShowProjects(!showProjects)} style={styles.header}>
-                  <Text style={styles.headerText}>Projects {showProjects ? "▲" : "▼"}</Text>
-                </TouchableOpacity>
-                {showProjects &&
-                  (currentProjects.length === 0 ? (
-                    <Text style={styles.emptyText}>No pending projects available.</Text>
-                  ) : (
-                    currentProjects.map((item) => renderCard(item))
-                  ))}
-              </>
-            }
-            showsVerticalScrollIndicator={false}
-          />
-        </>
+              {/* --- Section: Projects --- */}
+              <SectionToggle
+                title="Projects"
+                open={showProjects}
+                onPress={() => setShowProjects(!showProjects)}
+                isDark={isDark}
+              />
+              {showProjects &&
+                (currentProjects.length === 0 ? (
+                  <Text style={styles.emptyText}>No pending projects available.</Text>
+                ) : (
+                  currentProjects.map((item) => renderCard(item))
+                ))}
+            </>
+          }
+          showsVerticalScrollIndicator={false}
+        />
       ) : (
         <View style={{ padding: 16 }}>
           <Text style={styles.text}>Employee view goes here</Text>
@@ -423,18 +661,48 @@ function TaskPage() {
 
 export default TaskPage;
 
+/* =========================================================
+   Styles
+   ========================================================= */
 const getStyles = (isDark: boolean) =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: isDark ? "#0F172A" : "#F8FAFC", // NEW: slightly deeper dark bg
+      backgroundColor: isDark ? "#0F172A" : "#F8FAFC",
     },
+
+    // header bar
+    headerBar: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 16,
+      paddingTop: 8,
+      paddingBottom: 8,
+    },
+    headerTitle: {
+      fontSize: 22,
+      fontWeight: "800",
+      color: isDark ? "#F3F4F6" : "#111827",
+      letterSpacing: 0.2,
+    },
+    smallGreyBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: isDark ? "#111827" : "#E5E7EB",
+      borderWidth: isDark ? 1 : 0,
+      borderColor: isDark ? "#1F2937" : "transparent",
+    },
+
     scrollContainer: {
       padding: 16,
       paddingBottom: 40,
     },
 
-    // NEW: top banner
+    // top banner
     banner: {
       paddingHorizontal: 16,
       paddingVertical: 12,
@@ -453,68 +721,9 @@ const getStyles = (isDark: boolean) =>
       color: isDark ? "#CBD5E1" : "#1E40AF",
     },
 
-    header: {
-      width: "100%",
-      paddingVertical: 16,
-      paddingHorizontal: 20,
-      marginBottom: 8,
-      backgroundColor: isDark ? "#3B82F6" : "#2563EB",
-      alignItems: "center",
-      justifyContent: "center",
-      borderRadius: 16,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 3 },
-      shadowOpacity: 0.2,
-      shadowRadius: 4,
-      elevation: 4,
-    },
-    headerText: {
-      fontSize: 20,
-      fontWeight: "700",
-      color: "#FFFFFF",
-      letterSpacing: 0.3,
-    },
-    subHeader: {
-      marginTop: 4,
-      marginBottom: 4,
-      paddingVertical: 12,
-      paddingHorizontal: 16,
-      backgroundColor: isDark ? "#1D4ED8" : "#3B82F6",
-      borderRadius: 12,
-      alignItems: "center",
-      justifyContent: "center",
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.15,
-      shadowRadius: 3,
-      elevation: 3,
-    },
-    subHeaderText: {
-      fontSize: 18,
-      fontWeight: "700",
-      color: "#FFFFFF",
-    },
-    historyButton: {
-      backgroundColor: isDark ? "#1D4ED8" : "#007AFF",
-      paddingVertical: 14,
-      paddingHorizontal: 24,
-      borderRadius: 12,
-      alignSelf: "center",
-      marginVertical: 16,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.2,
-      shadowRadius: 4,
-      elevation: 4,
-    },
-    historyButtonText: {
-      color: "white",
-      fontSize: 16,
-      fontWeight: "600",
-    },
-
+    // task cards
     taskCard: {
-      backgroundColor: isDark ? "#111827" : "#FFFFFF", // NEW: a bit darker card in dark mode
+      backgroundColor: isDark ? "#111827" : "#FFFFFF",
       borderRadius: 16,
       padding: 20,
       paddingRight: 28,
@@ -526,9 +735,11 @@ const getStyles = (isDark: boolean) =>
       elevation: 6,
       position: "relative",
       overflow: "hidden",
+      borderWidth: isDark ? 1 : 0,
+      borderColor: isDark ? "#1F2937" : "transparent",
     },
 
-    // Right-side rail that holds the status pill
+    // status pill rail
     pillRail: {
       position: "absolute",
       right: 8,
@@ -544,7 +755,6 @@ const getStyles = (isDark: boolean) =>
       height: "80%",
     },
 
-    // NEW: title row and "Now" pill
     titleRow: {
       flexDirection: "row",
       alignItems: "center",
@@ -570,7 +780,7 @@ const getStyles = (isDark: boolean) =>
 
     taskTitle: {
       fontSize: 16,
-      fontWeight: "700", // NEW: slightly bolder
+      fontWeight: "700",
       color: isDark ? "#E2E8F0" : "#0F172A",
     },
     taskText: {

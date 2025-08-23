@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   SafeAreaView,
   ScrollView,
@@ -7,27 +7,80 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
+  Animated,
+  Easing,
 } from "react-native";
 import { signOut } from "firebase/auth";
 import { auth } from "@/firebaseConfig";
 import { router } from "expo-router";
 import { useTheme } from "../ThemeContext";
+import { Ionicons } from "@expo/vector-icons";
 
-function SettingRow({
+/* ---------- Pretty row for settings ---------- */
+function SettingsRow({
   label,
   onPress,
   isDark,
+  icon,
 }: {
   label: string;
   onPress: () => void;
   isDark: boolean;
+  icon?: React.ReactNode;
 }) {
-  const s = getStyles(isDark);
   return (
-    <TouchableOpacity style={s.settingButton} onPress={onPress}>
-      <Text style={[s.settingButtonText, isDark && s.settingButtonTextDark]}>
-        {label}
-      </Text>
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.88}
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        paddingVertical: 14,
+        paddingHorizontal: 14,
+        borderRadius: 14,
+        backgroundColor: isDark ? "#1F2937" : "#FFFFFF",
+        borderWidth: isDark ? 1 : 0,
+        borderColor: isDark ? "#111827" : "transparent",
+        shadowColor: "#000",
+        shadowOpacity: 0.08,
+        shadowRadius: 6,
+        shadowOffset: { width: 0, height: 2 },
+        elevation: 4,
+        marginTop: 10,
+      }}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+        <View
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: 8,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: isDark ? "#111827" : "#E5E7EB",
+            borderWidth: isDark ? 1 : 0,
+            borderColor: isDark ? "#1F2937" : "transparent",
+          }}
+        >
+          {icon}
+        </View>
+        <Text
+          style={{
+            fontSize: 16,
+            fontWeight: "700",
+            color: isDark ? "#F3F4F6" : "#0F172A",
+          }}
+        >
+          {label}
+        </Text>
+      </View>
+
+      <Ionicons
+        name="chevron-forward"
+        size={18}
+        color={isDark ? "#C7D2FE" : "#1E3A8A"}
+      />
     </TouchableOpacity>
   );
 }
@@ -37,13 +90,48 @@ export default function ProfileScreen() {
   const isDark = theme === "dark";
   const s = getStyles(isDark);
 
+  // THEME CROSSFADE
+  const themeAnim = useRef(new Animated.Value(isDark ? 1 : 0)).current;
+  useEffect(() => {
+    Animated.timing(themeAnim, {
+      toValue: isDark ? 1 : 0,
+      duration: 220,
+      easing: Easing.inOut(Easing.quad),
+      useNativeDriver: false,
+    }).start();
+  }, [isDark, themeAnim]);
+
+  const user = auth.currentUser;
+  const displayName =
+    user?.displayName || user?.email?.split("@")[0] || "User";
+  const email = user?.email || "—";
+
+  const initials = useMemo(() => {
+    const base = user?.displayName || user?.email || "U";
+    return base
+      .split(/\s+|@/g)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((s) => s[0]?.toUpperCase() || "")
+      .join("");
+  }, [user?.displayName, user?.email]);
+
   const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      Alert.alert("Success!", "Logged Out.");
-    } catch {
-      Alert.alert("Error", "Please Try Again.");
-    }
+    Alert.alert("Sign out", "Are you sure you want to sign out?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Sign Out",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await signOut(auth);
+            Alert.alert("Success!", "Logged Out.");
+          } catch {
+            Alert.alert("Error", "Please try again.");
+          }
+        },
+      },
+    ]);
   };
 
   const editProfile = () => {
@@ -51,66 +139,170 @@ export default function ProfileScreen() {
   };
 
   const handleSettingTap = (label: string) => {
-    Alert.alert(`${label} tapped`);
+    Alert.alert(`${label}`, "This is a placeholder action.");
   };
 
   return (
     <SafeAreaView style={s.screen}>
+      {/* crossfade layers */}
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: "#F8FAFC" }]} />
+      <Animated.View
+        style={[
+          StyleSheet.absoluteFill,
+          { backgroundColor: "#0F172A", opacity: themeAnim },
+        ]}
+      />
+
       <ScrollView
         style={s.scrollView}
         contentContainerStyle={s.scrollContent}
         indicatorStyle={isDark ? "white" : "black"}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={s.container}>
-          <Text style={s.header}>Profile</Text>
+        {/* Header bar with pills */}
+        <View style={s.headerBar}>
+          <Text style={s.headerTitle}>Profile</Text>
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <TouchableOpacity
+              onPress={editProfile}
+              style={s.smallGreyBtn}
+              accessibilityLabel="Edit profile"
+            >
+              <Ionicons
+                name="create-outline"
+                size={18}
+                color={isDark ? "#E5E7EB" : "#111827"}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={toggleTheme}
+              style={s.smallGreyBtn}
+              accessibilityLabel="Toggle theme"
+            >
+              <Ionicons
+                name={isDark ? "sunny-outline" : "moon-outline"}
+                size={18}
+                color={isDark ? "#FDE68A" : "#111827"}
+              />
+            </TouchableOpacity>
+          </View>
+        </View>
 
-          <TouchableOpacity style={s.button} onPress={editProfile}>
-            <Text style={s.buttonText}>Edit Profile</Text>
-          </TouchableOpacity>
+        <View style={s.contentWrap}>
+          {/* Profile card */}
+          <View style={s.profileCard}>
+            <View style={s.avatar}>
+              <Text style={s.avatarText}>{initials || "U"}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.nameText} numberOfLines={1}>
+                {displayName}
+              </Text>
+              <Text style={s.emailText} numberOfLines={1}>
+                {email}
+              </Text>
+            </View>
+          </View>
 
-          <TouchableOpacity style={[s.button, s.logout]} onPress={handleLogout}>
-            <Text style={s.buttonText}>Sign Out</Text>
+          {/* Primary actions */}
+          <TouchableOpacity style={s.primaryBtn} onPress={editProfile} activeOpacity={0.9}>
+            <Ionicons name="person-circle-outline" size={18} color="#fff" />
+            <Text style={s.primaryBtnText}>Edit Profile</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[s.button, isDark ? s.neutralDark : s.neutralLight]}
-            onPress={() => {
-              toggleTheme();
-            }}
+            style={[s.primaryBtn, s.logoutBtn]}
+            onPress={handleLogout}
+            activeOpacity={0.9}
           >
-            <Text style={[s.buttonText, { color: isDark ? "#FFF" : "#000" }]}>
+            <Ionicons name="log-out-outline" size={18} color="#fff" />
+            <Text style={s.primaryBtnText}>Sign Out</Text>
+          </TouchableOpacity>
+
+          {/* Secondary action */}
+          <TouchableOpacity
+            style={s.secondaryBtn}
+            onPress={toggleTheme}
+            activeOpacity={0.9}
+          >
+            <Ionicons
+              name={isDark ? "sunny-outline" : "moon-outline"}
+              size={16}
+              color={isDark ? "#FDE68A" : "#111827"}
+            />
+            <Text
+              style={[
+                s.secondaryBtnText,
+                { color: isDark ? "#F3F4F6" : "#111827" },
+              ]}
+            >
               Toggle Theme
             </Text>
           </TouchableOpacity>
 
+          {/* Settings */}
           <View style={s.section}>
             <Text style={s.sectionTitle}>Settings</Text>
 
-            <SettingRow
+            <SettingsRow
               label="Privacy Policy"
               onPress={() => handleSettingTap("Privacy Policy")}
               isDark={isDark}
+              icon={
+                <Ionicons
+                  name="shield-checkmark-outline"
+                  size={16}
+                  color={isDark ? "#E5E7EB" : "#111827"}
+                />
+              }
             />
-            <SettingRow
+            <SettingsRow
               label="Terms of Use"
               onPress={() => handleSettingTap("Terms of Use")}
               isDark={isDark}
+              icon={
+                <Ionicons
+                  name="document-text-outline"
+                  size={16}
+                  color={isDark ? "#E5E7EB" : "#111827"}
+                />
+              }
             />
-            <SettingRow
+            <SettingsRow
               label="Help & Support"
               onPress={() => handleSettingTap("Help & Support")}
               isDark={isDark}
+              icon={
+                <Ionicons
+                  name="help-buoy-outline"
+                  size={16}
+                  color={isDark ? "#E5E7EB" : "#111827"}
+                />
+              }
             />
-            <SettingRow
+            <SettingsRow
               label="About"
               onPress={() => handleSettingTap("About")}
               isDark={isDark}
+              icon={
+                <Ionicons
+                  name="information-circle-outline"
+                  size={16}
+                  color={isDark ? "#E5E7EB" : "#111827"}
+                />
+              }
             />
-            <SettingRow
+            <SettingsRow
               label="Contact Us"
               onPress={() => handleSettingTap("Contact Us")}
               isDark={isDark}
+              icon={
+                <Ionicons
+                  name="mail-outline"
+                  size={16}
+                  color={isDark ? "#E5E7EB" : "#111827"}
+                />
+              }
             />
           </View>
         </View>
@@ -123,80 +315,149 @@ const getStyles = (isDark: boolean) =>
   StyleSheet.create({
     screen: {
       flex: 1,
-      backgroundColor: isDark ? "#111827" : "#F9FAFB",
+      backgroundColor: isDark ? "#0F172A" : "#F8FAFC",
     },
     scrollView: {
       flex: 1,
-      backgroundColor: isDark ? "#111827" : "#F9FAFB",
+      backgroundColor: "transparent",
     },
     scrollContent: {
       flexGrow: 1,
-      padding: 20,
+      padding: 16,
+      paddingBottom: 28,
     },
-    container: {
-      flex: 1,
+
+    /* Header */
+    headerBar: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 4,
+      paddingTop: 8,
+      paddingBottom: 8,
+    },
+    headerTitle: {
+      fontSize: 22,
+      fontWeight: "800",
+      color: isDark ? "#F3F4F6" : "#111827",
+      letterSpacing: 0.2,
+    },
+    smallGreyBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
       alignItems: "center",
       justifyContent: "center",
+      backgroundColor: isDark ? "#111827" : "#E5E7EB",
+      borderWidth: isDark ? 1 : 0,
+      borderColor: isDark ? "#1F2937" : "transparent",
     },
-    header: {
-      fontSize: 28,
-      fontWeight: "700",
-      marginBottom: 24,
-      color: isDark ? "#E5E7EB" : "#333",
+
+    contentWrap: {
+      gap: 12,
     },
-    button: {
-      backgroundColor: isDark ? "#2563EB" : "#007AFF",
-      paddingVertical: 14,
-      paddingHorizontal: 24,
-      borderRadius: 12,
-      marginTop: 12,
-      width: "100%",
+
+    /* Profile card */
+    profileCard: {
+      flexDirection: "row",
       alignItems: "center",
+      gap: 12,
+      backgroundColor: isDark ? "#1F2937" : "#FFFFFF",
+      borderRadius: 16,
+      padding: 14,
+      shadowColor: "#000",
+      shadowOpacity: 0.1,
+      shadowRadius: 6,
+      shadowOffset: { width: 0, height: 2 },
+      elevation: 6,
+      borderWidth: isDark ? 1 : 0,
+      borderColor: isDark ? "#111827" : "transparent",
+    },
+    avatar: {
+      width: 56,
+      height: 56,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: isDark ? "#0B1220" : "#E5E7EB",
+      borderWidth: isDark ? 1 : 0,
+      borderColor: isDark ? "#1F2937" : "transparent",
+    },
+    avatarText: {
+      fontSize: 18,
+      fontWeight: "800",
+      color: isDark ? "#E5E7EB" : "#111827",
+      letterSpacing: 0.3,
+    },
+    nameText: {
+      fontSize: 18,
+      fontWeight: "800",
+      color: isDark ? "#F3F4F6" : "#0F172A",
+    },
+    emailText: {
+      marginTop: 2,
+      fontSize: 13,
+      fontWeight: "600",
+      color: isDark ? "#9CA3AF" : "#4B5563",
+    },
+
+    /* Buttons */
+    primaryBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      backgroundColor: isDark ? "#2563EB" : "#1D4ED8",
+      paddingVertical: 14,
+      borderRadius: 12,
+      width: "100%",
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.12,
+      shadowRadius: 4,
       elevation: 3,
     },
-    logout: {
-      backgroundColor: isDark ? "#B91C1C" : "#f44336",
+    logoutBtn: {
+      backgroundColor: isDark ? "#B91C1C" : "#DC2626",
     },
-    neutralDark: {
-      backgroundColor: "#444",
-    },
-    neutralLight: {
-      backgroundColor: "#DDD",
-    },
-    buttonText: {
+    primaryBtnText: {
       color: "#FFFFFF",
       fontSize: 16,
-      fontWeight: "600",
+      fontWeight: "800",
+      letterSpacing: 0.3,
     },
+
+    secondaryBtn: {
+      marginTop: 6,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      backgroundColor: isDark ? "#111827" : "#E5E7EB",
+      borderWidth: isDark ? 1 : 0,
+      borderColor: isDark ? "#1F2937" : "transparent",
+      paddingVertical: 12,
+      borderRadius: 12,
+      width: "100%",
+    },
+    secondaryBtnText: {
+      fontSize: 14,
+      fontWeight: "800",
+    },
+
+    /* Section */
     section: {
-      marginTop: 28,
+      marginTop: 18,
       width: "100%",
       borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)",
-      paddingTop: 16,
+      borderTopColor: isDark ? "#1F2937" : "#E5E7EB",
+      paddingTop: 12,
     },
     sectionTitle: {
-      fontSize: 18,
-      fontWeight: "700",
-      marginBottom: 12,
-      color: isDark ? "#E5E7EB" : "#111827",
-      alignSelf: "flex-start",
-    },
-    settingButton: {
-      backgroundColor: isDark ? "#1F2937" : "#E5E7EB",
-      paddingVertical: 14,
-      paddingHorizontal: 16,
-      borderRadius: 12,
-      marginTop: 10,
-      width: "100%",
-      alignItems: "flex-start",
-    },
-    settingButtonText: {
-      color: "#111827",
       fontSize: 16,
-      fontWeight: "600",
-    },
-    settingButtonTextDark: {
-      color: "#F9FAFB",
+      fontWeight: "800",
+      marginBottom: 8,
+      color: isDark ? "#C7D2FE" : "#1E3A8A",
+      letterSpacing: 0.2,
     },
   });

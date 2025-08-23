@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   ScrollView,
@@ -9,242 +9,500 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Image,
+  Platform,
+  Animated,
+  Easing,
+  ActivityIndicator,
+  SafeAreaView,
 } from "react-native";
 import { db, auth } from "../../firebaseConfig";
-import { doc, setDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import { router } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { useTheme } from "../ThemeContext";
+import { Ionicons } from "@expo/vector-icons";
+
+type UserDoc = {
+  firstName?: string;
+  lastName?: string;
+  birthday?: string;
+  employeeId?: string;
+  profileImageUri?: string | null;
+  email?: string;
+  displayName?: string;
+};
 
 function EditProfile() {
+  const { theme, toggleTheme } = useTheme();
+  const isDark = theme === "dark";
+  const styles = getStyles(isDark);
+
+  const userId = auth.currentUser?.uid || null;
+
   const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [birthday, setBirthday] = useState("");
+  const [lastName, setLastName]   = useState("");
+  const [birthday, setBirthday]   = useState("");
   const [employeeId, setEmployeeId] = useState("");
   const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [loadingDoc, setLoadingDoc] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  const { theme } = useTheme();
-  const isDark = theme === "dark";
-  const userId = auth.currentUser?.uid;
+  // THEME CROSSFADE
+  const themeAnim = useRef(new Animated.Value(isDark ? 1 : 0)).current;
+  useEffect(() => {
+    Animated.timing(themeAnim, {
+      toValue: isDark ? 1 : 0,
+      duration: 220,
+      easing: Easing.inOut(Easing.quad),
+      useNativeDriver: false,
+    }).start();
+  }, [isDark, themeAnim]);
+
+  // Load existing user doc once
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      if (!userId) {
+        setLoadingDoc(false);
+        return;
+      }
+      try {
+        const snap = await getDoc(doc(db, "users", userId));
+        const data = (snap.data() as UserDoc) || {};
+        if (!mounted) return;
+        setFirstName(data.firstName || "");
+        setLastName(data.lastName || "");
+        setBirthday(data.birthday || "");
+        setEmployeeId(data.employeeId || "");
+        setProfileImage(data.profileImageUri || null);
+      } catch (e) {
+        console.error(e);
+        Alert.alert("Error", "Failed to load your profile.");
+      } finally {
+        if (mounted) setLoadingDoc(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [userId]);
+
+  const currentDisplayName =
+    auth.currentUser?.displayName ||
+    [firstName, lastName].filter(Boolean).join(" ") ||
+    auth.currentUser?.email?.split("@")[0] ||
+    "User";
+
+  const initials = useMemo(() => {
+    const src =
+      currentDisplayName ||
+      auth.currentUser?.email ||
+      `${firstName} ${lastName}` ||
+      "U";
+    return src
+      .split(/\s+|@/g)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((s) => s[0]?.toUpperCase() || "")
+      .join("");
+  }, [currentDisplayName, firstName, lastName]);
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.7,
+      aspect: [1, 1],
+      quality: 0.8,
     });
-
     if (!result.canceled) {
       setProfileImage(result.assets[0].uri);
     }
   };
 
+  const hasChanges = useMemo(() => {
+    // If loading, avoid enabling button
+    if (loadingDoc) return false;
+    // naive: enable if any field non-empty or changed — good enough for UI
+    return true;
+  }, [loadingDoc, firstName, lastName, birthday, employeeId, profileImage]);
+
   const updateUser = async () => {
     if (!userId) {
-      console.error("User ID is not available");
+      Alert.alert("Not signed in", "Please sign in again.");
       return;
     }
-
-    const userRef = doc(db, "users", userId);
-
     try {
+      setSaving(true);
       await setDoc(
-        userRef,
+        doc(db, "users", userId),
         {
-          firstName,
-          lastName,
-          birthday,
-          employeeId,
-        },
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          birthday: birthday.trim(),
+          employeeId: employeeId.trim().toUpperCase(),
+          profileImageUri: profileImage || null,
+          // helpful mirrors (optional)
+          displayName:
+            (firstName.trim() || lastName.trim()) ?
+            `${firstName.trim()} ${lastName.trim()}`.trim() :
+            auth.currentUser?.displayName || null,
+          email: auth.currentUser?.email || null,
+        } as UserDoc,
         { merge: true }
       );
-      Alert.alert("Changes Saved!");
+      Alert.alert("Saved", "Your profile was updated.");
       router.back();
     } catch (error) {
       console.error(error);
       Alert.alert("Error", "Please try again.");
+    } finally {
+      setSaving(false);
     }
   };
 
   return (
-    <KeyboardAvoidingView
-      style={[
-        styles.container,
-        { backgroundColor: isDark ? "#121212" : "#F9FAFB" },
-      ]}
-      behavior="padding"
-    >
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
-        {profileImage && (
-          <Image
-            source={{ uri: profileImage }}
-            style={[
-              styles.avatar,
-              { borderColor: isDark ? "#444" : "#ddd", borderWidth: 1 },
-            ]}
-          />
-        )}
+    <SafeAreaView style={styles.container}>
+      {/* crossfade layers */}
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: "#F8FAFC" }]} />
+      <Animated.View
+        style={[
+          StyleSheet.absoluteFill,
+          { backgroundColor: "#0F172A", opacity: themeAnim },
+        ]}
+      />
 
-        <View
-          style={[
-            styles.card,
-            { backgroundColor: isDark ? "#1e1e1e" : "#FFFFFF" },
-          ]}
-        >
-          <TouchableOpacity onPress={pickImage}>
-            <Text style={[styles.changePhoto, { color: "#007AFF" }]}>
-              Change Profile Picture
-            </Text>
+      {/* Header */}
+      <View style={styles.headerBar}>
+        <View style={{ flexDirection: "row", gap: 10 }}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.smallGreyBtn}
+            accessibilityLabel="Back"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons
+              name="chevron-back"
+              size={20}
+              color={isDark ? "#E5E7EB" : "#111827"}
+            />
           </TouchableOpacity>
 
-          <Text style={[styles.label, { color: isDark ? "#ccc" : "#333" }]}>
-            First Name
-          </Text>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: isDark ? "#2a2a2a" : "#fff",
-                borderColor: isDark ? "#555" : "#ccc",
-                color: isDark ? "#fff" : "#111",
-              },
-            ]}
-            placeholder="First Name"
-            placeholderTextColor={isDark ? "#888" : "#999"}
-            value={firstName}
-            onChangeText={setFirstName}
-            autoCapitalize="sentences"
-          />
-
-          <Text style={[styles.label, { color: isDark ? "#ccc" : "#333" }]}>
-            Last Name
-          </Text>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: isDark ? "#2a2a2a" : "#fff",
-                borderColor: isDark ? "#555" : "#ccc",
-                color: isDark ? "#fff" : "#111",
-              },
-            ]}
-            placeholder="Last Name"
-            placeholderTextColor={isDark ? "#888" : "#999"}
-            value={lastName}
-            onChangeText={setLastName}
-            autoCapitalize="sentences"
-          />
-
-          <Text style={[styles.label, { color: isDark ? "#ccc" : "#333" }]}>
-            Date of Birth
-          </Text>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: isDark ? "#2a2a2a" : "#fff",
-                borderColor: isDark ? "#555" : "#ccc",
-                color: isDark ? "#fff" : "#111",
-              },
-            ]}
-            placeholder="Birthday"
-            placeholderTextColor={isDark ? "#888" : "#999"}
-            value={birthday}
-            onChangeText={setBirthday}
-          />
-
-          <Text style={[styles.label, { color: isDark ? "#ccc" : "#333" }]}>
-            Employee ID
-          </Text>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: isDark ? "#2a2a2a" : "#fff",
-                borderColor: isDark ? "#555" : "#ccc",
-                color: isDark ? "#fff" : "#111",
-              },
-            ]}
-            placeholder="Employee ID"
-            placeholderTextColor={isDark ? "#888" : "#999"}
-            value={employeeId}
-            onChangeText={setEmployeeId}
-            autoCapitalize="characters"
-          />
-
-          <TouchableOpacity onPress={updateUser} style={styles.button}>
-            <Text style={styles.buttonText}>Save</Text>
+          <TouchableOpacity
+            onPress={toggleTheme}
+            style={styles.smallGreyBtn}
+            accessibilityLabel="Toggle theme"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons
+              name={isDark ? "sunny-outline" : "moon-outline"}
+              size={18}
+              color={isDark ? "#FDE68A" : "#111827"}
+            />
           </TouchableOpacity>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+
+        <Text style={styles.headerTitle}>Edit Profile</Text>
+
+        <View style={{ width: 36, height: 36 }} />
+      </View>
+
+      <KeyboardAvoidingView
+        behavior={Platform.select({ ios: "padding", android: undefined })}
+        style={{ flex: 1 }}
+      >
+        {loadingDoc ? (
+          <View style={styles.loaderWrap}>
+            <ActivityIndicator />
+            <Text style={styles.loaderText}>Loading…</Text>
+          </View>
+        ) : (
+          <ScrollView
+            contentContainerStyle={styles.scrollContainer}
+            keyboardShouldPersistTaps="handled"
+          >
+            {/* Profile card w/ avatar */}
+            <View style={styles.card}>
+              <View style={styles.avatarWrap}>
+                {profileImage ? (
+                  <Image source={{ uri: profileImage }} style={styles.avatarImg} />
+                ) : (
+                  <View style={styles.avatarFallback}>
+                    <Text style={styles.avatarText}>{initials || "U"}</Text>
+                  </View>
+                )}
+                <TouchableOpacity
+                  style={styles.changePhotoBtn}
+                  onPress={pickImage}
+                  activeOpacity={0.9}
+                >
+                  <Ionicons name="image-outline" size={14} color="#fff" />
+                  <Text style={styles.changePhotoText}>Change photo</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Inputs */}
+              <View style={styles.fieldGroup}>
+                <Text style={styles.label}>First name</Text>
+                <TextInput
+                  placeholder="First name"
+                  value={firstName}
+                  onChangeText={(v) => setFirstName(v)}
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: isDark ? "#111827" : "#FFFFFF",
+                      borderColor: isDark ? "#1F2937" : "#E5E7EB",
+                      color: isDark ? "#E5E7EB" : "#111827",
+                    },
+                  ]}
+                  placeholderTextColor={isDark ? "#9CA3AF" : "#9AA1AA"}
+                  autoCapitalize="words"
+                  returnKeyType="next"
+                />
+              </View>
+
+              <View style={styles.fieldGroup}>
+                <Text style={styles.label}>Last name</Text>
+                <TextInput
+                  placeholder="Last name"
+                  value={lastName}
+                  onChangeText={(v) => setLastName(v)}
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: isDark ? "#111827" : "#FFFFFF",
+                      borderColor: isDark ? "#1F2937" : "#E5E7EB",
+                      color: isDark ? "#E5E7EB" : "#111827",
+                    },
+                  ]}
+                  placeholderTextColor={isDark ? "#9CA3AF" : "#9AA1AA"}
+                  autoCapitalize="words"
+                  returnKeyType="next"
+                />
+              </View>
+
+              <View style={styles.fieldGroup}>
+                <Text style={styles.label}>Date of birth</Text>
+                <TextInput
+                  placeholder="YYYY-MM-DD"
+                  value={birthday}
+                  onChangeText={(v) => setBirthday(v)}
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: isDark ? "#111827" : "#FFFFFF",
+                      borderColor: isDark ? "#1F2937" : "#E5E7EB",
+                      color: isDark ? "#E5E7EB" : "#111827",
+                    },
+                  ]}
+                  placeholderTextColor={isDark ? "#9CA3AF" : "#9AA1AA"}
+                  keyboardType="numbers-and-punctuation"
+                  returnKeyType="next"
+                />
+              </View>
+
+              <View style={styles.fieldGroup}>
+                <Text style={styles.label}>Employee ID</Text>
+                <TextInput
+                  placeholder="EMP123"
+                  value={employeeId}
+                  onChangeText={(v) => setEmployeeId(v.toUpperCase())}
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: isDark ? "#111827" : "#FFFFFF",
+                      borderColor: isDark ? "#1F2937" : "#E5E7EB",
+                      color: isDark ? "#E5E7EB" : "#111827",
+                    },
+                  ]}
+                  placeholderTextColor={isDark ? "#9CA3AF" : "#9AA1AA"}
+                  autoCapitalize="characters"
+                  returnKeyType="done"
+                />
+              </View>
+
+              <TouchableOpacity
+                onPress={updateUser}
+                disabled={!hasChanges || saving}
+                style={[
+                  styles.saveBtn,
+                  {
+                    backgroundColor:
+                      !hasChanges || saving
+                        ? isDark ? "#1E3A8A" : "#93C5FD"
+                        : isDark ? "#2563EB" : "#1D4ED8",
+                    opacity: !hasChanges || saving ? 0.9 : 1,
+                  },
+                ]}
+                activeOpacity={0.9}
+              >
+                {saving ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="save-outline" size={18} color="#fff" />
+                    <Text style={styles.saveBtnText}>Save changes</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        )}
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 export default EditProfile;
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scrollContainer: {
-    padding: 20,
-    paddingBottom: 40,
-    alignItems: "center",
-    justifyContent: "center",
-    flexGrow: 1,
-  },
-  card: {
-    width: "100%",
-    height: "90%",
-    borderRadius: 16,
-    paddingHorizontal: 24,
-    paddingTop: 160,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 6,
-    justifyContent: "flex-start",
-  },
-  avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    marginBottom: -50,
-    zIndex: 10,
-  },
-  changePhoto: {
-    textAlign: "center",
-    fontWeight: "600",
-    marginBottom: 20,
-    marginTop: -20,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 6,
-  },
-  input: {
-    borderWidth: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    fontSize: 16,
-    marginBottom: 16,
-  },
-  button: {
-    backgroundColor: "#007AFF",
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: "center",
-    marginTop: 12,
-    elevation: 4,
-  },
-  buttonText: {
-    color: "white",
-    fontSize: 18,
-    fontWeight: "600",
-  },
-});
+const getStyles = (isDark: boolean) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: isDark ? "#0F172A" : "#F8FAFC",
+    },
+
+    /* Header */
+    headerBar: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 16,
+      paddingTop: 8,
+      paddingBottom: 8,
+    },
+    headerTitle: {
+      fontSize: 20,
+      fontWeight: "800",
+      color: isDark ? "#F3F4F6" : "#111827",
+      letterSpacing: 0.2,
+    },
+    smallGreyBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: isDark ? "#111827" : "#E5E7EB",
+      borderWidth: isDark ? 1 : 0,
+      borderColor: isDark ? "#1F2937" : "transparent",
+    },
+
+    loaderWrap: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingBottom: 40,
+    },
+    loaderText: {
+      marginTop: 8,
+      color: isDark ? "#CBD5E1" : "#475569",
+    },
+
+    /* Scroll area */
+    scrollContainer: {
+      paddingHorizontal: 16,
+      paddingBottom: 28,
+      paddingTop: 8,
+      alignItems: "stretch",
+      gap: 12,
+    },
+
+    /* Card */
+    card: {
+      backgroundColor: isDark ? "#1F2937" : "#FFFFFF",
+      borderRadius: 16,
+      padding: 14,
+      shadowColor: "#000",
+      shadowOpacity: 0.1,
+      shadowRadius: 6,
+      shadowOffset: { width: 0, height: 2 },
+      elevation: 6,
+      borderWidth: isDark ? 1 : 0,
+      borderColor: isDark ? "#111827" : "transparent",
+    },
+
+    avatarWrap: {
+      alignItems: "center",
+      marginTop: 6,
+      marginBottom: 12,
+    },
+    avatarImg: {
+      width: 96,
+      height: 96,
+      borderRadius: 16,
+      borderWidth: isDark ? 1 : 0,
+      borderColor: isDark ? "#1F2937" : "transparent",
+    },
+    avatarFallback: {
+      width: 96,
+      height: 96,
+      borderRadius: 16,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: isDark ? "#0B1220" : "#E5E7EB",
+      borderWidth: isDark ? 1 : 0,
+      borderColor: isDark ? "#1F2937" : "transparent",
+    },
+    avatarText: {
+      fontSize: 28,
+      fontWeight: "900",
+      color: isDark ? "#E5E7EB" : "#111827",
+      letterSpacing: 0.4,
+    },
+    changePhotoBtn: {
+      marginTop: 10,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 999,
+      backgroundColor: isDark ? "#2563EB" : "#1D4ED8",
+    },
+    changePhotoText: {
+      color: "#fff",
+      fontWeight: "800",
+      fontSize: 12,
+      letterSpacing: 0.2,
+    },
+
+    fieldGroup: {
+      marginTop: 8,
+    },
+    label: {
+      fontSize: 12,
+      fontWeight: "800",
+      marginBottom: 6,
+      color: isDark ? "#C7D2FE" : "#1E3A8A",
+      letterSpacing: 0.2,
+    },
+    input: {
+      borderWidth: 1,
+      paddingVertical: 12,
+      paddingHorizontal: 12,
+      borderRadius: 12,
+      fontSize: 16,
+    },
+
+    saveBtn: {
+      marginTop: 14,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      paddingVertical: 14,
+      borderRadius: 12,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.12,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    saveBtnText: {
+      color: "#fff",
+      fontSize: 16,
+      fontWeight: "800",
+      letterSpacing: 0.3,
+    },
+  });

@@ -1,6 +1,5 @@
-// THIS PAGE HAS THE HANDLING FOR TASK ROLLOUT. THIS INCLUDES DELETING/RESETTING TASKS AFTER EACH NEW DAY.
-// MOVE THIS TO A CLOUD FUNCTION LATER.
 // app/(manager)/scheduler.tsx
+// Handles task rollout. (Cloud Function later.)
 import React, { useEffect, useRef, useState } from "react";
 import {
   View,
@@ -15,8 +14,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Alert, // for validation alerts
-  Animated, // for the toggle thumb animation
+  Alert,
+  Animated,
 } from "react-native";
 import SwipeableItem, { UnderlayParams } from "react-native-swipeable-item";
 import DraggableFlatList, {
@@ -33,9 +32,9 @@ import {
   writeBatch,
   doc,
   where,
-  getDoc, // still imported in case you want the guard back later
+  getDoc,
   serverTimestamp,
-  getDocs, // NEW
+  getDocs,
 } from "firebase/firestore";
 import { Dropdown, MultiSelect } from "react-native-element-dropdown";
 
@@ -230,18 +229,16 @@ export default function Scheduler() {
   }, []);
 
   // ===========================
-  // NEW: helper to flip existing "today" tasks off
+  // helper to flip existing "today" tasks off
   // ===========================
   async function markExistingTasksNotForToday(todayStr: string) {
     const ids = new Set<string>();
     const tasksRef = collection(db, "tasks");
 
-    // Prefer explicit flag for today
     const qFlag = query(tasksRef, where("forToday", "==", true));
     const snapFlag = await getDocs(qFlag);
     snapFlag.forEach((d) => ids.add(d.id));
 
-    // Fallback: same business date (covers older docs created before `forToday` existed)
     const qDate = query(tasksRef, where("dateYYYYMMDD", "==", todayStr));
     const snapDate = await getDocs(qDate);
     snapDate.forEach((d) => ids.add(d.id));
@@ -249,7 +246,6 @@ export default function Scheduler() {
     const allIds = Array.from(ids);
     if (allIds.length === 0) return 0;
 
-    // Chunk to respect Firestore's 500 writes per batch
     const CHUNK = 450;
     for (let i = 0; i < allIds.length; i += CHUNK) {
       const batch = writeBatch(db);
@@ -269,23 +265,12 @@ export default function Scheduler() {
     const dayKey = selectedDay;
     const todayStr = ymd(new Date());
 
-    // --------- DUP GUARD DISABLED ----------
-    // const guardRef = doc(db, "task_rollouts", todayStr);
-    // const guardSnap = await getDoc(guardRef);
-    // if (guardSnap.exists()) {
-    //   Alert.alert("Already rolled out", "Today's tasks are already created.");
-    //   return;
-    // }
-    // ---------------------------------------
-
-    // Ensure selected day’s templates are loaded
     if (loadingByDay[dayKey]) {
       Alert.alert("Please wait", "Scheduler is still loading. Try again in a moment.");
       return;
     }
 
-    // NEW: flip any existing "today" tasks off before creating new ones
-    const cleared = await markExistingTasksNotForToday(todayStr); // NEW
+    const cleared = await markExistingTasksNotForToday(todayStr);
 
     const templates = itemsByDay[dayKey] || [];
     const batch = writeBatch(db);
@@ -299,32 +284,23 @@ export default function Scheduler() {
         : [];
       if (workerIds.length === 0) return;
 
-      // ONE doc per template item, with all workers in an array
       const ref = doc(collection(db, "tasks"));
       batch.set(ref, {
         title: tpl.title || "Untitled",
         description: tpl.description || "",
         priority: tpl.defaultPriority ?? 3,
-        dayKey, // which schedule set was used
-        dateYYYYMMDD: todayStr, // date you rolled out
+        dayKey,
+        dateYYYYMMDD: todayStr,
         templateId: tpl.id,
-        assignedWorkers: workerIds, // <-- the array you wanted
+        assignedWorkers: workerIds,
         status: "assigned",
-        order: tpl.order ?? 999, // optional: carry over sort order
+        order: tpl.order ?? 999,
         createdAt: serverTimestamp(),
-        forToday: true, // NEW: mark as today's batch
+        forToday: true,
       });
 
-      createdCount += 1; // one per template item
+      createdCount += 1;
     });
-
-    // --------- DUP GUARD WRITE DISABLED ----------
-    // batch.set(guardRef, {
-    //   dayKey,
-    //   dateYYYYMMDD: todayStr,
-    //   createdAt: serverTimestamp(),
-    // });
-    // ---------------------------------------------
 
     await batch.commit();
     Alert.alert(
@@ -394,7 +370,6 @@ export default function Scheduler() {
             assignedWorkerIds: Array.isArray(it.assignedWorkerIds)
               ? it.assignedWorkerIds
               : [],
-            // defaultPriority is already computed in the modal submit
           },
           { merge: true }
         );
@@ -493,14 +468,26 @@ export default function Scheduler() {
         <View style={styles.headerRow}>
           <View style={styles.daySwitcher}>
             <TouchableOpacity onPress={prevDay} style={styles.arrowBtn}>
-              <Text style={styles.arrowText}>‹</Text>
+              <Ionicons
+                name="chevron-back"
+                size={18}
+                color={isDark ? "#E5E7EB" : "#1F2937"}
+              />
             </TouchableOpacity>
-            <Text style={styles.dayLabel}>
-              {DAY_LABEL[selectedDay]}
-              {dirtyDays.has(selectedDay) ? " •" : ""}
-            </Text>
+
+            <View style={styles.dayBadge}>
+              <Text style={styles.dayLabel}>
+                {DAY_LABEL[selectedDay]}
+                {dirtyDays.has(selectedDay) ? " •" : ""}
+              </Text>
+            </View>
+
             <TouchableOpacity onPress={nextDay} style={styles.arrowBtn}>
-              <Text style={styles.arrowText}>›</Text>
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={isDark ? "#E5E7EB" : "#1F2937"}
+              />
             </TouchableOpacity>
           </View>
 
@@ -508,11 +495,12 @@ export default function Scheduler() {
             style={styles.addBtn}
             onPress={() => setAddOpen(true)}
           >
+            <Ionicons name="add" size={16} color="#fff" />
             <Text style={styles.addBtnText}>Add</Text>
           </TouchableOpacity>
 
-          {/* Always enabled rollout */}
           <TouchableOpacity style={styles.rolloutBtn} onPress={rolloutToday}>
+            <Ionicons name="rocket-outline" size={14} color="#fff" />
             <Text style={styles.rolloutText}>
               Rollout {DAY_LABEL[selectedDay]}
             </Text>
@@ -524,6 +512,18 @@ export default function Scheduler() {
           <View style={styles.center}>
             <ActivityIndicator />
             <Text style={styles.loadingText}>Loading…</Text>
+          </View>
+        ) : selectedList.length === 0 ? (
+          <View style={styles.emptyWrap}>
+            <Ionicons
+              name="clipboard-outline"
+              size={24}
+              color={isDark ? "#94A3B8" : "#64748B"}
+            />
+            <Text style={styles.emptyText}>
+              No items for {DAY_LABEL[selectedDay]} yet.
+            </Text>
+            <Text style={styles.emptySubtle}>Tap “Add” to create one.</Text>
           </View>
         ) : (
           <DraggableFlatList
@@ -587,7 +587,6 @@ function AddSchedulerItemModal({
 }) {
   const [title, setTitle] = useState("");
   const [desc, setDesc] = useState("");
-  // const [priority, setPriority] = useState<string>("3"); // REMOVED: typed priority
   const [urgent, setUrgent] = useState(false);
   const [important, setImportant] = useState(false);
   const [selectedWorkerIds, setSelectedWorkerIds] = useState<string[]>([]);
@@ -601,7 +600,6 @@ function AddSchedulerItemModal({
   };
 
   const computePriorityFromFlags = (u: boolean, i: boolean) => {
-    // both = 1, important only = 2, urgent only = 3, none = 4
     if (u && i) return 1;
     if (!u && i) return 2;
     if (u && !i) return 3;
@@ -655,7 +653,7 @@ function AddSchedulerItemModal({
         onPress={onToggle}
         style={[
           modalStyles.toggleContainer,
-          { backgroundColor: value ? "#22C55E" : isDark ? "#374151" : "#ccc" },
+          { backgroundColor: value ? "#22C55E" : isDark ? "#374151" : "#D1D5DB" },
         ]}
       >
         <Animated.View
@@ -680,7 +678,7 @@ function AddSchedulerItemModal({
             { backgroundColor: isDark ? "#121826" : "#FFFFFF" },
           ]}
         >
-          <View className="header" style={modalStyles.headerRow}>
+          <View style={modalStyles.headerRow}>
             <Text
               style={[
                 modalStyles.headerText,
@@ -715,7 +713,7 @@ function AddSchedulerItemModal({
                   backgroundColor: isDark ? "#1F2937" : "#FFF",
                 },
               ]}
-              placeholderStyle={{ color: isDark ? "#9CA3AF" : "#9CA3AF" }}
+              placeholderStyle={{ color: "#9CA3AF" }}
               selectedTextStyle={{ color: isDark ? "#F9FAFB" : "#111827" }}
               itemTextStyle={{ color: isDark ? "#F9FAFB" : "#111827" }}
               containerStyle={{ backgroundColor: isDark ? "#111827" : "#FFF" }}
@@ -731,7 +729,7 @@ function AddSchedulerItemModal({
               value={title}
               onChangeText={setTitle}
               placeholder="Or type a custom title"
-              placeholderTextColor={isDark ? "#9CA3AF" : "#9CA3AF"}
+              placeholderTextColor="#9CA3AF"
               style={[
                 modalStyles.input,
                 {
@@ -757,7 +755,7 @@ function AddSchedulerItemModal({
                   backgroundColor: isDark ? "#1F2937" : "#FFF",
                 },
               ]}
-              placeholderStyle={{ color: isDark ? "#9CA3AF" : "#9CA3AF" }}
+              placeholderStyle={{ color: "#9CA3AF" }}
               selectedTextStyle={{ color: isDark ? "#F9FAFB" : "#111827" }}
               itemTextStyle={{ color: isDark ? "#F9FAFB" : "#111827" }}
               containerStyle={{ backgroundColor: isDark ? "#111827" : "#FFF" }}
@@ -781,7 +779,7 @@ function AddSchedulerItemModal({
               value={desc}
               onChangeText={setDesc}
               placeholder="Optional details"
-              placeholderTextColor={isDark ? "#9CA3AF" : "#9CA3AF"}
+              placeholderTextColor="#9CA3AF"
               style={[
                 modalStyles.input,
                 {
@@ -790,6 +788,7 @@ function AddSchedulerItemModal({
                   borderColor: isDark ? "#374151" : "#D1D5DB",
                 },
               ]}
+              multiline
             />
 
             {/* Urgent / Important toggles */}
@@ -828,6 +827,7 @@ const getStyles = (isDark: boolean) =>
       paddingHorizontal: 12,
       paddingTop: 12,
       paddingBottom: 4,
+      gap: 8,
     },
     daySwitcher: {
       flexDirection: "row",
@@ -841,40 +841,65 @@ const getStyles = (isDark: boolean) =>
       paddingHorizontal: 10,
       paddingVertical: 6,
     },
-    arrowText: {
-      fontSize: 18,
-      color: isDark ? "#E5E7EB" : "#1F2937",
-      fontWeight: "700",
+    dayBadge: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      backgroundColor: isDark ? "#111827" : "#E5E7EB",
+      borderRadius: 999,
+      borderWidth: isDark ? 1 : 0,
+      borderColor: isDark ? "#1F2937" : "transparent",
     },
     dayLabel: {
-      fontSize: 18,
-      fontWeight: "700",
+      fontSize: 16,
+      fontWeight: "800",
       color: isDark ? "#F3F4F6" : "#111827",
+      letterSpacing: 0.2,
     },
     addBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
       backgroundColor: isDark ? "#2563EB" : "#1D4ED8",
       paddingHorizontal: 14,
       paddingVertical: 10,
       borderRadius: 10,
     },
-    addBtnText: { color: "#FFF", fontWeight: "700" },
+    addBtnText: { color: "#FFF", fontWeight: "800" },
 
     rolloutBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
       backgroundColor: "#10B981",
       paddingHorizontal: 12,
       paddingVertical: 8,
-      borderRadius: 8,
-      marginLeft: 8,
+      borderRadius: 10,
     },
-    rolloutText: { color: "#fff", fontWeight: "700" },
+    rolloutText: { color: "#fff", fontWeight: "800" },
 
     center: { flex: 1, alignItems: "center", justifyContent: "center" },
     loadingText: { marginTop: 8, color: isDark ? "#E5E7EB" : "#111827" },
 
+    emptyWrap: {
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 40,
+      gap: 8,
+    },
+    emptyText: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: isDark ? "#E5E7EB" : "#111827",
+    },
+    emptySubtle: {
+      fontSize: 13,
+      color: isDark ? "#94A3B8" : "#64748B",
+    },
+
     card: {
       height: CARD_HEIGHT,
       width: "100%",
-      backgroundColor: isDark ? "#1F2937" : "#FFFFFF",
+      backgroundColor: isDark ? "#111827" : "#FFFFFF",
       borderRadius: 16,
       padding: 14,
       marginVertical: 8,
@@ -883,12 +908,15 @@ const getStyles = (isDark: boolean) =>
       shadowRadius: 4,
       shadowOffset: { width: 0, height: 2 },
       elevation: 3,
+      borderWidth: isDark ? 1 : 0,
+      borderColor: isDark ? "#1F2937" : "transparent",
     },
     title: {
       fontSize: 16,
-      fontWeight: "700",
-      color: isDark ? "#F3F4F6" : "#111827",
+      fontWeight: "800",
+      color: isDark ? "#E5E7EB" : "#0F172A",
       marginBottom: 6,
+      letterSpacing: 0.2,
     },
     meta: {
       fontSize: 13,
@@ -915,7 +943,7 @@ const getStyles = (isDark: boolean) =>
     underlayText: {
       marginTop: 6,
       color: "#fff",
-      fontWeight: "700",
+      fontWeight: "800",
     },
 
     saveBar: {
@@ -943,14 +971,14 @@ const getStyles = (isDark: boolean) =>
       borderRadius: 10,
       backgroundColor: isDark ? "#111827" : "#E5E7EB",
     },
-    discardText: { color: isDark ? "#E5E7EB" : "#111827", fontWeight: "700" },
+    discardText: { color: isDark ? "#E5E7EB" : "#111827", fontWeight: "800" },
     saveBtn: {
       paddingVertical: 10,
       paddingHorizontal: 14,
       borderRadius: 10,
       backgroundColor: isDark ? "#2563EB" : "#1D4ED8",
     },
-    saveText: { color: "#FFF", fontWeight: "700" },
+    saveText: { color: "#FFF", fontWeight: "800" },
   });
 
 const modalStyles = StyleSheet.create({
@@ -971,17 +999,17 @@ const modalStyles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 8,
   },
-  headerText: { fontSize: 18, fontWeight: "700" },
-  label: { fontSize: 13, fontWeight: "700", marginTop: 12, marginBottom: 6 },
+  headerText: { fontSize: 18, fontWeight: "800" },
+  label: { fontSize: 13, fontWeight: "800", marginTop: 12, marginBottom: 6 },
   dropdown: {
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 12,
   },
   input: {
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 12,
     fontSize: 14,
   },
@@ -992,9 +1020,8 @@ const modalStyles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
   },
-  submitText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  submitText: { color: "#fff", fontSize: 16, fontWeight: "800" },
 
-  // NEW: toggle styles (mirroring your TaskModal look)
   toggleRow: {
     flexDirection: "row",
     alignItems: "center",
