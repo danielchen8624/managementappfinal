@@ -7,6 +7,8 @@ import { User } from "firebase/auth";
 import { UserProvider } from "./UserContext";
 import {ThemeProvider} from "./ThemeContext";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { ServerTimeProvider } from "./serverTimeContext"; // adjust path to your file
+
 
 export default function RootLayout() {
   const [user, setUser] = useState<User | null>(null);
@@ -26,6 +28,7 @@ export default function RootLayout() {
   }, []);
 
   return (
+    <ServerTimeProvider>
     <GestureHandlerRootView style = {{flex: 1}}>
     <UserProvider>
       <ThemeProvider>
@@ -36,6 +39,7 @@ export default function RootLayout() {
     </ThemeProvider>
     </UserProvider>
     </GestureHandlerRootView>
+    </ServerTimeProvider>
     
   );
 }

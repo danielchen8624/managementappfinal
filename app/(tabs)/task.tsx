@@ -7,6 +7,8 @@ import {
   SafeAreaView,
   ActivityIndicator,
   Alert,
+  Animated, // NEW
+  Easing,   // NEW
 } from "react-native";
 import { router } from "expo-router";
 import { db } from "../../firebaseConfig";
@@ -19,17 +21,42 @@ import {
   deleteDoc,
   // orderBy, // optional: uncomment if you have an index on "order"
 } from "firebase/firestore";
-import React, { useState, useEffect } from "react";
+import React, { useMemo, useRef, useState, useEffect } from "react";
 import { useUser } from "../UserContext";
 import { useTheme } from "../ThemeContext";
+// NEW: server-authoritative time + schedule
+import { useServerTime, priorityWindows } from "../serverTimeContext";
+// NEW: luxon for countdown labels (already used in ServerTimeContext)
+import { DateTime } from "luxon";
 
-// NEW: same swipe lib you’re using in scheduler
+// same swipe lib you’re using in scheduler
 import SwipeableItem, { UnderlayParams } from "react-native-swipeable-item";
 import { Ionicons } from "@expo/vector-icons";
 
 /** Helper to sort by optional `order` field */
 function sortByOrder<T extends { order?: number }>(arr: T[]) {
   return [...arr].sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+}
+
+// NEW: compute nice human label for a window
+function windowLabel(p: number) {
+  const w = priorityWindows.find((x) => x.priority === p);
+  return w ? `${w.start}–${w.end}` : "";
+}
+
+// NEW: get end DateTime of active window, for countdown
+function getActiveWindowEnd(tzNow: DateTime) {
+  const w = priorityWindows.find((x) => {
+    const [sh, sm] = x.start.split(":").map(Number);
+    const [eh, em] = x.end.split(":").map(Number);
+    const mins = tzNow.hour * 60 + tzNow.minute;
+    const s = sh * 60 + sm;
+    const e = eh * 60 + em;
+    return mins >= s && mins <= e;
+  });
+  if (!w) return null;
+  const [eh, em] = w.end.split(":").map(Number);
+  return tzNow.set({ hour: eh, minute: em, second: 0, millisecond: 0 });
 }
 
 function TaskPage() {
@@ -54,26 +81,36 @@ function TaskPage() {
   const styles = getStyles(isDark);
   const { role, loading } = useUser();
 
+  // NEW: server-authoritative time context
+  const { activePriority, tzNow } = useServerTime();
+
+  // NEW: compute today (if you later add taskDate filter)
+  const todayISO = useMemo(() => tzNow().toISODate(), [tzNow]);
+
   useEffect(() => {
     // Only read from `tasks`. We assume the collection already contains just today's items.
+    // If/when you add a `taskDate` string (YYYY-MM-DD), add where("taskDate","==",todayISO).
     const statuses = ["pending", "assigned", "in_progress"];
 
     const q1 = query(
       collection(db, "tasks"),
       where("priority", "==", 1),
       where("status", "in", statuses)
+      // where("taskDate", "==", todayISO) // NEW: optional if you store dates
       // orderBy("order") // optional if you have an index
     );
     const q2 = query(
       collection(db, "tasks"),
       where("priority", "==", 2),
       where("status", "in", statuses)
+      // where("taskDate", "==", todayISO) // NEW: optional
       // orderBy("order")
     );
     const q3 = query(
       collection(db, "tasks"),
       where("priority", "==", 3),
       where("status", "in", statuses)
+      // where("taskDate", "==", todayISO) // NEW: optional
       // orderBy("order")
     );
 
@@ -108,7 +145,9 @@ function TaskPage() {
       u3();
       uProj();
     };
-  }, []);
+    // NEW: todayISO in deps only if you add the taskDate filter
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [/* todayISO */]);
 
   const handleRefresh = () => {
     setIsRefreshing(true);
@@ -177,52 +216,116 @@ function TaskPage() {
     );
   };
 
-  const renderCard = (item: any) => (
-    <SwipeableItem
-      key={item.id}
-      item={item}
-      snapPointsLeft={[96]}       // swipe LEFT to reveal delete
-      overSwipe={32}
-      renderUnderlayLeft={({ close }: UnderlayParams<any>) => (
-        <View style={styles.underlayLeft}>
-          <TouchableOpacity
-            onPress={() => confirmDeleteTask(item.id, close)}
-            style={styles.underlayButton}
-            activeOpacity={0.9}
-          >
-            <Ionicons name="trash-outline" size={28} color="#fff" />
-            <Text style={styles.underlayText}>Delete</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-      onChange={({ openDirection }) => {
-        if (openDirection === "left") {
-          // Immediately ask as soon as user swipes left
-          confirmDeleteTask(item.id);
-        }
-      }}
-    >
-      <TouchableOpacity
-        onPress={() => openScreen(item)}
-        style={styles.taskCard}
-        activeOpacity={0.8}
+  // NEW: animated pulse for active tasks
+  const pulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 1200, easing: Easing.inOut(Easing.quad), useNativeDriver: false }),
+        Animated.timing(pulse, { toValue: 0, duration: 1200, easing: Easing.inOut(Easing.quad), useNativeDriver: false }),
+      ])
+    ).start();
+  }, [pulse]);
+
+  // NEW: glow styles derived from pulse
+  const glowStyle = (isActive: boolean) => {
+    if (!isActive) return {};
+    const intensity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.2, 0.65] });
+    return {
+      borderWidth: 2,
+      borderColor: isDark ? "rgba(59,130,246,0.8)" : "rgba(37,99,235,0.9)",
+      shadowColor: isDark ? "#60A5FA" : "#3B82F6",
+      shadowOpacity: intensity as unknown as number,
+      shadowRadius: 12,
+      elevation: 8,
+    } as any;
+  };
+
+  const renderCard = (item: any) => {
+    const isActive = item.priority === activePriority; // NEW
+    return (
+      <SwipeableItem
+        key={item.id}
+        item={item}
+        snapPointsLeft={[96]}       // swipe LEFT to reveal delete
+        overSwipe={32}
+        renderUnderlayLeft={({ close }: UnderlayParams<any>) => (
+          <View style={styles.underlayLeft}>
+            <TouchableOpacity
+              onPress={() => confirmDeleteTask(item.id, close)}
+              style={styles.underlayButton}
+              activeOpacity={0.9}
+            >
+              <Ionicons name="trash-outline" size={28} color="#fff" />
+              <Text style={styles.underlayText}>Delete</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        onChange={({ openDirection }) => {
+          if (openDirection === "left") {
+            confirmDeleteTask(item.id);
+          }
+        }}
       >
-        <View style={{ paddingRight: 14 }}>
-          <Text style={styles.taskTitle}>{item.taskType || item.title || "Untitled"}</Text>
-          <Text style={styles.taskText}>Room: {item.roomNumber || "N/A"}</Text>
-          <Text style={styles.taskText}>Priority: {item.priority ?? "Unassigned"}</Text>
-        </View>
-        <View style={styles.pillRail}>
-          <View style={[styles.pill, { backgroundColor: getStatusColor(item) }]} />
-        </View>
-      </TouchableOpacity>
-    </SwipeableItem>
-  );
+        <Animated.View style={[styles.taskCard, glowStyle(isActive)] /* NEW */}>
+          <TouchableOpacity onPress={() => openScreen(item)} activeOpacity={0.86}>
+            <View style={{ paddingRight: 14 }}>
+              <View style={styles.titleRow /* NEW */}>
+                <Text style={styles.taskTitle}>{item.taskType || item.title || "Untitled"}</Text>
+                {isActive && (
+                  <View style={styles.nowPill /* NEW */}>
+                    <Ionicons name="flash" size={14} color="#fff" />
+                    <Text style={styles.nowPillText}>Now</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.taskText}>Room: {item.roomNumber || "N/A"}</Text>
+              <Text style={styles.taskText}>Priority: {item.priority ?? "Unassigned"}</Text>
+              {typeof item.estimatedMinutes === "number" && (
+                <Text style={styles.taskSubtle}>ETA: ~{item.estimatedMinutes} min</Text>
+              )}
+            </View>
+            <View style={styles.pillRail}>
+              <View style={[styles.pill, { backgroundColor: getStatusColor(item) }]} />
+            </View>
+          </TouchableOpacity>
+        </Animated.View>
+      </SwipeableItem>
+    );
+  };
 
   const openHistory = () => router.push("/completedTasks");
 
+  // NEW: top banner (“Now” and countdown)
+  const tz = tzNow();
+  const end = getActiveWindowEnd(tz);
+  const countdown =
+    end ? Math.max(0, Math.floor(end.diff(tz, "minutes").minutes)) : null;
+
   return (
     <SafeAreaView style={styles.container}>
+      {/* NEW: Current window banner */}
+      <View style={styles.banner /* NEW */}>
+        {activePriority ? (
+          <>
+            <Text style={styles.bannerTitle /* NEW */}>
+              Priority {activePriority} window
+            </Text>
+            <Text style={styles.bannerSubtitle /* NEW */}>
+              {windowLabel(activePriority)}
+              {countdown !== null ? `  ·  ${countdown} min left` : ""}
+            </Text>
+          </>
+        ) : (
+          <>
+            <Text style={styles.bannerTitle}>No active window</Text>
+            <Text style={styles.bannerSubtitle}>
+              Next starts at {priorityWindows[0].start}
+            </Text>
+          </>
+        )}
+      </View>
+
       {role === "manager" ? (
         <>
           <TouchableOpacity onPress={openHistory} style={styles.historyButton}>
@@ -249,7 +352,11 @@ function TaskPage() {
                   <View>
                     {/* Priority 1 */}
                     <TouchableOpacity onPress={() => setShowP1(!showP1)} style={styles.subHeader}>
-                      <Text style={styles.subHeaderText}>Priority 1 {showP1 ? "▲" : "▼"}</Text>
+                      <Text style={styles.subHeaderText}>
+                        Priority 1 {windowLabel(1)}
+                        {activePriority === 1 ? "  ·  Now" : ""}
+                        {showP1 ? "  ▲" : "  ▼"}
+                      </Text>
                     </TouchableOpacity>
                     {showP1 && (p1.length === 0 ? (
                       <Text style={styles.emptyText}>No items for Priority 1.</Text>
@@ -259,7 +366,11 @@ function TaskPage() {
 
                     {/* Priority 2 */}
                     <TouchableOpacity onPress={() => setShowP2(!showP2)} style={styles.subHeader}>
-                      <Text style={styles.subHeaderText}>Priority 2 {showP2 ? "▲" : "▼"}</Text>
+                      <Text style={styles.subHeaderText}>
+                        Priority 2 {windowLabel(2)}
+                        {activePriority === 2 ? "  ·  Now" : ""}
+                        {showP2 ? "  ▲" : "  ▼"}
+                      </Text>
                     </TouchableOpacity>
                     {showP2 && (p2.length === 0 ? (
                       <Text style={styles.emptyText}>No items for Priority 2.</Text>
@@ -269,7 +380,11 @@ function TaskPage() {
 
                     {/* Priority 3 */}
                     <TouchableOpacity onPress={() => setShowP3(!showP3)} style={styles.subHeader}>
-                      <Text style={styles.subHeaderText}>Priority 3 {showP3 ? "▲" : "▼"}</Text>
+                      <Text style={styles.subHeaderText}>
+                        Priority 3 {windowLabel(3)}
+                        {activePriority === 3 ? "  ·  Now" : ""}
+                        {showP3 ? "  ▲" : "  ▼"}
+                      </Text>
                     </TouchableOpacity>
                     {showP3 && (p3.length === 0 ? (
                       <Text style={styles.emptyText}>No items for Priority 3.</Text>
@@ -309,12 +424,32 @@ const getStyles = (isDark: boolean) =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: isDark ? "#1E293B" : "#F9FAFB",
+      backgroundColor: isDark ? "#0F172A" : "#F8FAFC", // NEW: slightly deeper dark bg
     },
     scrollContainer: {
       padding: 16,
       paddingBottom: 40,
     },
+
+    // NEW: top banner
+    banner: {
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      backgroundColor: isDark ? "#1E293B" : "#E0ECFF",
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: isDark ? "#334155" : "#BFDBFE",
+    },
+    bannerTitle: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: isDark ? "#E5E7EB" : "#0F172A",
+    },
+    bannerSubtitle: {
+      marginTop: 2,
+      fontSize: 13,
+      color: isDark ? "#CBD5E1" : "#1E40AF",
+    },
+
     header: {
       width: "100%",
       paddingVertical: 16,
@@ -374,8 +509,9 @@ const getStyles = (isDark: boolean) =>
       fontSize: 16,
       fontWeight: "600",
     },
+
     taskCard: {
-      backgroundColor: isDark ? "#334155" : "#FFFFFF",
+      backgroundColor: isDark ? "#111827" : "#FFFFFF", // NEW: a bit darker card in dark mode
       borderRadius: 16,
       padding: 20,
       paddingRight: 28,
@@ -388,6 +524,7 @@ const getStyles = (isDark: boolean) =>
       position: "relative",
       overflow: "hidden",
     },
+
     // Right-side rail that holds the status pill
     pillRail: {
       position: "absolute",
@@ -403,17 +540,47 @@ const getStyles = (isDark: boolean) =>
       borderRadius: 8,
       height: "80%",
     },
+
+    // NEW: title row and "Now" pill
+    titleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 10,
+      marginBottom: 4,
+    },
+    nowPill: {
+      flexDirection: "row",
+      gap: 6,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 999,
+      backgroundColor: "#22C55E",
+      alignItems: "center",
+    },
+    nowPillText: {
+      color: "#fff",
+      fontWeight: "700",
+      fontSize: 12,
+      letterSpacing: 0.3,
+    },
+
     taskTitle: {
       fontSize: 16,
-      fontWeight: "600",
-      color: isDark ? "#E2E8F0" : "#111",
-      marginBottom: 4,
+      fontWeight: "700", // NEW: slightly bolder
+      color: isDark ? "#E2E8F0" : "#0F172A",
     },
     taskText: {
       fontSize: 14,
-      color: isDark ? "#CBD5E1" : "#444",
-      marginBottom: 2,
+      color: isDark ? "#CBD5E1" : "#334155",
+      marginTop: 2,
     },
+    taskSubtle: {
+      fontSize: 12,
+      color: isDark ? "#94A3B8" : "#64748B",
+      marginTop: 2,
+    },
+
     emptyText: {
       fontSize: 16,
       textAlign: "center",
