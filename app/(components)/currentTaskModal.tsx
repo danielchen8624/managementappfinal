@@ -51,7 +51,8 @@ function CurrentTaskModal({ visible, onClose }: TaskModalProps) {
     const tasksQ = query(
       collection(db, "tasks"),
       where("assignedWorkers", "array-contains", uid),
-      where("status", "==", "assigned")
+      where("status", "==", "assigned"),
+      where("forToday", "==", true) 
     );
     const unsubTasks = onSnapshot(
       tasksQ,
