@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import {
   updateDoc,
   serverTimestamp,
   arrayUnion,
+  onSnapshot,
 } from "firebase/firestore";
 import { useTheme } from "../ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
@@ -25,18 +26,42 @@ export default function ToDoScreen() {
 
   const params = useLocalSearchParams();
   const taskDescription = (params.taskDescription as string) || "";
-  const createdBy = (params.createdBy as string) || "";
+  const createdBy = (params.taskCreatedBy as string) || (params.createdBy as string) || "";
   const taskId = params.taskId as string;
-  const taskStatus = (params.taskStatus as string) || "";
+  const initialStatus = (params.taskStatus as string) || "";
+
+  const [status, setStatus] = useState<string>(initialStatus);
+  const [managerHasReviewed, setManagerHasReviewed] = useState<boolean>(false);
+
+  // Live subscribe to this task to keep status/managerHasReviewed fresh
+  useEffect(() => {
+    if (!taskId) return;
+    const ref = doc(db, "tasks", taskId);
+    const unsub = onSnapshot(ref, (snap) => {
+      if (!snap.exists()) return;
+      const data = snap.data() || {};
+      setStatus(String(data.status || ""));
+      setManagerHasReviewed(Boolean(data.managerHasReviewed));
+    });
+    return () => unsub();
+  }, [taskId]);
 
   const handleCompleteTask = async () => {
     if (!taskId) return console.error("No task ID found!");
+
+    // SERVER-SIDE GUARD: if already reviewed, do nothing.
+    if (managerHasReviewed) {
+      Alert.alert("Already reviewed", "This task has been approved by a manager and is finalized.");
+      return;
+    }
+
     try {
       const taskRef = doc(db, "tasks", taskId);
       await updateDoc(taskRef, {
         status: "completed",
         completedAt: serverTimestamp(),
         completedBy: arrayUnion(auth.currentUser?.uid || "unknown"),
+        managerHasReviewed: false, // stays false until manager approves
       });
       Alert.alert("Nice!", "Task marked as completed.");
       router.back();
@@ -48,6 +73,13 @@ export default function ToDoScreen() {
 
   const handleAccept = async () => {
     if (!taskId) return console.error("No task ID found!");
+
+    // Optional: prevent accepting if already reviewed/finalized
+    if (managerHasReviewed) {
+      Alert.alert("Already reviewed", "This task is finalized by a manager.");
+      return;
+    }
+
     try {
       const taskRef = doc(db, "tasks", taskId);
       await updateDoc(taskRef, {
@@ -62,6 +94,10 @@ export default function ToDoScreen() {
       Alert.alert("Error", "Could not accept the task.");
     }
   };
+
+  const showAcceptSection = !managerHasReviewed && status === "pending";
+  const showCompleteSection = !managerHasReviewed && status !== "pending";
+  const showReviewedMessage = managerHasReviewed === true;
 
   return (
     <SafeAreaView style={s.screen}>
@@ -87,7 +123,9 @@ export default function ToDoScreen() {
       <View style={s.banner}>
         <Text style={s.bannerTitle}>Review & Take Action</Text>
         <Text style={s.bannerSubtitle}>
-          Accept to start; complete when done.
+          {showReviewedMessage
+            ? "This task has been reviewed and finalized by a manager."
+            : "Accept to start; complete when done."}
         </Text>
       </View>
 
@@ -106,7 +144,29 @@ export default function ToDoScreen() {
 
           <View style={{ height: 8 }} />
 
-          {taskStatus === "pending" ? (
+          {showReviewedMessage ? (
+            <>
+              <View style={[s.reviewBadge]}>
+                <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                <Text style={s.reviewBadgeText}>Completed!</Text>
+              </View>
+
+              <View style={s.buttonCol}>
+                <TouchableOpacity
+                  onPress={() => router.back()}
+                  style={s.secondaryBtn}
+                  activeOpacity={0.9}
+                >
+                  <Ionicons
+                    name="arrow-back-circle"
+                    size={18}
+                    color={isDark ? "#E5E7EB" : "#111827"}
+                  />
+                  <Text style={s.secondaryBtnText}>Back</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          ) : showAcceptSection ? (
             <>
               <Text style={s.question}>Do you want to accept this task?</Text>
               <View style={s.buttonCol}>
@@ -133,7 +193,7 @@ export default function ToDoScreen() {
                 </TouchableOpacity>
               </View>
             </>
-          ) : (
+          ) : showCompleteSection ? (
             <>
               <Text style={s.question}>Mark this task as completed?</Text>
               <View style={s.buttonCol}>
@@ -160,7 +220,7 @@ export default function ToDoScreen() {
                 </TouchableOpacity>
               </View>
             </>
-          )}
+          ) : null}
         </View>
       </View>
     </SafeAreaView>
@@ -290,6 +350,22 @@ const getStyles = (isDark: boolean) =>
       shadowOpacity: 0.12,
       shadowRadius: 4,
       elevation: 3,
+    },
+    reviewBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      backgroundColor: isDark ? "#22C55E" : "#16A34A",
+      paddingVertical: 12,
+      borderRadius: 12,
+      marginBottom: 8,
+    },
+    reviewBadgeText: {
+      color: "#fff",
+      fontSize: 16,
+      fontWeight: "800",
+      letterSpacing: 0.3,
     },
     primaryBtnText: {
       color: "#fff",

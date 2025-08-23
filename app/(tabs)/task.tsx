@@ -9,10 +9,9 @@ import {
   Alert,
   Animated,
   Easing,
-  StyleSheet as RNStyleSheet, // name guard if needed
 } from "react-native";
 import { router } from "expo-router";
-import { db } from "../../firebaseConfig";
+import { db, auth } from "../../firebaseConfig"; // <-- auth used for employee UID
 import {
   collection,
   query,
@@ -23,7 +22,7 @@ import {
 } from "firebase/firestore";
 import React, { useMemo, useRef, useState, useEffect } from "react";
 import { useUser } from "../UserContext";
-import { useTheme } from "../ThemeContext"; // theme + toggleTheme()
+import { useTheme } from "../ThemeContext";
 import { useServerTime, priorityWindows } from "../serverTimeContext";
 import { DateTime } from "luxon";
 import SwipeableItem, { UnderlayParams } from "react-native-swipeable-item";
@@ -83,7 +82,6 @@ const SectionToggle = ({
         backgroundColor: isDark ? "#1F2937" : "#FFFFFF",
         borderWidth: isDark ? 1 : 0,
         borderColor: isDark ? "#111827" : "transparent",
-        // match card shadow
         shadowColor: "#000",
         shadowOpacity: 0.1,
         shadowRadius: 6,
@@ -223,12 +221,17 @@ const PriorityToggle = ({
    Main Page
    ========================================================= */
 function TaskPage() {
-  // Buckets
-  const [p1, setP1] = useState<any[]>([]);
-  const [p2, setP2] = useState<any[]>([]);
-  const [p3, setP3] = useState<any[]>([]);
+  // Manager buckets (renamed)
+  const [MP1, setMP1] = useState<any[]>([]);
+  const [MP2, setMP2] = useState<any[]>([]);
+  const [MP3, setMP3] = useState<any[]>([]);
 
-  // Projects
+  // for employee: buckets only containing tasks assigned to current user
+  const [EP1, setEP1] = useState<any[]>([]); // for employee
+  const [EP2, setEP2] = useState<any[]>([]); // for employee
+  const [EP3, setEP3] = useState<any[]>([]); // for employee
+
+  // Projects (unchanged)
   const [currentProjects, setCurrentProjects] = useState<any[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -244,8 +247,10 @@ function TaskPage() {
   const styles = getStyles(isDark);
   const { role, loading } = useUser();
 
-  const { activePriority, tzNow } = useServerTime();
+  const { activePriority, tzNow, nextBoundary } = useServerTime();
   const todayISO = useMemo(() => tzNow().toISODate(), [tzNow]);
+
+  const uid = auth.currentUser?.uid || null; // for employee
 
   /* ---------- theme crossfade ---------- */
   const themeAnim = useRef(new Animated.Value(isDark ? 1 : 0)).current;
@@ -257,47 +262,41 @@ function TaskPage() {
       useNativeDriver: false,
     }).start();
   }, [isDark, themeAnim]);
-  const bgLight = { backgroundColor: "#F8FAFC" };
-  const bgDark = { backgroundColor: "#0F172A" };
   const darkOpacity = themeAnim;
 
-  /* ---------- data subscriptions ---------- */
+  /* ---------- data subscriptions: MANAGER (see all) ---------- */
   useEffect(() => {
-    const statuses = ["pending", "assigned", "in_progress"];
 
     const q1 = query(
       collection(db, "tasks"),
       where("priority", "==", 1),
-      where("status", "in", statuses),
       where("forToday", "==", true)
     );
     const q2 = query(
       collection(db, "tasks"),
       where("priority", "==", 2),
-      where("status", "in", statuses),
       where("forToday", "==", true)
     );
     const q3 = query(
       collection(db, "tasks"),
       where("priority", "==", 3),
-      where("status", "in", statuses),
       where("forToday", "==", true)
     );
 
     const u1 = onSnapshot(q1, (snap) => {
       const items: any[] = [];
       snap.forEach((d) => items.push({ id: d.id, ...d.data() }));
-      setP1(sortByOrder(items));
+      setMP1(sortByOrder(items));
     });
     const u2 = onSnapshot(q2, (snap) => {
       const items: any[] = [];
       snap.forEach((d) => items.push({ id: d.id, ...d.data() }));
-      setP2(sortByOrder(items));
+      setMP2(sortByOrder(items));
     });
     const u3 = onSnapshot(q3, (snap) => {
       const items: any[] = [];
       snap.forEach((d) => items.push({ id: d.id, ...d.data() }));
-      setP3(sortByOrder(items));
+      setMP3(sortByOrder(items));
     });
 
     const projectsQ = query(
@@ -318,6 +317,69 @@ function TaskPage() {
       uProj();
     };
   }, [todayISO]);
+
+  /* ---------- data subscriptions: EMPLOYEE (assigned only) ---------- */
+  useEffect(() => {
+    if (role !== "employee" || !uid) return; // for employee
+
+    // helper to merge two snapshots (assignedWorkers contains uid OR assignedTo == uid)
+    const subscribeEmployeeBucket = (
+      priority: 1 | 2 | 3,
+      setBucket: (xs: any[]) => void
+    ) => {
+      const unsubs: Array<() => void> = [];
+      const map = new Map<string, any>();
+
+      const collectAndSet = () => {
+        setBucket(sortByOrder(Array.from(map.values())));
+      };
+
+      // assignedWorkers array-contains uid
+      const qAW = query(
+        collection(db, "tasks"),
+        where("priority", "==", priority),
+        where("forToday", "==", true),
+        where("assignedWorkers", "array-contains", uid)
+      );
+      unsubs.push(
+        onSnapshot(qAW, (snap) => {
+          // refresh this slice
+          // first remove old entries from this source (keep simple: rebuild all)
+          // We'll rebuild map entirely from both queries on each change
+          map.clear();
+          snap.forEach((d) => map.set(d.id, { id: d.id, ...d.data() }));
+          collectAndSet();
+        })
+      );
+
+      // assignedTo == uid
+      const qAT = query(
+        collection(db, "tasks"),
+        where("priority", "==", priority),
+        where("forToday", "==", true),
+        where("assignedTo", "==", uid)
+      );
+      unsubs.push(
+        onSnapshot(qAT, (snap) => {
+          // merge on top
+          snap.forEach((d) => map.set(d.id, { id: d.id, ...d.data() }));
+          collectAndSet();
+        })
+      );
+
+      return () => unsubs.forEach((u) => u());
+    };
+
+    const off1 = subscribeEmployeeBucket(1, setEP1);
+    const off2 = subscribeEmployeeBucket(2, setEP2);
+    const off3 = subscribeEmployeeBucket(3, setEP3);
+
+    return () => {
+      off1?.();
+      off2?.();
+      off3?.();
+    };
+  }, [todayISO, role, uid]); // for employee
 
   const handleRefresh = () => {
     setIsRefreshing(true);
@@ -365,6 +427,18 @@ function TaskPage() {
     if (isComplete(item)) return "#22C55E";
     if (hasAssignee(item)) return "#EAB308";
     return "#EF4444";
+  };
+  const formatNextStart = (nb: DateTime | null, now: DateTime) => {
+    const prefix = "Next window: ";
+    if (!nb) return `${prefix}${priorityWindows[0].start}`;
+    if (nb.hasSame(now, "day")) return `${prefix}${nb.toFormat("HH:mm")}`;
+
+    const tomorrow = now.plus({ days: 1 }).startOf("day");
+    if (nb.startOf("day").equals(tomorrow)) {
+      return `${prefix}Tomorrow ${nb.toFormat("HH:mm")}`;
+    }
+
+    return `${prefix}${nb.toFormat("ccc HH:mm")}`;
   };
 
   const confirmDeleteTask = (id: string, close?: () => void) => {
@@ -457,7 +531,10 @@ function TaskPage() {
         }}
       >
         <Animated.View style={[styles.taskCard, glowStyle(isActive)]}>
-          <TouchableOpacity onPress={() => openScreen(item)} activeOpacity={0.86}>
+          <TouchableOpacity
+            onPress={() => openScreen(item)}
+            activeOpacity={0.86}
+          >
             <View style={{ paddingRight: 14 }}>
               <View style={styles.titleRow}>
                 <Text style={styles.taskTitle}>
@@ -477,7 +554,9 @@ function TaskPage() {
                 Priority: {item.priority ?? "Unassigned"}
               </Text>
               {typeof item.estimatedMinutes === "number" && (
-                <Text style={styles.taskSubtle}>ETA: ~{item.estimatedMinutes} min</Text>
+                <Text style={styles.taskSubtle}>
+                  ETA: ~{item.estimatedMinutes} min
+                </Text>
               )}
             </View>
             <View style={styles.pillRail}>
@@ -495,12 +574,13 @@ function TaskPage() {
 
   const tz = tzNow();
   const end = getActiveWindowEnd(tz);
-  const countdown =
-    end ? Math.max(0, Math.floor(end.diff(tz, "minutes").minutes)) : null;
+  const countdown = end
+    ? Math.max(0, Math.floor(end.diff(tz, "minutes").minutes))
+    : null;
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* crossfade layers */}
+      {/* background layers */}
       <View style={[StyleSheet.absoluteFill, { backgroundColor: "#F8FAFC" }]} />
       <Animated.View
         style={[
@@ -509,7 +589,7 @@ function TaskPage() {
         ]}
       />
 
-      {/* Header bar with theme + history */}
+      {/* Header bar with history + theme */}
       <View style={styles.headerBar}>
         <Text style={styles.headerTitle}>Tasks</Text>
         <View style={{ flexDirection: "row", gap: 10 }}>
@@ -556,13 +636,14 @@ function TaskPage() {
           <>
             <Text style={styles.bannerTitle}>No active window</Text>
             <Text style={styles.bannerSubtitle}>
-              Next starts at {priorityWindows[0].start}
+              {formatNextStart(nextBoundary, tzNow())}
             </Text>
           </>
         )}
       </View>
 
       {role === "manager" ? (
+        // ========================= MANAGER VIEW (MP buckets) =========================
         <FlatList
           data={[]}
           renderItem={() => null}
@@ -572,7 +653,6 @@ function TaskPage() {
           onRefresh={handleRefresh}
           ListHeaderComponent={
             <>
-              {/* --- Section: Today’s Tasks --- */}
               <SectionToggle
                 title="Today’s Tasks"
                 pillText="Live"
@@ -583,9 +663,8 @@ function TaskPage() {
 
               {showTasks && (
                 <View>
-                  {/* Priority 1 */}
                   <PriorityToggle
-                    label="Priority 1"
+                    label="Priority 1 (MP1)"
                     open={showP1}
                     onPress={() => setShowP1(!showP1)}
                     isActiveNow={activePriority === 1}
@@ -593,15 +672,16 @@ function TaskPage() {
                     isDark={isDark}
                   />
                   {showP1 &&
-                    (p1.length === 0 ? (
-                      <Text style={styles.emptyText}>No items for Priority 1.</Text>
+                    (MP1.length === 0 ? (
+                      <Text style={styles.emptyText}>
+                        No items for Priority 1.
+                      </Text>
                     ) : (
-                      p1.map((item) => renderCard(item))
+                      MP1.map((item) => renderCard(item))
                     ))}
 
-                  {/* Priority 2 */}
                   <PriorityToggle
-                    label="Priority 2"
+                    label="Priority 2 (MP2)"
                     open={showP2}
                     onPress={() => setShowP2(!showP2)}
                     isActiveNow={activePriority === 2}
@@ -609,15 +689,16 @@ function TaskPage() {
                     isDark={isDark}
                   />
                   {showP2 &&
-                    (p2.length === 0 ? (
-                      <Text style={styles.emptyText}>No items for Priority 2.</Text>
+                    (MP2.length === 0 ? (
+                      <Text style={styles.emptyText}>
+                        No items for Priority 2.
+                      </Text>
                     ) : (
-                      p2.map((item) => renderCard(item))
+                      MP2.map((item) => renderCard(item))
                     ))}
 
-                  {/* Priority 3 */}
                   <PriorityToggle
-                    label="Priority 3"
+                    label="Priority 3 (MP3)"
                     open={showP3}
                     onPress={() => setShowP3(!showP3)}
                     isActiveNow={activePriority === 3}
@@ -625,15 +706,16 @@ function TaskPage() {
                     isDark={isDark}
                   />
                   {showP3 &&
-                    (p3.length === 0 ? (
-                      <Text style={styles.emptyText}>No items for Priority 3.</Text>
+                    (MP3.length === 0 ? (
+                      <Text style={styles.emptyText}>
+                        No items for Priority 3.
+                      </Text>
                     ) : (
-                      p3.map((item) => renderCard(item))
+                      MP3.map((item) => renderCard(item))
                     ))}
                 </View>
               )}
 
-              {/* --- Section: Projects --- */}
               <SectionToggle
                 title="Projects"
                 open={showProjects}
@@ -642,7 +724,9 @@ function TaskPage() {
               />
               {showProjects &&
                 (currentProjects.length === 0 ? (
-                  <Text style={styles.emptyText}>No pending projects available.</Text>
+                  <Text style={styles.emptyText}>
+                    No pending projects available.
+                  </Text>
                 ) : (
                   currentProjects.map((item) => renderCard(item))
                 ))}
@@ -651,9 +735,85 @@ function TaskPage() {
           showsVerticalScrollIndicator={false}
         />
       ) : (
-        <View style={{ padding: 16 }}>
-          <Text style={styles.text}>Employee view goes here</Text>
-        </View>
+        // ========================= EMPLOYEE VIEW (EP buckets) =========================
+        <FlatList
+          data={[]}
+          renderItem={() => null}
+          keyExtractor={() => Math.random().toString()}
+          contentContainerStyle={styles.scrollContainer}
+          refreshing={isRefreshing}
+          onRefresh={handleRefresh}
+          ListHeaderComponent={
+            <>
+              <SectionToggle
+                title="My Tasks"
+                pillText="Assigned to me" // for employee
+                open={showTasks}
+                onPress={() => setShowTasks(!showTasks)}
+                isDark={isDark}
+              />
+
+              {showTasks && (
+                <View>
+                  {/* for employee */}
+                  <PriorityToggle
+                    label="Priority 1 (EP1)" // for employee
+                    open={showP1}
+                    onPress={() => setShowP1(!showP1)}
+                    isActiveNow={activePriority === 1}
+                    windowLabelText={windowLabel(1)}
+                    isDark={isDark}
+                  />
+                  {showP1 &&
+                    (EP1.length === 0 ? (
+                      <Text style={styles.emptyText}>
+                        No items for Priority 1.
+                      </Text>
+                    ) : (
+                      EP1.map((item) => renderCard(item))
+                    ))}
+
+                  {/* for employee */}
+                  <PriorityToggle
+                    label="Priority 2 (EP2)" // for employee
+                    open={showP2}
+                    onPress={() => setShowP2(!showP2)}
+                    isActiveNow={activePriority === 2}
+                    windowLabelText={windowLabel(2)}
+                    isDark={isDark}
+                  />
+                  {showP2 &&
+                    (EP2.length === 0 ? (
+                      <Text style={styles.emptyText}>
+                        No items for Priority 2.
+                      </Text>
+                    ) : (
+                      EP2.map((item) => renderCard(item))
+                    ))}
+
+                  {/* for employee */}
+                  <PriorityToggle
+                    label="Priority 3 (EP3)" // for employee
+                    open={showP3}
+                    onPress={() => setShowP3(!showP3)}
+                    isActiveNow={activePriority === 3}
+                    windowLabelText={windowLabel(3)}
+                    isDark={isDark}
+                  />
+                  {showP3 &&
+                    (EP3.length === 0 ? (
+                      <Text style={styles.emptyText}>
+                        No items for Priority 3.
+                      </Text>
+                    ) : (
+                      EP3.map((item) => renderCard(item))
+                    ))}
+                </View>
+              )}
+            </>
+          }
+          showsVerticalScrollIndicator={false}
+        />
       )}
     </SafeAreaView>
   );
@@ -670,8 +830,6 @@ const getStyles = (isDark: boolean) =>
       flex: 1,
       backgroundColor: isDark ? "#0F172A" : "#F8FAFC",
     },
-
-    // header bar
     headerBar: {
       flexDirection: "row",
       alignItems: "center",
@@ -696,13 +854,10 @@ const getStyles = (isDark: boolean) =>
       borderWidth: isDark ? 1 : 0,
       borderColor: isDark ? "#1F2937" : "transparent",
     },
-
     scrollContainer: {
       padding: 16,
       paddingBottom: 40,
     },
-
-    // top banner
     banner: {
       paddingHorizontal: 16,
       paddingVertical: 12,
@@ -720,8 +875,6 @@ const getStyles = (isDark: boolean) =>
       fontSize: 13,
       color: isDark ? "#CBD5E1" : "#1E40AF",
     },
-
-    // task cards
     taskCard: {
       backgroundColor: isDark ? "#111827" : "#FFFFFF",
       borderRadius: 16,
@@ -738,8 +891,6 @@ const getStyles = (isDark: boolean) =>
       borderWidth: isDark ? 1 : 0,
       borderColor: isDark ? "#1F2937" : "transparent",
     },
-
-    // status pill rail
     pillRail: {
       position: "absolute",
       right: 8,
@@ -754,7 +905,6 @@ const getStyles = (isDark: boolean) =>
       borderRadius: 8,
       height: "80%",
     },
-
     titleRow: {
       flexDirection: "row",
       alignItems: "center",
@@ -777,7 +927,6 @@ const getStyles = (isDark: boolean) =>
       fontSize: 12,
       letterSpacing: 0.3,
     },
-
     taskTitle: {
       fontSize: 16,
       fontWeight: "700",
@@ -793,7 +942,6 @@ const getStyles = (isDark: boolean) =>
       color: isDark ? "#94A3B8" : "#64748B",
       marginTop: 2,
     },
-
     emptyText: {
       fontSize: 16,
       textAlign: "center",
@@ -804,8 +952,6 @@ const getStyles = (isDark: boolean) =>
     text: {
       color: isDark ? "#E5E7EB" : "#111",
     },
-
-    /* Swipe underlay (left) */
     underlayLeft: {
       flex: 1,
       marginVertical: 8,

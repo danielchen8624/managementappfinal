@@ -49,6 +49,11 @@ export default function RequestHistory() {
   const [editingRequest, setEditingRequest] = useState<Request | null>(null);
   const [editDescription, setEditDescription] = useState("");
   const [refreshing, setRefreshing] = useState(false);
+  
+  const isLocked = (item: any) => {
+    const s = String(item.status ?? "").toLowerCase();
+    return s === "completed" || s === "in_progress";
+  };
 
   const fetchUserRequests = useCallback(async () => {
     const userId = auth.currentUser?.uid;
@@ -162,7 +167,9 @@ export default function RequestHistory() {
               color={isDark ? "#94A3B8" : "#64748B"}
             />
             <Text style={s.emptyText}>No requests yet</Text>
-            <Text style={s.emptySubtle}>Your submitted requests will appear here.</Text>
+            <Text style={s.emptySubtle}>
+              Your submitted requests will appear here.
+            </Text>
           </View>
         ) : (
           requests.map((item) => (
@@ -170,7 +177,10 @@ export default function RequestHistory() {
               {/* right status rail */}
               <View style={s.pillRail}>
                 <View
-                  style={[s.pill, { backgroundColor: statusColor(item.status) }]}
+                  style={[
+                    s.pill,
+                    { backgroundColor: statusColor(item.status) },
+                  ]}
                 />
               </View>
 
@@ -178,7 +188,9 @@ export default function RequestHistory() {
                 <View style={s.titleRow}>
                   <Text style={s.titleText}>{item.type || "Untitled"}</Text>
                   <View style={s.statusChip}>
-                    <Text style={s.statusChipText}>{item.status || "pending"}</Text>
+                    <Text style={s.statusChipText}>
+                      {item.status || "pending"}
+                    </Text>
                   </View>
                 </View>
 
@@ -488,7 +500,10 @@ const getStyles = (isDark: boolean) =>
       borderWidth: isDark ? 1 : 0,
       borderColor: isDark ? "#1F2937" : "transparent",
     },
-    modalNeutralText: { color: isDark ? "#E5E7EB" : "#111827", fontWeight: "800" },
+    modalNeutralText: {
+      color: isDark ? "#E5E7EB" : "#111827",
+      fontWeight: "800",
+    },
     modalPrimary: { backgroundColor: isDark ? "#2563EB" : "#1D4ED8" },
     modalPrimaryText: { color: "#fff", fontWeight: "800" },
   });

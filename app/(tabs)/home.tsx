@@ -11,6 +11,7 @@ import {
   Alert,
   Animated,
   Easing,
+  ScrollView,
 } from "react-native";
 import {
   addDoc,
@@ -31,6 +32,7 @@ import ProjectModal from "../(components)/taskModal";
 import ReportModal from "../(components)/reportModal";
 import ManagerViewReportsModal from "../(components)/managerViewReportModal";
 import CurrentTaskModal from "../(components)/currentTaskModal";
+import TaskReviewModal from "../(components)/taskReviewModal"; 
 import { useUser } from "../UserContext";
 import { Ionicons, MaterialIcons, FontAwesome5 } from "@expo/vector-icons";
 import { useTheme } from "../ThemeContext";
@@ -52,6 +54,7 @@ function HomePage() {
   const [reportModal, setReportModal] = useState(false);
   const [currentTaskModal, setCurrentTaskModal] = useState(false);
   const [managerViewReportModal, setManagerViewReportModal] = useState(false);
+  const [reviewModal, setReviewModal] = useState(false); // 👈 NEW
   const [currentShiftId, setCurrentShiftId] = useState("");
 
   const [latestReport, setLatestReport] = useState<LatestReport | null>(null);
@@ -62,7 +65,6 @@ function HomePage() {
   const isDark = theme === "dark";
   const s = getStyles(isDark);
 
-  // theme crossfade like other screens
   const themeAnim = useRef(new Animated.Value(isDark ? 1 : 0)).current;
   useEffect(() => {
     Animated.timing(themeAnim, {
@@ -121,11 +123,7 @@ function HomePage() {
 
   // Subscribe to latest report (for the View Reports button subtitle)
   useEffect(() => {
-    const qy = query(
-      collection(db, "reports"),
-      orderBy("createdAt", "desc"),
-      limit(1)
-    );
+    const qy = query(collection(db, "reports"), orderBy("createdAt", "desc"), limit(1));
     const unsub = onSnapshot(
       qy,
       (snap) => {
@@ -199,7 +197,10 @@ function HomePage() {
     return s.length > n ? s.slice(0, n - 1) + "…" : s;
   };
 
-  // Fancy action button (icon pill + chevron + subtitle)
+  // ⚠️ Keep as requested — but also open the modal right away
+  const openVerifyCompleted = () => router.push("/home"); // do not change
+
+  // Action button component
   const ActionButton = ({
     onPress,
     icon,
@@ -217,18 +218,12 @@ function HomePage() {
     size?: "md" | "lg" | "xl";
     style?: any;
   }) => {
-    const sizeStyle =
-      size === "xl" ? s.btnXL : size === "lg" ? s.btnLG : s.btnMD;
+    const sizeStyle = size === "xl" ? s.btnXL : size === "lg" ? s.btnLG : s.btnMD;
 
     return (
       <TouchableOpacity
         onPress={onPress}
-        style={[
-          s.btnBase,
-          sizeStyle,
-          fullWidth && { width: "100%" },
-          style,
-        ]}
+        style={[s.btnBase, sizeStyle, fullWidth && { width: "100%" }, style]}
         activeOpacity={0.9}
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       >
@@ -250,21 +245,19 @@ function HomePage() {
     );
   };
 
-  const reportsSubtitle = latestLoading
-    ? "Loading latest…"
-    : latestReport
-    ? `Latest: ${trim(latestReport.title || latestReport.description || "Untitled")}`
-    : "No reports yet";
+  const reportsSubtitle =
+    latestLoading
+      ? "Loading latest…"
+      : latestReport
+      ? `Latest: ${trim(latestReport.title || latestReport.description || "Untitled")}`
+      : "No reports yet";
 
   return (
     <View style={s.container}>
       {/* crossfade layers */}
       <View style={[StyleSheet.absoluteFill, { backgroundColor: "#F8FAFC" }]} />
       <Animated.View
-        style={[
-          StyleSheet.absoluteFill,
-          { backgroundColor: "#0F172A", opacity: themeAnim },
-        ]}
+        style={[StyleSheet.absoluteFill, { backgroundColor: "#0F172A", opacity: themeAnim }]}
       />
 
       <SafeAreaView style={{ flex: 1 }}>
@@ -275,7 +268,6 @@ function HomePage() {
             {!!role && <Text style={s.headerRole}> • {role}</Text>}
           </View>
 
-          {/* Top-right: icon-only Request History (grey pill) */}
           {role === "manager" && (
             <TouchableOpacity
               onPress={() => router.push("/requestHistory")}
@@ -283,11 +275,7 @@ function HomePage() {
               activeOpacity={0.9}
               accessibilityLabel="Request History"
             >
-              <MaterialIcons
-                name="history"
-                size={18}
-                color={isDark ? "#E5E7EB" : "#111827"}
-              />
+              <MaterialIcons name="history" size={18} color={isDark ? "#E5E7EB" : "#111827"} />
             </TouchableOpacity>
           )}
         </View>
@@ -295,18 +283,8 @@ function HomePage() {
         {/* Employee quick status */}
         {role === "employee" && (
           <View style={s.statusRow}>
-            <View
-              style={[
-                s.statusChip,
-                currentShiftId ? s.statusOn : s.statusOff,
-              ]}
-            >
-              <View
-                style={[
-                  s.dot,
-                  { backgroundColor: currentShiftId ? "#10B981" : "#9CA3AF" },
-                ]}
-              />
+            <View style={[s.statusChip, currentShiftId ? s.statusOn : s.statusOff]}>
+              <View style={[s.dot, { backgroundColor: currentShiftId ? "#10B981" : "#9CA3AF" }]} />
               <Text style={s.statusText}>
                 {currentShiftId ? `On shift • ${hhmmss}` : "Not clocked in"}
               </Text>
@@ -314,70 +292,85 @@ function HomePage() {
           </View>
         )}
 
-        <View style={s.content}>
-          {/* Manager block WITH grey backdrop/card */}
+        {/* Scrollable content */}
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={s.scrollContainer}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Manager area */}
           {role === "manager" && (
-            <View style={s.card}>
-              <View style={s.cardHeader}>
-                <Text style={s.cardTitle}>Manager</Text>
-                <Text style={s.cardSubtitle}>
-                  Quick actions to run the floor
-                </Text>
+            <>
+              <View className="card" style={s.card}>
+                <View style={s.cardHeader}>
+                  <Text style={s.cardTitle}>Manager</Text>
+                  <Text style={s.cardSubtitle}>Quick actions to run the floor</Text>
+                </View>
+
+                <View style={s.row}>
+                  <View style={s.half}>
+                    <ActionButton
+                      onPress={() => setTaskModal(true)}
+                      icon={<FontAwesome5 name="project-diagram" size={18} color="#FFFFFF" />}
+                      label="Add New Task"
+                      size="lg"
+                      style={s.equalHeight}
+                    />
+                  </View>
+                  <View style={s.half}>
+                    <ActionButton
+                      onPress={() => router.push("/scheduler")}
+                      icon={<Ionicons name="calendar" size={20} color="#FFFFFF" />}
+                      label="Scheduler"
+                      size="lg"
+                      style={s.equalHeight}
+                    />
+                  </View>
+                </View>
+
+                <View style={s.twoThirdsSpacer} />
+
+                <ActionButton
+                  onPress={() => setManagerViewReportModal(true)}
+                  icon={<MaterialIcons name="assessment" size={20} color="#FFFFFF" />}
+                  label="View Reports"
+                  subtitle={reportsSubtitle}
+                  size="xl"
+                  fullWidth
+                />
+                <View style={{ height: 10 }} />
+                <ActionButton
+                  onPress={() => router.push("/manageEmployees")}
+                  icon={<Ionicons name="people" size={20} color="#FFFFFF" />}
+                  label="Manage Employees"
+                  size="xl"
+                  fullWidth
+                />
               </View>
 
-              {/* Row: Add New Task | Scheduler */}
-              <View style={s.row}>
-                <View style={s.half}>
-                  <ActionButton
-                    onPress={() => setTaskModal(true)}
-                    icon={<FontAwesome5 name="project-diagram" size={18} color="#FFFFFF" />}
-                    label="Add New Task"
-                    size="lg"
-                    style={s.equalHeight}
-                  />
-                </View>
-                <View style={s.half}>
-                  <ActionButton
-                    onPress={() => router.push("/scheduler")}
-                    icon={<Ionicons name="calendar" size={20} color="#FFFFFF" />}
-                    label="Scheduler"
-                    size="lg"
-                    style={s.equalHeight}
-                  />
-                </View>
+              {/* Verify Completed Tasks Card */}
+              <View style={[s.verifyCard, { backgroundColor: isDark ? "#1F2937" : "#F3F4F6" }]}>
+                <TouchableOpacity
+                  onPress={() => {
+                    openVerifyCompleted();   // keep your existing call
+                    setReviewModal(true);    // 👈 ALSO open the modal
+                  }}
+                  style={[s.verifyBtn, { backgroundColor: isDark ? "#2563EB" : "#3B82F6" }]}
+                  activeOpacity={0.9}
+                >
+                  <Text style={s.verifyBtnText}>Verify Completed Tasks</Text>
+                </TouchableOpacity>
               </View>
-
-              {/* Spacer to keep big buttons lower but tighter than before for cohesion */}
-              <View style={s.twoThirdsSpacer} />
-
-              {/* Big buttons: View Reports (with latest) then Manage Employees */}
-              <ActionButton
-                onPress={() => setManagerViewReportModal(true)}
-                icon={<MaterialIcons name="assessment" size={20} color="#FFFFFF" />}
-                label="View Reports"
-                subtitle={reportsSubtitle}
-                size="xl"
-                fullWidth
-              />
-              <View style={{ height: 10 }} />
-              <ActionButton
-                onPress={() => router.push("/manageEmployees")}
-                icon={<Ionicons name="people" size={20} color="#FFFFFF" />}
-                label="Manage Employees"
-                size="xl"
-                fullWidth
-              />
-            </View>
+            </>
           )}
 
-          {/* Employee actions */}
+          {/* Employee area */}
           {role === "employee" && (
             <View style={s.card}>
               <View style={s.cardHeader}>
                 <Text style={s.cardTitle}>My Work</Text>
-                <Text style={s.cardSubtitle}>
-                  Clock in, check tasks, report issues
-                </Text>
+                <Text style={s.cardSubtitle}>Clock in, check tasks, report issues</Text>
               </View>
               <ActionButton
                 onPress={handleClockIn}
@@ -395,7 +388,7 @@ function HomePage() {
               <ActionButton
                 onPress={() => setCurrentTaskModal(true)}
                 icon={<MaterialIcons name="assignment" size={18} color="#FFFFFF" />}
-                label="View Current Task"
+                label="View Current Tasks"
                 size="lg"
                 fullWidth
               />
@@ -408,30 +401,23 @@ function HomePage() {
               />
             </View>
           )}
-        </View>
+        </ScrollView>
       </SafeAreaView>
 
       {/* Modals */}
-      {taskModal && (
-        <ProjectModal visible={taskModal} onClose={() => setTaskModal(false)} />
-      )}
+      {taskModal && <ProjectModal visible={taskModal} onClose={() => setTaskModal(false)} />}
       {currentTaskModal && (
-        <CurrentTaskModal
-          visible={currentTaskModal}
-          onClose={() => setCurrentTaskModal(false)}
-        />
+        <CurrentTaskModal visible={currentTaskModal} onClose={() => setCurrentTaskModal(false)} />
       )}
-      {reportModal && (
-        <ReportModal
-          visible={reportModal}
-          onClose={() => setReportModal(false)}
-        />
-      )}
+      {reportModal && <ReportModal visible={reportModal} onClose={() => setReportModal(false)} />}
       {managerViewReportModal && (
         <ManagerViewReportsModal
           visible={managerViewReportModal}
           onClose={() => setManagerViewReportModal(false)}
         />
+      )}
+      {reviewModal && (
+        <TaskReviewModal visible={reviewModal} onClose={() => setReviewModal(false)} />
       )}
     </View>
   );
@@ -470,7 +456,6 @@ const getStyles = (isDark: boolean) =>
       marginLeft: 8,
     },
 
-    // Icon-only request history (grey)
     headerIconBtn: {
       flexDirection: "row",
       alignItems: "center",
@@ -498,9 +483,7 @@ const getStyles = (isDark: boolean) =>
       backgroundColor: isDark ? "#0B3B2F" : "#ECFDF5",
       borderColor: isDark ? "#0B3B2F" : "#A7F3D0",
     },
-    statusOff: {
-      // fallback uses defaults above
-    },
+    statusOff: {},
     dot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
     statusText: {
       fontWeight: "800",
@@ -509,15 +492,13 @@ const getStyles = (isDark: boolean) =>
       letterSpacing: 0.2,
     },
 
-    content: {
-      flex: 1,
+    scrollContainer: {
       paddingHorizontal: 12,
-      paddingBottom: 12,
+      paddingBottom: 24,
       paddingTop: 8,
       gap: 12,
     },
 
-    // Card/backdrop (cohesive with other screens)
     card: {
       backgroundColor: isDark ? "#1F2937" : "#FFFFFF",
       borderRadius: 16,
@@ -559,10 +540,9 @@ const getStyles = (isDark: boolean) =>
     },
 
     twoThirdsSpacer: {
-      height: Math.max(16, Math.floor(SCREEN_H * 0.10)), // slightly tighter to match other screens
+      height: Math.max(16, Math.floor(SCREEN_H * 0.1)),
     },
 
-    // Action button
     btnBase: {
       flexDirection: "row",
       alignItems: "center",
@@ -602,5 +582,28 @@ const getStyles = (isDark: boolean) =>
       marginTop: 1,
       fontWeight: "700",
       letterSpacing: 0.2,
+    },
+
+    verifyCard: {
+      borderRadius: 16,
+      padding: 16,
+      marginTop: 12,
+      shadowColor: "#000",
+      shadowOpacity: 0.08,
+      shadowRadius: 6,
+      shadowOffset: { width: 0, height: 3 },
+      elevation: 4,
+    },
+    verifyBtn: {
+      backgroundColor: "#10B981",
+      paddingVertical: 14,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    verifyBtnText: {
+      color: "#fff",
+      fontWeight: "800",
+      fontSize: 16,
     },
   });
