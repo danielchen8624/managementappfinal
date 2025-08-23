@@ -34,10 +34,7 @@ const DEFAULT_PRIORITY_WINDOWS = [
 ];
 
 // Weekdays only by default
-const isActiveBusinessDay = (d: Date) => {
-  const dow = d.getDay(); // 0 Sun .. 6 Sat
-  return dow >= 1 && dow <= 5;
-};
+const isActiveBusinessDay = (d: Date) => true;
 
 /* ----------------------------- time utilities ----------------------------- */
 

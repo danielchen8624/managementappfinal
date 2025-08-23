@@ -69,7 +69,10 @@ const locationOptions = [
   { label: "Mail Boxes", value: "Mail Boxes" },
   { label: "Maintenance of all floors", value: "Maintenance of all floors" },
   { label: "Manager Office", value: "Manager Office" },
-  { label: "Men & Women Washroom & Sauna", value: "Men & Women Washroom & Sauna" },
+  {
+    label: "Men & Women Washroom & Sauna",
+    value: "Men & Women Washroom & Sauna",
+  },
   { label: "Men's & Women's Gym", value: "Men's & Women's Gym" },
   { label: "Moving Room", value: "Moving Room" },
   { label: "Other", value: "Other" },
@@ -82,14 +85,23 @@ const locationOptions = [
   { label: "Staircase", value: "Staircase" },
   { label: "Telecom Room", value: "Telecom Room" },
   { label: "Waiting Room", value: "Waiting Room" },
-  { label: "Washroom (Men,Women & Security)", value: "Washroom (Men,Women & Security)" },
+  {
+    label: "Washroom (Men,Women & Security)",
+    value: "Washroom (Men,Women & Security)",
+  },
   { label: "Windows & Mirrors", value: "Windows & Mirrors" },
 ];
 
-type DayKey = "mon" | "tue" | "wed" | "thu" | "fri";
-const DAYS: DayKey[] = ["mon", "tue", "wed", "thu", "fri"];
+type DayKey = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
+const DAYS: DayKey[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 const DAY_LABEL: Record<DayKey, string> = {
-  mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri",
+  mon: "Mon",
+  tue: "Tue",
+  wed: "Wed",
+  thu: "Thu",
+  fri: "Fri",
+  sat: "Sat",
+  sun: "Sun",
 };
 
 type Worker = {
@@ -114,11 +126,23 @@ const makeTempId = () =>
   `temp_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 
 const makeEmpty = (): Record<DayKey, TemplateItem[]> => ({
-  mon: [], tue: [], wed: [], thu: [], fri: [],
+  mon: [],
+  tue: [],
+  wed: [],
+  thu: [],
+  fri: [],
+  sat: [],
+  sun: [],
 });
 
 const makeLoading = (): Record<DayKey, boolean> => ({
-  mon: true, tue: true, wed: true, thu: true, fri: true,
+  mon: true,
+  tue: true,
+  wed: true,
+  thu: true,
+  fri: true,
+  sat: true,
+  sun: true,
 });
 
 function deepClone<T>(arr: T[]): T[] {
@@ -142,13 +166,19 @@ export default function Scheduler() {
   const [dayIndex, setDayIndex] = useState(0);
   const selectedDay: DayKey = DAYS[dayIndex];
 
-  const [itemsByDay, setItemsByDay] = useState<Record<DayKey, TemplateItem[]>>(makeEmpty());
+  const [itemsByDay, setItemsByDay] = useState<Record<DayKey, TemplateItem[]>>(
+    makeEmpty()
+  );
   const originalRef = useRef<Record<DayKey, TemplateItem[]>>(makeEmpty());
-  const [loadingByDay, setLoadingByDay] = useState<Record<DayKey, boolean>>(makeLoading());
+  const [loadingByDay, setLoadingByDay] = useState<Record<DayKey, boolean>>(
+    makeLoading()
+  );
 
   const [dirtyDays, setDirtyDays] = useState<Set<DayKey>>(new Set());
   const dirtyDaysRef = useRef<Set<DayKey>>(new Set());
-  useEffect(() => { dirtyDaysRef.current = dirtyDays; }, [dirtyDays]);
+  useEffect(() => {
+    dirtyDaysRef.current = dirtyDays;
+  }, [dirtyDays]);
 
   const [addOpen, setAddOpen] = useState(false);
 
@@ -172,11 +202,17 @@ export default function Scheduler() {
   // subscribe per-day
   useEffect(() => {
     const unsubs = DAYS.map((day) => {
-      const qy = query(collection(db, "scheduler", day, "items"), orderBy("order"));
+      const qy = query(
+        collection(db, "scheduler", day, "items"),
+        orderBy("order")
+      );
       return onSnapshot(qy, (snap) => {
         setLoadingByDay((prev) => ({ ...prev, [day]: false }));
         if (dirtyDaysRef.current.has(day)) return;
-        const arr = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as TemplateItem[];
+        const arr = snap.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as any),
+        })) as TemplateItem[];
         setItemsByDay((prev) => ({ ...prev, [day]: arr }));
         originalRef.current = { ...originalRef.current, [day]: deepClone(arr) };
       });
@@ -218,7 +254,10 @@ export default function Scheduler() {
     const todayStr = ymd(new Date());
 
     if (loadingByDay[dayKey]) {
-      Alert.alert("Please wait", "Scheduler is still loading. Try again in a moment.");
+      Alert.alert(
+        "Please wait",
+        "Scheduler is still loading. Try again in a moment."
+      );
       return;
     }
 
@@ -231,7 +270,9 @@ export default function Scheduler() {
     templates.forEach((tpl) => {
       if (!tpl?.active) return;
 
-      const workerIds = Array.isArray(tpl.assignedWorkerIds) ? tpl.assignedWorkerIds : [];
+      const workerIds = Array.isArray(tpl.assignedWorkerIds)
+        ? tpl.assignedWorkerIds
+        : [];
       if (workerIds.length === 0) return;
 
       const ref = doc(collection(db, "tasks"));
@@ -255,7 +296,11 @@ export default function Scheduler() {
     await batch.commit();
     Alert.alert(
       "Success",
-      `Cleared ${cleared} existing task${cleared === 1 ? "" : "s"} from today.\nRolled out ${createdCount} new task${createdCount === 1 ? "" : "s"}!`
+      `Cleared ${cleared} existing task${
+        cleared === 1 ? "" : "s"
+      } from today.\nRolled out ${createdCount} new task${
+        createdCount === 1 ? "" : "s"
+      }!`
     );
   };
 
@@ -367,6 +412,7 @@ export default function Scheduler() {
 
     return (
       <SwipeableItem
+        key={`sw-${item.id}`}
         item={item}
         snapPointsLeft={[96]}
         overSwipe={32}
@@ -386,9 +432,7 @@ export default function Scheduler() {
           </View>
         )}
         onChange={({ openDirection }) => {
-          if (openDirection === "left") {
-            deleteItem(selectedDay, item.id);
-          }
+          if (openDirection === "left") deleteItem(selectedDay, item.id);
         }}
       >
         <TouchableOpacity
@@ -418,7 +462,11 @@ export default function Scheduler() {
         <View style={styles.headerRow}>
           <View style={styles.daySwitcher}>
             <TouchableOpacity onPress={prevDay} style={styles.arrowBtn}>
-              <Ionicons name="chevron-back" size={18} color={isDark ? "#E5E7EB" : "#1F2937"} />
+              <Ionicons
+                name="chevron-back"
+                size={18}
+                color={isDark ? "#E5E7EB" : "#1F2937"}
+              />
             </TouchableOpacity>
 
             <View style={styles.dayBadge}>
@@ -429,18 +477,27 @@ export default function Scheduler() {
             </View>
 
             <TouchableOpacity onPress={nextDay} style={styles.arrowBtn}>
-              <Ionicons name="chevron-forward" size={18} color={isDark ? "#E5E7EB" : "#1F2937"} />
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={isDark ? "#E5E7EB" : "#1F2937"}
+              />
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity style={styles.addBtn} onPress={() => setAddOpen(true)}>
+          <TouchableOpacity
+            style={styles.addBtn}
+            onPress={() => setAddOpen(true)}
+          >
             <Ionicons name="add" size={16} color="#fff" />
             <Text style={styles.addBtnText}>Add</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.rolloutBtn} onPress={rolloutToday}>
             <Ionicons name="rocket-outline" size={14} color="#fff" />
-            <Text style={styles.rolloutText}>Rollout {DAY_LABEL[selectedDay]}</Text>
+            <Text style={styles.rolloutText}>
+              Rollout {DAY_LABEL[selectedDay]}
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -452,26 +509,40 @@ export default function Scheduler() {
           </View>
         ) : selectedList.length === 0 ? (
           <View style={styles.emptyWrap}>
-            <Ionicons name="clipboard-outline" size={24} color={isDark ? "#94A3B8" : "#64748B"} />
-            <Text style={styles.emptyText}>No items for {DAY_LABEL[selectedDay]} yet.</Text>
+            <Ionicons
+              name="clipboard-outline"
+              size={24}
+              color={isDark ? "#94A3B8" : "#64748B"}
+            />
+            <Text style={styles.emptyText}>
+              No items for {DAY_LABEL[selectedDay]} yet.
+            </Text>
             <Text style={styles.emptySubtle}>Tap “Add” to create one.</Text>
           </View>
         ) : (
-          <DraggableFlatList<TemplateItem>
+          <DraggableFlatList
             data={selectedList}
-            keyExtractor={(it, idx) => (it?.id ? `k_${it.id}` : `fallback_${idx}`)}
+            keyExtractor={(it) => it.id}
             onDragEnd={({ data }) => onReorderDay(selectedDay, data)}
             renderItem={renderRow}
             activationDistance={16}
-            containerStyle={{ paddingBottom: 96 }}
-            contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8 }}
+            contentContainerStyle={{
+              paddingHorizontal: 16,
+              paddingTop: 8,
+              paddingBottom: 96,
+            }}
+            dragItemOverflow={true}
+            extraData={selectedList.map((i) => i.id).join("|")} // forces clean re-render
           />
         )}
 
         {/* Save/discard bar */}
         {hasDirty && (
           <View style={styles.saveBar}>
-            <TouchableOpacity style={styles.discardBtn} onPress={discardChanges}>
+            <TouchableOpacity
+              style={styles.discardBtn}
+              onPress={discardChanges}
+            >
               <Text style={styles.discardText}>Discard</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.saveBtn} onPress={saveChanges}>
@@ -584,7 +655,9 @@ export const AddSchedulerItemModal: React.FC<AddSchedulerItemModalProps> = ({
         onPress={onToggle}
         style={[
           modalStyles.toggleContainer,
-          { backgroundColor: value ? "#22C55E" : isDark ? "#374151" : "#D1D5DB" },
+          {
+            backgroundColor: value ? "#22C55E" : isDark ? "#374151" : "#D1D5DB",
+          },
         ]}
       >
         <Animated.View
