@@ -6,7 +6,7 @@ import {
   StyleSheet,
   SafeAreaView,
   Alert,
-  ScrollView,
+  FlatList,
 } from "react-native";
 import { db, auth } from "../../firebaseConfig";
 import { router, useLocalSearchParams } from "expo-router";
@@ -26,15 +26,16 @@ import { Ionicons } from "@expo/vector-icons";
 import { useUser } from "../UserContext";
 
 type Employee = {
-  id: string; // user uid
-  label: string; // display name
+  id: string;
+  label: string;
 };
 
 export default function ToDoScreen() {
   const { theme } = useTheme();
   const isDark = theme === "dark";
   const s = getStyles(isDark);
-  const { role } = useUser(); // "manager" | "employee" | etc.
+  const { role } = useUser();
+  const isManager = role === "manager";
 
   const params = useLocalSearchParams();
   const taskDescription = (params.taskDescription as string) || "";
@@ -48,11 +49,9 @@ export default function ToDoScreen() {
   const [assignedWorkers, setAssignedWorkers] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
-  // Employee directory for assignment (managers only)
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const isManager = role === "manager";
 
-  // --- subscribe to task for live updates ---
+  // Subscribe to task
   useEffect(() => {
     if (!taskId) return;
     const ref = doc(db, "tasks", taskId);
@@ -68,7 +67,7 @@ export default function ToDoScreen() {
     return () => unsub();
   }, [taskId]);
 
-  // --- fetch employees (only if manager) ---
+  // Fetch employees (manager only)
   useEffect(() => {
     const loadEmployees = async () => {
       try {
@@ -82,12 +81,10 @@ export default function ToDoScreen() {
           const v = d.data() as any;
           items.push(mapUserDoc(d.id, v));
         });
-        // Sort alpha
         items.sort((a, b) => a.label.localeCompare(b.label));
         setEmployees(items);
       } catch (e) {
         console.error(e);
-        // Not fatal for non-managers / empty list
       }
     };
     if (isManager) loadEmployees();
@@ -102,7 +99,6 @@ export default function ToDoScreen() {
       );
       return;
     }
-
     try {
       const taskRef = doc(db, "tasks", taskId);
       await updateDoc(taskRef, {
@@ -125,7 +121,6 @@ export default function ToDoScreen() {
       Alert.alert("Already reviewed", "This task is finalized by a manager.");
       return;
     }
-
     try {
       const taskRef = doc(db, "tasks", taskId);
       await updateDoc(taskRef, {
@@ -141,25 +136,19 @@ export default function ToDoScreen() {
     }
   };
 
-  // --- manager: toggle a worker in the selection ---
   const toggleWorker = (uid: string) => {
-    if (managerHasReviewed) return; // lock when finalized
+    if (managerHasReviewed) return;
     setAssignedWorkers((prev) =>
       prev.includes(uid) ? prev.filter((x) => x !== uid) : [...prev, uid]
     );
   };
 
-  // --- manager: save selected assignees ---
   const saveAssignees = async () => {
     if (!taskId) return;
     setSaving(true);
     try {
       const taskRef = doc(db, "tasks", taskId);
-      await updateDoc(taskRef, {
-        assignedWorkers,
-        // optional: nudge status if previously pending & now has assignees
-        // status: assignedWorkers.length ? (status === "pending" ? "assigned" : status) : "pending",
-      });
+      await updateDoc(taskRef, { assignedWorkers });
       Alert.alert("Saved", "Assignees updated.");
     } catch (e) {
       console.error(e);
@@ -175,7 +164,6 @@ export default function ToDoScreen() {
     !isManager && !managerHasReviewed && status !== "pending";
   const showReviewedMessage = managerHasReviewed === true;
 
-  // For managers: pretty labels for currently selected users
   const selectedLabels = useMemo(() => {
     if (!employees.length || !assignedWorkers.length) return "None";
     const map = new Map(employees.map((e) => [e.id, e.label]));
@@ -216,51 +204,52 @@ export default function ToDoScreen() {
         </Text>
       </View>
 
-      {/* Content */}
-      <ScrollView contentContainerStyle={s.container}>
+      {/* Body (static layout; only workers list scrolls) */}
+      <View style={s.container}>
         <View style={s.card}>
-          {/* Description */}
           <View style={s.row}>
             <Text style={s.label}>Description</Text>
             <Text style={[s.value, { lineHeight: 20 }]}>{taskDescription}</Text>
           </View>
 
-          {/* Status */}
           <View style={s.row}>
             <Text style={s.label}>Status</Text>
             <Text style={s.value}>{status || "—"}</Text>
           </View>
 
           {/* Manager block */}
-          {isManager && (
+          {isManager ? (
             <>
               <View style={[s.row, { marginTop: 8 }]}>
                 <Text style={s.label}>Currently Assigned</Text>
                 <Text style={s.value}>{selectedLabels}</Text>
               </View>
 
-              <View style={{ height: 8 }} />
-
               {showReviewedMessage ? (
-                <View style={[s.reviewBadge]}>
+                <View style={[s.reviewBadge, { marginTop: 8 }]}>
                   <Ionicons name="checkmark-circle" size={18} color="#fff" />
                   <Text style={s.reviewBadgeText}>Completed & Finalized</Text>
                 </View>
               ) : (
                 <>
-                  <Text style={[s.label, { marginBottom: 8 }]}>
+                  <Text style={[s.label, { marginTop: 12, marginBottom: 8 }]}>
                     Assign / Unassign Workers
                   </Text>
+
+                  {/* Only this list is scrollable */}
                   <View style={s.listBox}>
                     {employees.length === 0 ? (
                       <Text style={s.value}>No employees found.</Text>
                     ) : (
-                      <ScrollView style={{ maxHeight: 250 }}>
-                        {employees.map((emp) => {
+                      <FlatList
+                        data={employees}
+                        keyExtractor={(emp) => emp.id}
+                        showsVerticalScrollIndicator={false}
+                        style={{ maxHeight: 280 }} // cap list height
+                        renderItem={({ item: emp }) => {
                           const checked = assignedWorkers.includes(emp.id);
                           return (
                             <TouchableOpacity
-                              key={emp.id}
                               style={s.checkRow}
                               activeOpacity={0.8}
                               onPress={() => toggleWorker(emp.id)}
@@ -281,8 +270,13 @@ export default function ToDoScreen() {
                               <Text style={s.workerText}>{emp.label}</Text>
                             </TouchableOpacity>
                           );
+                        }}
+                        getItemLayout={(_, index) => ({
+                          length: 48,
+                          offset: 48 * index,
+                          index,
                         })}
-                      </ScrollView>
+                      />
                     )}
                   </View>
 
@@ -315,10 +309,8 @@ export default function ToDoScreen() {
                 </>
               )}
             </>
-          )}
-
-          {/* Employee flow */}
-          {!isManager && (
+          ) : (
+            // Employee flow
             <>
               <View style={{ height: 8 }} />
               {showReviewedMessage ? (
@@ -327,7 +319,6 @@ export default function ToDoScreen() {
                     <Ionicons name="checkmark-circle" size={18} color="#fff" />
                     <Text style={s.reviewBadgeText}>Completed!</Text>
                   </View>
-
                   <View style={s.buttonCol}>
                     <TouchableOpacity
                       onPress={() => router.back()}
@@ -345,20 +336,14 @@ export default function ToDoScreen() {
                 </>
               ) : showAcceptSection ? (
                 <>
-                  <Text style={s.question}>
-                    Do you want to accept this task?
-                  </Text>
+                  <Text style={s.question}>Do you want to accept this task?</Text>
                   <View style={s.buttonCol}>
                     <TouchableOpacity
                       onPress={handleAccept}
                       style={s.primaryBtn}
                       activeOpacity={0.9}
                     >
-                      <Ionicons
-                        name="checkmark-circle"
-                        size={18}
-                        color="#fff"
-                      />
+                      <Ionicons name="checkmark-circle" size={18} color="#fff" />
                       <Text style={s.primaryBtnText}>Yes, I’ll take it</Text>
                     </TouchableOpacity>
 
@@ -386,9 +371,7 @@ export default function ToDoScreen() {
                       activeOpacity={0.9}
                     >
                       <Ionicons name="checkmark-done" size={18} color="#fff" />
-                      <Text style={s.primaryBtnText}>
-                        I’ve completed this task
-                      </Text>
+                      <Text style={s.primaryBtnText}>I’ve completed this task</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -409,13 +392,15 @@ export default function ToDoScreen() {
             </>
           )}
         </View>
-      </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
 
 function mapUserDoc(id: string, v: any): Employee {
-  const label = String(v?.firstName || v?.email || id);
+  const label = String(
+    v?.firstName || v?.displayName || v?.name || v?.email || id
+  );
   return { id, label };
 }
 
@@ -471,10 +456,9 @@ const getStyles = (isDark: boolean) =>
     },
 
     container: {
-      flexGrow: 1,
       padding: 16,
-      justifyContent: "center",
     },
+
     card: {
       borderRadius: 16,
       padding: 20,
@@ -517,11 +501,12 @@ const getStyles = (isDark: boolean) =>
       backgroundColor: isDark ? "#0B1220" : "#F3F4F6",
       paddingVertical: 4,
       paddingHorizontal: 6,
+      // The height cap lives on the FlatList style prop above
     },
     checkRow: {
       flexDirection: "row",
       alignItems: "center",
-      paddingVertical: 10,
+      paddingVertical: 12,
       paddingHorizontal: 8,
       borderRadius: 10,
       gap: 10,

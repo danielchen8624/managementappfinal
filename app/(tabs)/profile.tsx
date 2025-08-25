@@ -102,8 +102,7 @@ export default function ProfileScreen() {
   }, [isDark, themeAnim]);
 
   const user = auth.currentUser;
-  const displayName =
-    user?.displayName || user?.email?.split("@")[0] || "User";
+  const displayName = user?.displayName || user?.email?.split("@")[0] || "User";
   const email = user?.email || "—";
 
   const initials = useMemo(() => {
@@ -136,10 +135,6 @@ export default function ProfileScreen() {
 
   const editProfile = () => {
     if (auth.currentUser) router.push("/editProfile");
-  };
-
-  const handleSettingTap = (label: string) => {
-    Alert.alert(`${label}`, "This is a placeholder action.");
   };
 
   return (
@@ -205,7 +200,11 @@ export default function ProfileScreen() {
           </View>
 
           {/* Primary actions */}
-          <TouchableOpacity style={s.primaryBtn} onPress={editProfile} activeOpacity={0.9}>
+          <TouchableOpacity
+            style={s.primaryBtn}
+            onPress={editProfile}
+            activeOpacity={0.9}
+          >
             <Ionicons name="person-circle-outline" size={18} color="#fff" />
             <Text style={s.primaryBtnText}>Edit Profile</Text>
           </TouchableOpacity>
@@ -246,7 +245,7 @@ export default function ProfileScreen() {
 
             <SettingsRow
               label="Privacy Policy"
-              onPress={() => handleSettingTap("Privacy Policy")}
+              onPress={() => router.push("/privacyPolicy")}
               isDark={isDark}
               icon={
                 <Ionicons
@@ -258,7 +257,7 @@ export default function ProfileScreen() {
             />
             <SettingsRow
               label="Terms of Use"
-              onPress={() => handleSettingTap("Terms of Use")}
+              onPress={() => router.push("/termsOfUse")}
               isDark={isDark}
               icon={
                 <Ionicons
@@ -270,7 +269,7 @@ export default function ProfileScreen() {
             />
             <SettingsRow
               label="Help & Support"
-              onPress={() => handleSettingTap("Help & Support")}
+              onPress={() => router.push("/helpAndSupport")}
               isDark={isDark}
               icon={
                 <Ionicons
@@ -280,9 +279,10 @@ export default function ProfileScreen() {
                 />
               }
             />
+
             <SettingsRow
               label="About"
-              onPress={() => handleSettingTap("About")}
+              onPress={() => router.push("/about")}
               isDark={isDark}
               icon={
                 <Ionicons
@@ -294,7 +294,7 @@ export default function ProfileScreen() {
             />
             <SettingsRow
               label="Contact Us"
-              onPress={() => handleSettingTap("Contact Us")}
+              onPress={() => router.push("/contactUs")}
               isDark={isDark}
               icon={
                 <Ionicons
