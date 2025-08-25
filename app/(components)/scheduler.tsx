@@ -120,6 +120,8 @@ export type TemplateItem = {
   order: number;
   active: boolean;
   [key: string]: any;
+    roomNumber?: string;            
+
 };
 
 const makeTempId = () =>
@@ -288,6 +290,7 @@ export default function Scheduler() {
         order: tpl.order ?? 999,
         createdAt: serverTimestamp(),
         forToday: true,
+        roomNumber: tpl.roomNumber ?? null,
       });
 
       createdCount += 1;

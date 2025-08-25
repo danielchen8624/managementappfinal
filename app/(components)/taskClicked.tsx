@@ -137,11 +137,6 @@ export default function ToDoScreen() {
             <Text style={[s.value, { lineHeight: 20 }]}>{taskDescription}</Text>
           </View>
 
-          <View style={s.row}>
-            <Text style={s.label}>Created By</Text>
-            <Text style={s.value}>{createdBy || "Unknown"}</Text>
-          </View>
-
           <View style={{ height: 8 }} />
 
           {showReviewedMessage ? (

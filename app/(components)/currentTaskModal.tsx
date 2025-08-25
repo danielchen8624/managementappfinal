@@ -140,9 +140,7 @@ function CurrentTaskModal({ visible, onClose }: TaskModalProps) {
                     </View>
 
                     <Text style={s.taskMeta}>Room: {task.roomNumber || "N/A"}</Text>
-                    <Text style={s.taskMeta}>
-                      Date: {task.createdAt?.toDate().toLocaleString?.() || "Unknown"}
-                    </Text>
+                    
                     {!!task.description && <Text style={s.taskBody}>{task.description}</Text>}
 
                     <ElapsedTimer

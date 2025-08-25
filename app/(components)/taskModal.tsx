@@ -183,7 +183,7 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
       setSubmitting(true);
       await addDoc(collection(db, "tasks"), {
         taskAddress,
-        taskType,
+        title: taskType,
         description: taskDescription,
         roomNumber,
         priority: finalPriority,
