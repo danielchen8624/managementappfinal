@@ -37,6 +37,7 @@ import {
   getDocs,
 } from "firebase/firestore";
 import { Dropdown, MultiSelect } from "react-native-element-dropdown";
+import { set } from "firebase/database";
 
 /* ---------- Location options ---------- */
 const locationOptions = [
@@ -119,7 +120,7 @@ export type TemplateItem = {
   assignedWorkerIds?: string[];
   order: number;
   active: boolean;
-  roomNumber?: string;            // 👈 NEW: default room number on template
+  roomNumber?: string; // 👈 NEW: default room number on template
   [key: string]: any;
 };
 
@@ -210,10 +211,28 @@ export default function Scheduler() {
       return onSnapshot(qy, (snap) => {
         setLoadingByDay((prev) => ({ ...prev, [day]: false }));
         if (dirtyDaysRef.current.has(day)) return;
-        const arr = snap.docs.map((d) => ({
-          id: d.id,
-          ...(d.data() as any),
-        })) as TemplateItem[];
+        const arr = snap.docs.map((d) => {
+          const raw = d.data() as any;
+          return {
+            id: d.id,
+            title:
+              typeof raw.title === "string" && raw.title.trim()
+                ? raw.title
+                : "Untitled",
+            description:
+              typeof raw.description === "string" ? raw.description : "",
+            defaultPriority:
+              typeof raw.defaultPriority === "number" ? raw.defaultPriority : 3,
+            roleNeeded: raw.roleNeeded ?? null,
+            assignedWorkerIds: Array.isArray(raw.assignedWorkerIds)
+              ? raw.assignedWorkerIds
+              : [],
+            order: typeof raw.order === "number" ? raw.order : 999,
+            active: raw.active !== false,
+            roomNumber:
+              typeof raw.roomNumber === "string" ? raw.roomNumber : null,
+          } as TemplateItem;
+        });
         setItemsByDay((prev) => ({ ...prev, [day]: arr }));
         originalRef.current = { ...originalRef.current, [day]: deepClone(arr) };
       });
@@ -274,7 +293,9 @@ export default function Scheduler() {
       const workerIds = Array.isArray(tpl.assignedWorkerIds)
         ? tpl.assignedWorkerIds
         : [];
-      if (workerIds.length === 0) return;
+
+      // ⬇️ Always create the task. If no workers, status = "pending".
+      const status = workerIds.length > 0 ? "assigned" : "pending";
 
       const ref = doc(collection(db, "tasks"));
       batch.set(ref, {
@@ -284,12 +305,12 @@ export default function Scheduler() {
         dayKey,
         dateYYYYMMDD: todayStr,
         templateId: tpl.id,
-        assignedWorkers: workerIds,
-        status: "assigned",
+        assignedWorkers: workerIds, // can be empty
+        status,
         order: tpl.order ?? 999,
         createdAt: serverTimestamp(),
         forToday: true,
-        roomNumber: tpl.roomNumber ?? null, // 👈 NEW: carry from template
+        roomNumber: tpl.roomNumber ?? null, // 👈 carry from template
       });
 
       createdCount += 1;
@@ -358,18 +379,25 @@ export default function Scheduler() {
           ? doc(collection(db, "scheduler", day, "items"))
           : doc(db, "scheduler", day, "items", it.id);
 
-        batch.set(
-          ref,
-          {
-            ...it,
-            id: ref.id,
-            order: idx,
-            assignedWorkerIds: Array.isArray(it.assignedWorkerIds)
-              ? it.assignedWorkerIds
-              : [],
-          },
-          { merge: true }
-        );
+        const toWrite = {
+          id: ref.id,
+          title: it.title || "Untitled",
+          description: typeof it.description === "string" ? it.description : "",
+          defaultPriority:
+            typeof it.defaultPriority === "number" ? it.defaultPriority : 3,
+          roleNeeded: it.roleNeeded ?? null,
+          assignedWorkerIds: Array.isArray(it.assignedWorkerIds)
+            ? it.assignedWorkerIds
+            : [],
+          order: idx,
+          active: it.active !== false,
+          roomNumber:
+            typeof it.roomNumber === "string" && it.roomNumber.trim()
+              ? it.roomNumber.trim()
+              : null,
+        } as const;
+
+        batch.set(ref, toWrite, { merge: true });
 
         if (isTemp) it.id = ref.id;
       });
@@ -593,8 +621,9 @@ export const AddSchedulerItemModal: React.FC<AddSchedulerItemModalProps> = ({
   workers,
 }) => {
   const [title, setTitle] = useState("");
+  const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
   const [desc, setDesc] = useState("");
-  const [roomNumber, setRoomNumber] = useState("");     // 👈 NEW
+  const [roomNumber, setRoomNumber] = useState(""); // 👈 NEW
   const [urgent, setUrgent] = useState(false);
   const [important, setImportant] = useState(false);
   const [selectedWorkerIds, setSelectedWorkerIds] = useState<string[]>([]);
@@ -602,10 +631,11 @@ export const AddSchedulerItemModal: React.FC<AddSchedulerItemModalProps> = ({
   const reset = () => {
     setTitle("");
     setDesc("");
-    setRoomNumber("");                                   // 👈 NEW
+    setRoomNumber(""); // 👈 NEW
     setUrgent(false);
     setImportant(false);
     setSelectedWorkerIds([]);
+    setSelectedLocation(null);
   };
 
   const computePriorityFromFlags = (u: boolean, i: boolean) => {
@@ -631,7 +661,7 @@ export const AddSchedulerItemModal: React.FC<AddSchedulerItemModalProps> = ({
       assignedWorkerIds: selectedWorkerIds,
       order: 9_999,
       active: true,
-      roomNumber: roomNumber.trim() || undefined,       // 👈 NEW persists on template
+      roomNumber: roomNumber.trim() || undefined, // 👈 NEW persists on template
     };
     await onCreate(payload);
     reset();
