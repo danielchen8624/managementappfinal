@@ -119,9 +119,8 @@ export type TemplateItem = {
   assignedWorkerIds?: string[];
   order: number;
   active: boolean;
+  roomNumber?: string;            // 👈 NEW: default room number on template
   [key: string]: any;
-    roomNumber?: string;            
-
 };
 
 const makeTempId = () =>
@@ -290,7 +289,7 @@ export default function Scheduler() {
         order: tpl.order ?? 999,
         createdAt: serverTimestamp(),
         forToday: true,
-        roomNumber: tpl.roomNumber ?? null,
+        roomNumber: tpl.roomNumber ?? null, // 👈 NEW: carry from template
       });
 
       createdCount += 1;
@@ -448,6 +447,9 @@ export default function Scheduler() {
           {!!item.description && (
             <Text style={styles.meta}>{item.description}</Text>
           )}
+          {!!item.roomNumber && (
+            <Text style={styles.meta}>Room: {item.roomNumber}</Text> // 👈 NEW row line
+          )}
           <Text style={styles.meta}>
             Priority {item.defaultPriority ?? 3}
             {item.roleNeeded ? ` • ${item.roleNeeded}` : ""}
@@ -535,7 +537,7 @@ export default function Scheduler() {
               paddingBottom: 96,
             }}
             dragItemOverflow={true}
-            extraData={selectedList.map((i) => i.id).join("|")} // forces clean re-render
+            extraData={selectedList.map((i) => i.id).join("|")}
           />
         )}
 
@@ -592,6 +594,7 @@ export const AddSchedulerItemModal: React.FC<AddSchedulerItemModalProps> = ({
 }) => {
   const [title, setTitle] = useState("");
   const [desc, setDesc] = useState("");
+  const [roomNumber, setRoomNumber] = useState("");     // 👈 NEW
   const [urgent, setUrgent] = useState(false);
   const [important, setImportant] = useState(false);
   const [selectedWorkerIds, setSelectedWorkerIds] = useState<string[]>([]);
@@ -599,6 +602,7 @@ export const AddSchedulerItemModal: React.FC<AddSchedulerItemModalProps> = ({
   const reset = () => {
     setTitle("");
     setDesc("");
+    setRoomNumber("");                                   // 👈 NEW
     setUrgent(false);
     setImportant(false);
     setSelectedWorkerIds([]);
@@ -627,6 +631,7 @@ export const AddSchedulerItemModal: React.FC<AddSchedulerItemModalProps> = ({
       assignedWorkerIds: selectedWorkerIds,
       order: 9_999,
       active: true,
+      roomNumber: roomNumber.trim() || undefined,       // 👈 NEW persists on template
     };
     await onCreate(payload);
     reset();
@@ -685,7 +690,7 @@ export const AddSchedulerItemModal: React.FC<AddSchedulerItemModalProps> = ({
             { backgroundColor: isDark ? "#121826" : "#FFFFFF" },
           ]}
         >
-          <View style={modalStyles.headerRow}>
+          <View className="header" style={modalStyles.headerRow}>
             <Text
               style={[
                 modalStyles.headerText,
@@ -746,6 +751,7 @@ export const AddSchedulerItemModal: React.FC<AddSchedulerItemModalProps> = ({
                 },
               ]}
             />
+
             <Text
               style={[
                 modalStyles.label,
@@ -798,6 +804,30 @@ export const AddSchedulerItemModal: React.FC<AddSchedulerItemModalProps> = ({
                 },
               ]}
               multiline
+            />
+
+            {/* NEW: Room Number field */}
+            <Text
+              style={[
+                modalStyles.label,
+                { color: isDark ? "#CBD5E1" : "#374151", marginTop: 8 },
+              ]}
+            >
+              Default Room Number
+            </Text>
+            <TextInput
+              value={roomNumber}
+              onChangeText={setRoomNumber}
+              placeholder="e.g., 1205"
+              placeholderTextColor="#9CA3AF"
+              style={[
+                modalStyles.input,
+                {
+                  backgroundColor: isDark ? "#1F2937" : "#FFF",
+                  color: isDark ? "#FFF" : "#111",
+                  borderColor: isDark ? "#374151" : "#D1D5DB",
+                },
+              ]}
             />
 
             {/* Urgent / Important toggles */}

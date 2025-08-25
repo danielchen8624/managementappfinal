@@ -20,11 +20,11 @@ type Task = {
   priority?: number;
   roomNumber?: string;
   status: string;
-  taskType: string;
   description: string;
   createdBy: string;
   createdAt?: { toDate: () => Date };
   startTime?: any;
+  title: string;
 };
 
 type TaskModalProps = {
@@ -82,7 +82,7 @@ function CurrentTaskModal({ visible, onClose }: TaskModalProps) {
       pathname: "/taskClicked",
       params: {
         taskId: task.id,
-        taskType: task.taskType,
+        taskTitle: task.title,
         taskDescription: task.description,
         taskRoomNumber: task.roomNumber,
         taskPriority: task.priority,
@@ -131,7 +131,7 @@ function CurrentTaskModal({ visible, onClose }: TaskModalProps) {
                 >
                   <View style={{ paddingRight: 20 }}>
                     <View style={s.titleRow}>
-                      <Text style={s.taskTitle}>{task.taskType || "Untitled Task"}</Text>
+                      <Text style={s.taskTitle}>{task.title|| "Untitled Task"}</Text>
                       {!!task.priority && (
                         <View style={s.priorityPill}>
                           <Text style={s.priorityText}>P{task.priority}</Text>
