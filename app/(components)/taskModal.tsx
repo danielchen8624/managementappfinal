@@ -19,6 +19,8 @@ import { db, auth } from "../../firebaseConfig";
 import { collection, addDoc, getDocs, query, where } from "firebase/firestore";
 import { useTheme } from "../ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
+// 👇 NEW: building context
+import { useBuilding } from "../BuildingContext";
 
 /* ---------- Location options ---------- */
 const data = [
@@ -51,10 +53,7 @@ const data = [
   { label: "Mail Boxes", value: "Mail Boxes" },
   { label: "Maintenance of all floors", value: "Maintenance of all floors" },
   { label: "Manager Office", value: "Manager Office" },
-  {
-    label: "Men & Women Washroom & Sauna",
-    value: "Men & Women Washroom & Sauna",
-  },
+  { label: "Men & Women Washroom & Sauna", value: "Men & Women Washroom & Sauna" },
   { label: "Men's & Women's Gym", value: "Men's & Women's Gym" },
   { label: "Moving Room", value: "Moving Room" },
   { label: "Other", value: "Other" },
@@ -67,10 +66,7 @@ const data = [
   { label: "Staircase", value: "Staircase" },
   { label: "Telecom Room", value: "Telecom Room" },
   { label: "Waiting Room", value: "Waiting Room" },
-  {
-    label: "Washroom (Men,Women & Security)",
-    value: "Washroom (Men,Women & Security)",
-  },
+  { label: "Washroom (Men,Women & Security)", value: "Washroom (Men,Women & Security)" },
   { label: "Windows & Mirrors", value: "Windows & Mirrors" },
 ];
 
@@ -84,6 +80,9 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
   const isDark = theme === "dark";
   const s = getStyles(isDark);
 
+  // 👇 building context
+  const { buildingId } = useBuilding();
+
   const [taskAddress, setTaskAddress] = useState("");
   const [taskType, setTaskType] = useState("");
   const [taskDescription, setTaskDescription] = useState("");
@@ -96,7 +95,6 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
-  // only avoid keyboard when description is focused
   const [isDescFocused, setIsDescFocused] = useState(false);
 
   // entry animation
@@ -124,7 +122,7 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
     }
   }, [visible, sheetY, sheetOpacity]);
 
-  // employees options
+  // employees options (global users; filter to your needs)
   useEffect(() => {
     (async () => {
       try {
@@ -152,6 +150,7 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
   }, [urgent, important]);
 
   const canSubmit =
+    !!buildingId && // 👈 must have a building selected
     (taskType || "").trim().length > 0 &&
     (taskDescription || "").trim().length > 0 &&
     (roomNumber || "").trim().length > 0 &&
@@ -174,6 +173,10 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
       Alert.alert("You must be logged in to submit a request.");
       return;
     }
+    if (!buildingId) {
+      Alert.alert("Select a building first.");
+      return;
+    }
     if (!canSubmit) {
       Alert.alert("Please complete all required fields.");
       return;
@@ -181,7 +184,8 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
 
     try {
       setSubmitting(true);
-      await addDoc(collection(db, "tasks"), {
+      // 👇 write into /buildings/{buildingId}/tasks
+      await addDoc(collection(db, "buildings", buildingId, "tasks"), {
         taskAddress,
         title: taskType,
         description: taskDescription,
@@ -192,6 +196,7 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
         createdAt: new Date(),
         assignedWorkers: selectedAssignees,
         forToday: true,
+        buildingId, // denormalize for collectionGroup queries later
       });
       Alert.alert("Request Submitted!");
       resetForm();
@@ -240,7 +245,7 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
           behavior={Platform.select({ ios: "padding", android: "height" })}
           keyboardVerticalOffset={Platform.select({ ios: 12, android: 0 })}
           style={{ width: "100%" }}
-          enabled={isDescFocused} // <-- only avoid when description focused
+          enabled={isDescFocused}
         >
           <Animated.View
             style={[
@@ -268,6 +273,24 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
                   />
                 </TouchableOpacity>
               </View>
+
+              {/* (Optional) nudge if no building */}
+              {!buildingId && (
+                <View
+                  style={{
+                    padding: 10,
+                    borderRadius: 10,
+                    borderWidth: 1,
+                    borderColor: isDark ? "#334155" : "#BFDBFE",
+                    backgroundColor: isDark ? "#0B1220" : "#EFF6FF",
+                    marginBottom: 8,
+                  }}
+                >
+                  <Text style={{ color: isDark ? "#E5E7EB" : "#0F172A", fontWeight: "700" }}>
+                    Select a building to submit tasks
+                  </Text>
+                </View>
+              )}
 
               {/* Address (optional) */}
               <Text style={s.label}>Address (optional)</Text>
@@ -333,26 +356,18 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
                 placeholder="What needs to be done?"
                 placeholderTextColor={isDark ? "#9CA3AF" : "#9AA1AA"}
                 value={taskDescription}
-                onChangeText={setTaskDescription} // allow natural newlines
+                onChangeText={setTaskDescription}
                 style={[s.input, { height: 112, textAlignVertical: "top" }]}
                 multiline
-                blurOnSubmit={false}           // keep keyboard up
-                returnKeyType="default"        // iOS: show return; Android: normal
+                blurOnSubmit={false}
+                returnKeyType="default"
                 onFocus={() => setIsDescFocused(true)}
                 onBlur={() => setIsDescFocused(false)}
               />
 
               {/* Toggles */}
-              <Toggle
-                label="Urgent"
-                value={urgent}
-                onToggle={() => setUrgent((v) => !v)}
-              />
-              <Toggle
-                label="Important"
-                value={important}
-                onToggle={() => setImportant((v) => !v)}
-              />
+              <Toggle label="Urgent" value={urgent} onToggle={() => setUrgent((v) => !v)} />
+              <Toggle label="Important" value={important} onToggle={() => setImportant((v) => !v)} />
 
               {/* Submit */}
               <TouchableOpacity

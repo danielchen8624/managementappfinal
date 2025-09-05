@@ -22,6 +22,7 @@ import {
 import { db, auth } from "../../firebaseConfig";
 import { useTheme } from "../ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
+import { useBuilding } from "../BuildingContext"; // 👈 current building
 
 type TaskReviewModalProps = {
   visible: boolean;
@@ -46,6 +47,7 @@ const TaskReviewModal: React.FC<TaskReviewModalProps> = ({ visible, onClose }) =
   const { theme } = useTheme();
   const isDark = theme === "dark";
   const s = getStyles(isDark);
+  const { buildingId } = useBuilding(); // 👈 building scope
 
   const [loading, setLoading] = useState(true);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -77,21 +79,29 @@ const TaskReviewModal: React.FC<TaskReviewModalProps> = ({ visible, onClose }) =
     }
   }, [visible, sheetOpacity, sheetY]);
 
-  // live list: ONLY completed items that still require a manager review
+  // live list: ONLY completed items that still require a manager review — building-scoped
   useEffect(() => {
     if (!visible) return;
+
+    // if no building selected, clear UI and stop
+    if (!buildingId) {
+      setTasks([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     const qy = query(
-      collection(db, "tasks"),
+      collection(db, "buildings", buildingId, "tasks"),
       where("managerHasReviewed", "==", false),
       where("status", "==", "completed")
     );
+
     const unsub = onSnapshot(
       qy,
       (snap) => {
         const list: Task[] = [];
         snap.forEach((d) => list.push({ id: d.id, ...(d.data() as any) }));
-        // newest first if createdAt present
         list.sort((a, b) => {
           const ta = a.createdAt?.toMillis?.() ?? 0;
           const tb = b.createdAt?.toMillis?.() ?? 0;
@@ -100,10 +110,14 @@ const TaskReviewModal: React.FC<TaskReviewModalProps> = ({ visible, onClose }) =
         setTasks(list);
         setLoading(false);
       },
-      () => setLoading(false)
+      (err) => {
+        console.error("TaskReviewModal onSnapshot", err);
+        setLoading(false);
+      }
     );
+
     return () => unsub();
-  }, [visible]);
+  }, [visible, buildingId]);
 
   const trim = (v?: string, n: number = 120) =>
     v ? (v.length > n ? v.slice(0, n - 1) + "…" : v) : "";
@@ -131,18 +145,21 @@ const TaskReviewModal: React.FC<TaskReviewModalProps> = ({ visible, onClose }) =
     return isDark ? "#6B7280" : "#9CA3AF";
   };
 
-  // Approve/verify: mark reviewed
+  // Approve/verify: mark reviewed — building-scoped
   const verifyTask = async (t: Task) => {
+    if (!buildingId) {
+      Alert.alert("Select a building", "Please select a building first.");
+      return;
+    }
     if (updating[t.id]) return;
     try {
       setUpdating((m) => ({ ...m, [t.id]: true }));
       const u = auth.currentUser?.uid || "manager";
-      await updateDoc(doc(db, "tasks", t.id), {
+      await updateDoc(doc(db, "buildings", buildingId, "tasks", t.id), {
         managerHasReviewed: true,
         reviewedAt: new Date(),
         reviewedBy: u,
       });
-      // disappears from this list automatically due to query filter
     } catch (e: any) {
       Alert.alert("Error", e?.message || "Could not mark as reviewed.");
     } finally {
@@ -150,16 +167,20 @@ const TaskReviewModal: React.FC<TaskReviewModalProps> = ({ visible, onClose }) =
     }
   };
 
-  // Decline: bounce back to worker for more work
+  // Decline: bounce back — building-scoped
   const declineTask = async (t: Task) => {
+    if (!buildingId) {
+      Alert.alert("Select a building", "Please select a building first.");
+      return;
+    }
     if (declining[t.id]) return;
     try {
       setDeclining((m) => ({ ...m, [t.id]: true }));
       const u = auth.currentUser?.uid || "manager";
-      await updateDoc(doc(db, "tasks", t.id), {
-        status: "assigned",        // continue working
-        managerHasReviewed: false, // will need review again after re-completion
-        forToday: true,            // ensure it shows in today's lists
+      await updateDoc(doc(db, "buildings", buildingId, "tasks", t.id), {
+        status: "assigned",
+        managerHasReviewed: false,
+        forToday: true,
         declinedAt: new Date(),
         declinedBy: u,
       });
@@ -189,6 +210,14 @@ const TaskReviewModal: React.FC<TaskReviewModalProps> = ({ visible, onClose }) =
             </TouchableOpacity>
           </View>
 
+          {/* No-building banner */}
+          {!buildingId && (
+            <View style={s.banner}>
+              <Text style={s.bannerTitle}>No building selected</Text>
+              <Text style={s.bannerSubtitle}>Choose a building to review its tasks.</Text>
+            </View>
+          )}
+
           {/* Body */}
           {loading ? (
             <View style={[s.center, { paddingVertical: 24 }]}>
@@ -202,7 +231,9 @@ const TaskReviewModal: React.FC<TaskReviewModalProps> = ({ visible, onClose }) =
                 size={22}
                 color={isDark ? "#93A3B8" : "#6B7280"}
               />
-              <Text style={s.muted}>You're all caught up.</Text>
+              <Text style={s.muted}>
+                {buildingId ? "You're all caught up." : "Select a building to see tasks."}
+              </Text>
             </View>
           ) : (
             <ScrollView
@@ -263,7 +294,7 @@ const TaskReviewModal: React.FC<TaskReviewModalProps> = ({ visible, onClose }) =
                           s.primaryBtn,
                           (updating[t.id] || declining[t.id]) && { opacity: 0.7 },
                         ]}
-                        disabled={!!updating[t.id] || !!declining[t.id]}
+                        disabled={!buildingId || !!updating[t.id] || !!declining[t.id]}
                         activeOpacity={0.9}
                       >
                         {updating[t.id] ? (
@@ -282,7 +313,7 @@ const TaskReviewModal: React.FC<TaskReviewModalProps> = ({ visible, onClose }) =
                           s.dangerBtn,
                           (updating[t.id] || declining[t.id]) && { opacity: 0.7 },
                         ]}
-                        disabled={!!updating[t.id] || !!declining[t.id]}
+                        disabled={!buildingId || !!updating[t.id] || !!declining[t.id]}
                         activeOpacity={0.9}
                       >
                         {declining[t.id] ? (
@@ -360,15 +391,28 @@ const getStyles = (isDark: boolean) =>
       borderColor: isDark ? "#1F2937" : "transparent",
     },
 
+    banner: {
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      backgroundColor: isDark ? "#1E293B" : "#E0ECFF",
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: isDark ? "#334155" : "#BFDBFE",
+    },
+    bannerTitle: {
+      fontSize: 14,
+      fontWeight: "800",
+      color: isDark ? "#E5E7EB" : "#0F172A",
+    },
+    bannerSubtitle: {
+      marginTop: 2,
+      fontSize: 12,
+      color: isDark ? "#CBD5E1" : "#1E40AF",
+    },
+
     center: { alignItems: "center", justifyContent: "center", gap: 8 },
     muted: { marginTop: 6, color: isDark ? "#93A3B8" : "#6B7280", fontWeight: "700" },
 
-    listContent: {
-      paddingHorizontal: 14,
-      paddingTop: 12,
-      paddingBottom: 10,
-      gap: 12,
-    },
+    listContent: { paddingHorizontal: 14, paddingTop: 12, paddingBottom: 10, gap: 12 },
 
     card: {
       borderRadius: 14,
@@ -404,33 +448,13 @@ const getStyles = (isDark: boolean) =>
       borderWidth: isDark ? 1 : 0,
       borderColor: isDark ? "#1E293B" : "transparent",
     },
-    prioText: {
-      fontSize: 11,
-      fontWeight: "900",
-      color: isDark ? "#C7D2FE" : "#1E3A8A",
-      letterSpacing: 0.2,
-    },
+    prioText: { fontSize: 11, fontWeight: "900", color: isDark ? "#C7D2FE" : "#1E3A8A", letterSpacing: 0.2 },
 
-    rowText: {
-      fontSize: 13,
-      color: isDark ? "#CBD5E1" : "#334155",
-      marginTop: 2,
-    },
-    rowTextStrong: {
-      fontWeight: "800",
-      color: isDark ? "#E5E7EB" : "#111827",
-    },
-    desc: {
-      marginTop: 6,
-      fontSize: 13,
-      color: isDark ? "#9CA3AF" : "#6B7280",
-    },
+    rowText: { fontSize: 13, color: isDark ? "#CBD5E1" : "#334155", marginTop: 2 },
+    rowTextStrong: { fontWeight: "800", color: isDark ? "#E5E7EB" : "#111827" },
+    desc: { marginTop: 6, fontSize: 13, color: isDark ? "#9CA3AF" : "#6B7280" },
 
-    btnRow: {
-      marginTop: 10,
-      flexDirection: "row",
-      gap: 8,
-    },
+    btnRow: { marginTop: 10, flexDirection: "row", gap: 8 },
     primaryBtn: {
       flex: 1,
       flexDirection: "row",
@@ -448,12 +472,7 @@ const getStyles = (isDark: boolean) =>
       borderWidth: isDark ? 1 : 0,
       borderColor: isDark ? "#1E3A8A" : "transparent",
     },
-    primaryBtnText: {
-      color: "#fff",
-      fontWeight: "800",
-      fontSize: 14,
-      letterSpacing: 0.2,
-    },
+    primaryBtnText: { color: "#fff", fontWeight: "800", fontSize: 14, letterSpacing: 0.2 },
     dangerBtn: {
       flexDirection: "row",
       alignItems: "center",
@@ -469,10 +488,6 @@ const getStyles = (isDark: boolean) =>
       shadowRadius: 4,
       elevation: 3,
     },
-    dangerBtnText: {
-      color: "#fff",
-      fontWeight: "800",
-      fontSize: 14,
-      letterSpacing: 0.2,
-    },
+    dangerBtnText: { color: "#fff", fontWeight: "800", fontSize: 14, letterSpacing: 0.2 },
   });
+

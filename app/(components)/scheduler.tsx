@@ -1,5 +1,5 @@
 // app/(manager)/scheduler.tsx
-// Handles task rollout. (Cloud Function later.)
+// Handles task rollout, per-building.
 import React, { useEffect, useRef, useState } from "react";
 import {
   View,
@@ -32,12 +32,13 @@ import {
   writeBatch,
   doc,
   where,
-  getDoc,
   serverTimestamp,
   getDocs,
 } from "firebase/firestore";
 import { Dropdown, MultiSelect } from "react-native-element-dropdown";
-import { set } from "firebase/database";
+
+// 🔑 Building context
+import { useBuilding } from "../BuildingContext";
 
 /* ---------- Location options ---------- */
 const locationOptions = [
@@ -70,10 +71,7 @@ const locationOptions = [
   { label: "Mail Boxes", value: "Mail Boxes" },
   { label: "Maintenance of all floors", value: "Maintenance of all floors" },
   { label: "Manager Office", value: "Manager Office" },
-  {
-    label: "Men & Women Washroom & Sauna",
-    value: "Men & Women Washroom & Sauna",
-  },
+  { label: "Men & Women Washroom & Sauna", value: "Men & Women Washroom & Sauna" },
   { label: "Men's & Women's Gym", value: "Men's & Women's Gym" },
   { label: "Moving Room", value: "Moving Room" },
   { label: "Other", value: "Other" },
@@ -86,10 +84,7 @@ const locationOptions = [
   { label: "Staircase", value: "Staircase" },
   { label: "Telecom Room", value: "Telecom Room" },
   { label: "Waiting Room", value: "Waiting Room" },
-  {
-    label: "Washroom (Men,Women & Security)",
-    value: "Washroom (Men,Women & Security)",
-  },
+  { label: "Washroom (Men,Women & Security)", value: "Washroom (Men,Women & Security)" },
   { label: "Windows & Mirrors", value: "Windows & Mirrors" },
 ];
 
@@ -120,7 +115,7 @@ export type TemplateItem = {
   assignedWorkerIds?: string[];
   order: number;
   active: boolean;
-  roomNumber?: string; // 👈 NEW: default room number on template
+  roomNumber?: string;
   [key: string]: any;
 };
 
@@ -165,6 +160,9 @@ export default function Scheduler() {
   const isDark = theme === "dark";
   const styles = getStyles(isDark);
 
+  // 🔑 building context
+  const { buildingId } = useBuilding();
+
   const [dayIndex, setDayIndex] = useState(0);
   const selectedDay: DayKey = DAYS[dayIndex];
 
@@ -184,11 +182,19 @@ export default function Scheduler() {
 
   const [addOpen, setAddOpen] = useState(false);
 
-  // workers
+  // workers (scoped)
   const [workers, setWorkers] = useState<Worker[]>([]);
   useEffect(() => {
+    if (!buildingId) {
+      setWorkers([]);
+      return;
+    }
+
+    // If you have building-assigned employees, prefer:
+    // const qy = query(collection(db, "buildings", buildingId, "employees"));
+    // Here we fall back to global employees. You can add a membership filter if you store it.
     const qy = query(collection(db, "users"), where("role", "==", "employee"));
-    return onSnapshot(qy, (snap) => {
+    const unsub = onSnapshot(qy, (snap) => {
       const arr: Worker[] = snap.docs.map((d) => {
         const data = d.data() as any;
         return {
@@ -199,51 +205,62 @@ export default function Scheduler() {
       });
       setWorkers(arr);
     });
-  }, []);
+    return () => unsub();
+  }, [buildingId]);
 
-  // subscribe per-day
+  // subscribe per-day (scoped to building)
   useEffect(() => {
+    // reset when building changes
+    setItemsByDay(makeEmpty());
+    setLoadingByDay(makeLoading());
+    if (!buildingId) return;
+
     const unsubs = DAYS.map((day) => {
       const qy = query(
-        collection(db, "scheduler", day, "items"),
+        collection(db, "buildings", buildingId, "scheduler", day, "items"),
         orderBy("order")
       );
-      return onSnapshot(qy, (snap) => {
-        setLoadingByDay((prev) => ({ ...prev, [day]: false }));
-        if (dirtyDaysRef.current.has(day)) return;
-        const arr = snap.docs.map((d) => {
-          const raw = d.data() as any;
-          return {
-            id: d.id,
-            title:
-              typeof raw.title === "string" && raw.title.trim()
-                ? raw.title
-                : "Untitled",
-            description:
-              typeof raw.description === "string" ? raw.description : "",
-            defaultPriority:
-              typeof raw.defaultPriority === "number" ? raw.defaultPriority : 3,
-            roleNeeded: raw.roleNeeded ?? null,
-            assignedWorkerIds: Array.isArray(raw.assignedWorkerIds)
-              ? raw.assignedWorkerIds
-              : [],
-            order: typeof raw.order === "number" ? raw.order : 999,
-            active: raw.active !== false,
-            roomNumber:
-              typeof raw.roomNumber === "string" ? raw.roomNumber : null,
-          } as TemplateItem;
-        });
-        setItemsByDay((prev) => ({ ...prev, [day]: arr }));
-        originalRef.current = { ...originalRef.current, [day]: deepClone(arr) };
-      });
+      return onSnapshot(
+        qy,
+        (snap) => {
+          setLoadingByDay((prev) => ({ ...prev, [day]: false }));
+          if (dirtyDaysRef.current.has(day)) return; // don't stomp local edits
+          const arr = snap.docs.map((d) => {
+            const raw = d.data() as any;
+            return {
+              id: d.id,
+              title:
+                typeof raw.title === "string" && raw.title.trim()
+                  ? raw.title
+                  : "Untitled",
+              description:
+                typeof raw.description === "string" ? raw.description : "",
+              defaultPriority:
+                typeof raw.defaultPriority === "number" ? raw.defaultPriority : 3,
+              roleNeeded: raw.roleNeeded ?? null,
+              assignedWorkerIds: Array.isArray(raw.assignedWorkerIds)
+                ? raw.assignedWorkerIds
+                : [],
+              order: typeof raw.order === "number" ? raw.order : 999,
+              active: raw.active !== false,
+              roomNumber:
+                typeof raw.roomNumber === "string" ? raw.roomNumber : null,
+            } as TemplateItem;
+          });
+          setItemsByDay((prev) => ({ ...prev, [day]: arr }));
+          originalRef.current = { ...originalRef.current, [day]: deepClone(arr) };
+        },
+        () => setLoadingByDay((prev) => ({ ...prev, [day]: false }))
+      );
     });
-    return () => unsubs.forEach((u) => u());
-  }, []);
+    return () => unsubs.forEach((u) => u && u());
+  }, [buildingId]);
 
-  // helper to flip existing "today" tasks off
+  // helper to flip existing "today" tasks off (scoped)
   async function markExistingTasksNotForToday(todayStr: string) {
+    if (!buildingId) return 0;
     const ids = new Set<string>();
-    const tasksRef = collection(db, "tasks");
+    const tasksRef = collection(db, "buildings", buildingId, "tasks");
 
     const qFlag = query(tasksRef, where("forToday", "==", true));
     const snapFlag = await getDocs(qFlag);
@@ -256,28 +273,29 @@ export default function Scheduler() {
     const allIds = Array.from(ids);
     if (allIds.length === 0) return 0;
 
+    // batched updates
     const CHUNK = 450;
     for (let i = 0; i < allIds.length; i += CHUNK) {
       const batch = writeBatch(db);
       const slice = allIds.slice(i, i + CHUNK);
       slice.forEach((id) => {
-        batch.update(doc(db, "tasks", id), { forToday: false });
+        batch.update(doc(db, "buildings", buildingId, "tasks", id), { forToday: false });
       });
       await batch.commit();
     }
     return allIds.length;
   }
 
-  // MANUAL ROLLOUT (selected day)
+  // MANUAL ROLLOUT (selected day, scoped)
   const rolloutToday = async () => {
+    if (!buildingId) {
+      return Alert.alert("Select a building first.");
+    }
     const dayKey = selectedDay;
     const todayStr = ymd(new Date());
 
     if (loadingByDay[dayKey]) {
-      Alert.alert(
-        "Please wait",
-        "Scheduler is still loading. Try again in a moment."
-      );
+      Alert.alert("Please wait", "Scheduler is still loading. Try again in a moment.");
       return;
     }
 
@@ -294,11 +312,11 @@ export default function Scheduler() {
         ? tpl.assignedWorkerIds
         : [];
 
-      // ⬇️ Always create the task. If no workers, status = "pending".
       const status = workerIds.length > 0 ? "assigned" : "pending";
 
-      const ref = doc(collection(db, "tasks"));
+      const ref = doc(collection(db, "buildings", buildingId, "tasks"));
       batch.set(ref, {
+        buildingId, // helpful for cross-building queries
         title: tpl.title || "Untitled",
         description: tpl.description || "",
         priority: tpl.defaultPriority ?? 3,
@@ -310,7 +328,7 @@ export default function Scheduler() {
         order: tpl.order ?? 999,
         createdAt: serverTimestamp(),
         forToday: true,
-        roomNumber: tpl.roomNumber ?? null, // 👈 carry from template
+        roomNumber: tpl.roomNumber ?? null,
       });
 
       createdCount += 1;
@@ -319,11 +337,8 @@ export default function Scheduler() {
     await batch.commit();
     Alert.alert(
       "Success",
-      `Cleared ${cleared} existing task${
-        cleared === 1 ? "" : "s"
-      } from today.\nRolled out ${createdCount} new task${
-        createdCount === 1 ? "" : "s"
-      }!`
+      `Cleared ${cleared} existing task${cleared === 1 ? "" : "s"} from today.\n` +
+        `Rolled out ${createdCount} new task${createdCount === 1 ? "" : "s"}!`
     );
   };
 
@@ -356,6 +371,11 @@ export default function Scheduler() {
   };
 
   const saveChanges = async () => {
+    if (!buildingId) {
+      Alert.alert("Select a building first.");
+      return;
+    }
+
     const batch = writeBatch(db);
     const savedDays: DayKey[] = [];
 
@@ -367,17 +387,19 @@ export default function Scheduler() {
       const curr = itemsByDay[day] ?? [];
       const currIds = new Set(curr.map((i) => i.id));
 
+      // deletes
       for (const it of orig) {
         if (!currIds.has(it.id)) {
-          batch.delete(doc(db, "scheduler", day, "items", it.id));
+          batch.delete(doc(db, "buildings", buildingId, "scheduler", day, "items", it.id));
         }
       }
 
+      // upserts
       curr.forEach((it, idx) => {
         const isTemp = it.id.startsWith("temp_");
         const ref = isTemp
-          ? doc(collection(db, "scheduler", day, "items"))
-          : doc(db, "scheduler", day, "items", it.id);
+          ? doc(collection(db, "buildings", buildingId, "scheduler", day, "items"))
+          : doc(db, "buildings", buildingId, "scheduler", day, "items", it.id);
 
         const toWrite = {
           id: ref.id,
@@ -405,6 +427,7 @@ export default function Scheduler() {
 
     await batch.commit();
 
+    // refresh originals snapshot
     for (const day of savedDays) {
       const curr = itemsByDay[day] ?? [];
       originalRef.current = { ...originalRef.current, [day]: deepClone(curr) };
@@ -476,7 +499,7 @@ export default function Scheduler() {
             <Text style={styles.meta}>{item.description}</Text>
           )}
           {!!item.roomNumber && (
-            <Text style={styles.meta}>Room: {item.roomNumber}</Text> // 👈 NEW row line
+            <Text style={styles.meta}>Room: {item.roomNumber}</Text>
           )}
           <Text style={styles.meta}>
             Priority {item.defaultPriority ?? 3}
@@ -488,13 +511,15 @@ export default function Scheduler() {
     );
   };
 
+  const disabledUI = !buildingId;
+
   return (
     <View style={styles.container}>
       <SafeAreaView style={{ flex: 1 }}>
         {/* Header */}
         <View style={styles.headerRow}>
           <View style={styles.daySwitcher}>
-            <TouchableOpacity onPress={prevDay} style={styles.arrowBtn}>
+            <TouchableOpacity onPress={prevDay} style={styles.arrowBtn} disabled={disabledUI}>
               <Ionicons
                 name="chevron-back"
                 size={18}
@@ -509,7 +534,7 @@ export default function Scheduler() {
               </Text>
             </View>
 
-            <TouchableOpacity onPress={nextDay} style={styles.arrowBtn}>
+            <TouchableOpacity onPress={nextDay} style={styles.arrowBtn} disabled={disabledUI}>
               <Ionicons
                 name="chevron-forward"
                 size={18}
@@ -519,14 +544,19 @@ export default function Scheduler() {
           </View>
 
           <TouchableOpacity
-            style={styles.addBtn}
+            style={[styles.addBtn, disabledUI && { opacity: 0.6 }]}
             onPress={() => setAddOpen(true)}
+            disabled={disabledUI}
           >
             <Ionicons name="add" size={16} color="#fff" />
             <Text style={styles.addBtnText}>Add</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.rolloutBtn} onPress={rolloutToday}>
+          <TouchableOpacity
+            style={[styles.rolloutBtn, disabledUI && { opacity: 0.6 }]}
+            onPress={rolloutToday}
+            disabled={disabledUI}
+          >
             <Ionicons name="rocket-outline" size={14} color="#fff" />
             <Text style={styles.rolloutText}>
               Rollout {DAY_LABEL[selectedDay]}
@@ -534,8 +564,35 @@ export default function Scheduler() {
           </TouchableOpacity>
         </View>
 
+        {/* If no building selected, show a gentle nudge */}
+        {!buildingId && (
+          <View style={{ paddingHorizontal: 16, paddingBottom: 6 }}>
+            <View
+              style={{
+                padding: 12,
+                borderRadius: 10,
+                backgroundColor: isDark ? "#1F2937" : "#FFF7ED",
+                borderWidth: 1,
+                borderColor: isDark ? "#334155" : "#FED7AA",
+              }}
+            >
+              <Text style={{ fontWeight: "800", color: isDark ? "#F3F4F6" : "#7C2D12" }}>
+                Select a building to manage its scheduler
+              </Text>
+              <Text style={{ marginTop: 4, color: isDark ? "#CBD5E1" : "#7C2D12" }}>
+                All templates and rollouts are scoped per building.
+              </Text>
+            </View>
+          </View>
+        )}
+
         {/* List */}
-        {selectedLoading ? (
+        {disabledUI ? (
+          <View style={styles.center}>
+            <ActivityIndicator />
+            <Text style={styles.loadingText}>Waiting for building…</Text>
+          </View>
+        ) : selectedLoading ? (
           <View style={styles.center}>
             <ActivityIndicator />
             <Text style={styles.loadingText}>Loading…</Text>
@@ -570,7 +627,7 @@ export default function Scheduler() {
         )}
 
         {/* Save/discard bar */}
-        {hasDirty && (
+        {!disabledUI && hasDirty && (
           <View style={styles.saveBar}>
             <TouchableOpacity
               style={styles.discardBtn}
@@ -621,9 +678,8 @@ export const AddSchedulerItemModal: React.FC<AddSchedulerItemModalProps> = ({
   workers,
 }) => {
   const [title, setTitle] = useState("");
-  const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
   const [desc, setDesc] = useState("");
-  const [roomNumber, setRoomNumber] = useState(""); // 👈 NEW
+  const [roomNumber, setRoomNumber] = useState("");
   const [urgent, setUrgent] = useState(false);
   const [important, setImportant] = useState(false);
   const [selectedWorkerIds, setSelectedWorkerIds] = useState<string[]>([]);
@@ -631,11 +687,10 @@ export const AddSchedulerItemModal: React.FC<AddSchedulerItemModalProps> = ({
   const reset = () => {
     setTitle("");
     setDesc("");
-    setRoomNumber(""); // 👈 NEW
+    setRoomNumber("");
     setUrgent(false);
     setImportant(false);
     setSelectedWorkerIds([]);
-    setSelectedLocation(null);
   };
 
   const computePriorityFromFlags = (u: boolean, i: boolean) => {
@@ -661,7 +716,7 @@ export const AddSchedulerItemModal: React.FC<AddSchedulerItemModalProps> = ({
       assignedWorkerIds: selectedWorkerIds,
       order: 9_999,
       active: true,
-      roomNumber: roomNumber.trim() || undefined, // 👈 NEW persists on template
+      roomNumber: roomNumber.trim() || undefined,
     };
     await onCreate(payload);
     reset();
@@ -720,7 +775,7 @@ export const AddSchedulerItemModal: React.FC<AddSchedulerItemModalProps> = ({
             { backgroundColor: isDark ? "#121826" : "#FFFFFF" },
           ]}
         >
-          <View className="header" style={modalStyles.headerRow}>
+          <View style={modalStyles.headerRow}>
             <Text
               style={[
                 modalStyles.headerText,
@@ -836,7 +891,6 @@ export const AddSchedulerItemModal: React.FC<AddSchedulerItemModalProps> = ({
               multiline
             />
 
-            {/* NEW: Room Number field */}
             <Text
               style={[
                 modalStyles.label,
@@ -860,7 +914,6 @@ export const AddSchedulerItemModal: React.FC<AddSchedulerItemModalProps> = ({
               ]}
             />
 
-            {/* Urgent / Important toggles */}
             <ToggleSwitch
               label="Urgent"
               value={urgent}

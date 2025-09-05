@@ -14,7 +14,6 @@ import { useUser } from "../UserContext";
 
 function TaskHistory() {
   const [completedTask, setCompletedTask] = useState<any[]>([]);
-  const { role, loading } = useUser();
   const { theme } = useTheme();
   const isDark = theme === "dark";
 

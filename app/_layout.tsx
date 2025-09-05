@@ -8,6 +8,7 @@ import { UserProvider } from "./UserContext";
 import {ThemeProvider} from "./ThemeContext";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { ServerTimeProvider } from "./serverTimeContext"; // adjust path to your file
+import { BuildingProvider } from "./BuildingContext";
 
 
 export default function RootLayout() {
@@ -28,6 +29,7 @@ export default function RootLayout() {
   }, []);
 
   return (
+    <BuildingProvider>
     <ServerTimeProvider>
     <GestureHandlerRootView style = {{flex: 1}}>
     <UserProvider>
@@ -40,6 +42,7 @@ export default function RootLayout() {
     </UserProvider>
     </GestureHandlerRootView>
     </ServerTimeProvider>
+    </BuildingProvider>
     
   );
 }

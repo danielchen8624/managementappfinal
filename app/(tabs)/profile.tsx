@@ -304,6 +304,19 @@ export default function ProfileScreen() {
                 />
               }
             />
+
+              <SettingsRow
+              label="Add New Building"
+              onPress={() => router.push("/addNewBuilding")}
+              isDark={isDark}
+              icon={
+                <Ionicons
+                  name="mail-outline"
+                  size={16}
+                  color={isDark ? "#E5E7EB" : "#111827"}
+                />
+              }
+            />
           </View>
         </View>
       </ScrollView>

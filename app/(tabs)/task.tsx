@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState, useEffect } from "react";
+import React, { useMemo, useRef, useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -20,6 +20,7 @@ import {
   onSnapshot,
   doc,
   deleteDoc,
+  orderBy,
 } from "firebase/firestore";
 import { useUser } from "../UserContext";
 import { useTheme } from "../ThemeContext";
@@ -27,6 +28,9 @@ import { useServerTime, priorityWindows } from "../serverTimeContext";
 import { DateTime } from "luxon";
 import SwipeableItem, { UnderlayParams } from "react-native-swipeable-item";
 import { Ionicons } from "@expo/vector-icons";
+
+// 🔑 use the global building selection
+import { useBuilding } from "../BuildingContext";
 
 /** Helper to sort by optional `order` field */
 function sortByOrder<T extends { order?: number }>(arr: T[]) {
@@ -251,6 +255,9 @@ function TaskPage() {
 
   const uid = auth.currentUser?.uid || null;
 
+  // 🌆 current building
+  const { buildingId } = useBuilding();
+
   /* ---------- theme crossfade ---------- */
   const themeAnim = useRef(new Animated.Value(isDark ? 1 : 0)).current;
   useEffect(() => {
@@ -260,47 +267,44 @@ function TaskPage() {
       easing: Easing.inOut(Easing.quad),
       useNativeDriver: false,
     }).start();
-  }, [isDark, themeAnim]);
+  }, [isDark]);
   const darkOpacity = themeAnim;
 
-  /* ---------- data subscriptions: MANAGER (see all) ---------- */
+  /* ---------- data subscriptions: MANAGER (see all in this building) ---------- */
   useEffect(() => {
-    const q1 = query(
-      collection(db, "tasks"),
-      where("priority", "==", 1),
-      where("forToday", "==", true)
-    );
-    const q2 = query(
-      collection(db, "tasks"),
-      where("priority", "==", 2),
-      where("forToday", "==", true)
-    );
-    const q3 = query(
-      collection(db, "tasks"),
-      where("priority", "==", 3),
-      where("forToday", "==", true)
-    );
+    if (!buildingId) {
+      setMP1([]); setMP2([]); setMP3([]); setCurrentProjects([]);
+      return;
+    }
+
+    // Build refs here to avoid identity churn across renders
+    const tasksRef = collection(db, "buildings", buildingId, "tasks");
+
+    const q1 = query(tasksRef, where("priority", "==", 1), where("forToday", "==", true), orderBy("order", "asc"));
+    const q2 = query(tasksRef, where("priority", "==", 2), where("forToday", "==", true), orderBy("order", "asc"));
+    const q3 = query(tasksRef, where("priority", "==", 3), where("forToday", "==", true), orderBy("order", "asc"));
 
     const u1 = onSnapshot(q1, (snap) => {
       const items: any[] = [];
       snap.forEach((d) => items.push({ id: d.id, ...d.data() }));
       setMP1(sortByOrder(items));
     });
+
     const u2 = onSnapshot(q2, (snap) => {
       const items: any[] = [];
       snap.forEach((d) => items.push({ id: d.id, ...d.data() }));
       setMP2(sortByOrder(items));
     });
+
     const u3 = onSnapshot(q3, (snap) => {
       const items: any[] = [];
       snap.forEach((d) => items.push({ id: d.id, ...d.data() }));
       setMP3(sortByOrder(items));
     });
 
-    const projectsQ = query(
-      collection(db, "projects"),
-      where("status", "==", "pending")
-    );
+    // Projects
+    const projectsRef = collection(db, "buildings", buildingId, "projects");
+    const projectsQ = query(projectsRef, where("status", "==", "pending"));
     const uProj = onSnapshot(projectsQ, (snap) => {
       const items: any[] = [];
       snap.forEach((d) => items.push({ id: d.id, ...d.data() }));
@@ -309,16 +313,18 @@ function TaskPage() {
     });
 
     return () => {
-      u1();
-      u2();
-      u3();
-      uProj();
+      u1(); u2(); u3(); uProj();
     };
-  }, [todayISO]);
+  }, [buildingId, todayISO]); // re-evaluate if building or day changes
 
-  /* ---------- data subscriptions: EMPLOYEE (assigned only) ---------- */
+  /* ---------- data subscriptions: EMPLOYEE (assigned only, in this building) ---------- */
   useEffect(() => {
-    if (role !== "employee" || !uid) return;
+    if (role !== "employee" || !uid || !buildingId) {
+      setEP1([]); setEP2([]); setEP3([]);
+      return;
+    }
+
+    const tasksRef = collection(db, "buildings", buildingId, "tasks");
 
     const subscribeEmployeeBucket = (
       priority: 1 | 2 | 3,
@@ -333,7 +339,7 @@ function TaskPage() {
 
       // assignedWorkers array-contains uid
       const qAW = query(
-        collection(db, "tasks"),
+        tasksRef,
         where("priority", "==", priority),
         where("forToday", "==", true),
         where("assignedWorkers", "array-contains", uid)
@@ -348,7 +354,7 @@ function TaskPage() {
 
       // assignedTo == uid
       const qAT = query(
-        collection(db, "tasks"),
+        tasksRef,
         where("priority", "==", priority),
         where("forToday", "==", true),
         where("assignedTo", "==", uid)
@@ -368,16 +374,15 @@ function TaskPage() {
     const off3 = subscribeEmployeeBucket(3, setEP3);
 
     return () => {
-      off1?.();
-      off2?.();
-      off3?.();
+      off1?.(); off2?.(); off3?.();
     };
-  }, [todayISO, role, uid]);
+  }, [buildingId, todayISO, role, uid]);
 
-  const handleRefresh = () => {
+  const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
-    setTimeout(() => setIsRefreshing(false), 400);
-  };
+    const t = setTimeout(() => setIsRefreshing(false), 400);
+    return () => clearTimeout(t);
+  }, []);
 
   if (loading) {
     return (
@@ -393,7 +398,7 @@ function TaskPage() {
     );
   }
 
-  const openScreen = (item: any) => {
+  const openScreen = useCallback((item: any) => {
     router.push({
       pathname: "/taskClicked",
       params: {
@@ -405,9 +410,10 @@ function TaskPage() {
         taskStatus: item.status,
         taskCreatedBy: item.createdBy,
         taskCreatedAt: item.createdAt?.toDate?.().toLocaleString?.(),
+        buildingId,
       },
     });
-  };
+  }, [buildingId]);
 
   const isComplete = (item: any) =>
     String(item.status ?? "").toLowerCase() === "completed";
@@ -415,7 +421,7 @@ function TaskPage() {
     const v = item.assignedWorkers ?? item.assignedTo ?? null;
     if (Array.isArray(v)) return v.length > 0;
     return !!v;
-  };
+    };
   const getStatusColor = (item: any) => {
     if (isComplete(item)) return "#22C55E";
     if (hasAssignee(item)) return "#EAB308";
@@ -432,10 +438,14 @@ function TaskPage() {
     return `${prefix}${nb.toFormat("ccc HH:mm")}`;
   };
 
-  //  Manager-only delete UI + guard. Employees can't even trigger it.
-  const confirmDeleteTask = (id: string, close?: () => void) => {
+  // Manager-only delete UI + guard. Employees can't even trigger it.
+  const confirmDeleteTask = useCallback((id: string, close?: () => void) => {
     if (role !== "manager") {
       Alert.alert("Not allowed", "Only managers can delete tasks.");
+      return;
+    }
+    if (!buildingId) {
+      Alert.alert("Select a building first");
       return;
     }
     Alert.alert(
@@ -448,7 +458,8 @@ function TaskPage() {
           style: "destructive",
           onPress: async () => {
             try {
-              await deleteDoc(doc(db, "tasks", id)); // Rules enforce this too
+              const ref = doc(db, "buildings", buildingId, "tasks", id);
+              await deleteDoc(ref);
             } catch (e: any) {
               Alert.alert("Error", e?.message || "Failed to delete task.");
             } finally {
@@ -459,7 +470,7 @@ function TaskPage() {
       ],
       { cancelable: true }
     );
-  };
+  }, [role, buildingId]);
 
   // pulse for active tasks
   const pulse = useRef(new Animated.Value(0)).current;
@@ -484,7 +495,7 @@ function TaskPage() {
     return () => loop.stop();
   }, [pulse]);
 
-  const glowStyle = (isActive: boolean) => {
+  const glowStyle = useCallback((isActive: boolean) => {
     if (!isActive) return {};
     const intensity = pulse.interpolate({
       inputRange: [0, 1],
@@ -498,11 +509,11 @@ function TaskPage() {
       shadowRadius: 12,
       elevation: 8,
     } as any;
-  };
+  }, [isDark, pulse]);
 
-  const renderCard = (item: any) => {
+  const renderCard = useCallback((item: any) => {
     const isActive = item.priority === activePriority;
-    const canDelete = role === "manager"; // 👈 only managers can swipe-delete
+    const canDelete = role === "manager";
 
     return (
       <SwipeableItem
@@ -561,15 +572,31 @@ function TaskPage() {
         </Animated.View>
       </SwipeableItem>
     );
-  };
+  }, [activePriority, role, styles, confirmDeleteTask, glowStyle, openScreen]);
 
-  const openHistory = () => router.push("/completedTasks");
+  const openHistory = useCallback(() => router.push("/completedTasks"), []);
 
   const tz = tzNow();
   const end = getActiveWindowEnd(tz);
   const countdown = end
     ? Math.max(0, Math.floor(end.diff(tz, "minutes").minutes))
     : null;
+
+  // If no building selected, gently nudge
+  if (!buildingId) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={{ padding: 16 }}>
+          <Text style={{ fontSize: 18, fontWeight: "800", marginBottom: 8, color: isDark ? "#E5E7EB" : "#111827" }}>
+            Select a building to see tasks
+          </Text>
+          <Text style={{ color: isDark ? "#94A3B8" : "#4B5563" }}>
+            Tasks are scoped per building. Choose one from the Home screen header.
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -636,9 +663,8 @@ function TaskPage() {
       {role === "manager" ? (
         // ========================= MANAGER VIEW (MP buckets) =========================
         <FlatList
-          data={[]}
-          renderItem={() => null}
-          keyExtractor={() => Math.random().toString()}
+          data={[]} // we render via ListHeaderComponent
+          renderItem={null}
           contentContainerStyle={styles.scrollContainer}
           refreshing={isRefreshing}
           onRefresh={handleRefresh}
@@ -720,9 +746,8 @@ function TaskPage() {
       ) : (
         // ========================= EMPLOYEE VIEW (EP buckets) =========================
         <FlatList
-          data={[]}
-          renderItem={() => null}
-          keyExtractor={() => Math.random().toString()}
+          data={[]} // we render via ListHeaderComponent
+          renderItem={null}
           contentContainerStyle={styles.scrollContainer}
           refreshing={isRefreshing}
           onRefresh={handleRefresh}
@@ -929,7 +954,7 @@ const getStyles = (isDark: boolean) =>
 
     /* Underlay only behind the row (not full page) */
     underlayLeft: {
-      ...StyleSheet.absoluteFillObject, // fill just the row area
+      ...StyleSheet.absoluteFillObject,
       backgroundColor: "#EF4444",
       borderRadius: 16,
       alignItems: "center",

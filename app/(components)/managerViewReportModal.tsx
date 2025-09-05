@@ -14,6 +14,7 @@ import { useTheme } from "../ThemeContext";
 import { useUser } from "../UserContext";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useBuilding } from "../BuildingContext"; // 👈 NEW
 
 type Report = {
   id: string;
@@ -40,11 +41,21 @@ function ManagerViewReportsModal({ visible, onClose }: ReportModalProps) {
   const isDark = theme === "dark";
   const s = getStyles(isDark);
 
+  // 👇 current building
+  const { buildingId } = useBuilding();
+
   useEffect(() => {
     if (!visible) return;
 
+    // If there's no building selected, clear and bail
+    if (!buildingId) {
+      setPendingReports([]);
+      return;
+    }
+
+    // /buildings/{buildingId}/reports where managerHasReviewed == false
     const qReports = query(
-      collection(db, "reports"),
+      collection(db, "buildings", buildingId, "reports"),
       where("managerHasReviewed", "==", false)
     );
 
@@ -64,14 +75,16 @@ function ManagerViewReportsModal({ visible, onClose }: ReportModalProps) {
     );
 
     return () => unsub();
-  }, [visible]);
+  }, [visible, buildingId]);
 
   if (!visible) return null;
 
   const openReport = (r: Report) => {
+    if (!buildingId) return;
     router.push({
       pathname: "/reportClicked",
       params: {
+        buildingId, // 👈 pass it through
         reportId: r.id,
         type: r.type ?? "",
         location: r.location ?? "",
@@ -101,7 +114,17 @@ function ManagerViewReportsModal({ visible, onClose }: ReportModalProps) {
             </TouchableOpacity>
           </View>
 
-          {loading ? (
+          {/* No building selected */}
+          {!buildingId ? (
+            <View style={s.center}>
+              <Ionicons
+                name="business-outline"
+                size={24}
+                color={isDark ? "#94A3B8" : "#64748B"}
+              />
+              <Text style={s.emptyText}>Select a building to view its reports.</Text>
+            </View>
+          ) : loading ? (
             <View style={s.center}>
               <ActivityIndicator color={isDark ? "#fff" : "#000"} />
               <Text style={s.loadingText}>Loading…</Text>
@@ -185,8 +208,8 @@ const getStyles = (isDark: boolean) =>
       padding: 12,
     },
     modalContainer: {
-      width: "85%" as `${number}%`,          // typed % to satisfy RN types
-      maxHeight: "70%" as `${number}%`,      // typed % to satisfy RN types
+      width: "85%" as `${number}%`,
+      maxHeight: "70%" as `${number}%`,
       borderRadius: 16,
       padding: 16,
       backgroundColor: isDark ? "#1F2937" : "#FFFFFF",

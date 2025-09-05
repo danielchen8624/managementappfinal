@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useMemo } from "react";
 import { router } from "expo-router";
 import {
   View,
@@ -12,6 +12,8 @@ import {
   Animated,
   Easing,
   ScrollView,
+  Modal,
+  FlatList,
 } from "react-native";
 import {
   addDoc,
@@ -25,6 +27,7 @@ import {
   getDocs,
   onSnapshot,
   orderBy,
+  // getDoc, setDoc // (keep handy if needed later)
 } from "firebase/firestore";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { db, auth } from "../../firebaseConfig";
@@ -32,11 +35,14 @@ import ProjectModal from "../(components)/taskModal";
 import ReportModal from "../(components)/reportModal";
 import ManagerViewReportsModal from "../(components)/managerViewReportModal";
 import CurrentTaskModal from "../(components)/currentTaskModal";
-import TaskReviewModal from "../(components)/taskReviewModal"; 
+import TaskReviewModal from "../(components)/taskReviewModal";
 import { useUser } from "../UserContext";
 import { Ionicons, MaterialIcons, FontAwesome5 } from "@expo/vector-icons";
 import { useTheme } from "../ThemeContext";
 import { useShiftTimer } from "../(hooks)/secondsCounter";
+
+// 🔑 Building context
+import { useBuilding } from "../BuildingContext";
 
 const { height: SCREEN_H } = Dimensions.get("window");
 
@@ -49,12 +55,18 @@ type LatestReport = {
   status?: string;
 };
 
+type Building = {
+  id: string;
+  name?: string;
+  address?: string;
+};
+
 function HomePage() {
   const [taskModal, setTaskModal] = useState(false);
   const [reportModal, setReportModal] = useState(false);
   const [currentTaskModal, setCurrentTaskModal] = useState(false);
   const [managerViewReportModal, setManagerViewReportModal] = useState(false);
-  const [reviewModal, setReviewModal] = useState(false); // 👈 NEW
+  const [reviewModal, setReviewModal] = useState(false);
   const [currentShiftId, setCurrentShiftId] = useState("");
 
   const [latestReport, setLatestReport] = useState<LatestReport | null>(null);
@@ -78,7 +90,53 @@ function HomePage() {
   const uid = auth.currentUser?.uid;
   const { hhmmss } = useShiftTimer(uid);
 
-  // ---- AsyncStorage helpers ----
+  // 🌆 Building context
+  const { buildingId, setBuildingId } = useBuilding();
+
+  // ---- Building-scoped refs (reads/writes only inside the current building) ----
+  const subcol = (sub: "tasks" | "reports" | "messages") =>
+    buildingId ? collection(db, "buildings", buildingId, sub) : null;
+
+  const docIn = (sub: "tasks" | "reports" | "messages", id: string) =>
+    buildingId ? doc(db, "buildings", buildingId, sub, id) : null;
+
+  // ---- Building picker state ----
+  const [buildingPickerOpen, setBuildingPickerOpen] = useState(false);
+  const [buildings, setBuildings] = useState<Building[]>([]);
+  const [buildingsLoading, setBuildingsLoading] = useState(false);
+
+  // Load buildings the user can see (adjust filter to your membership model)
+  useEffect(() => {
+    (async () => {
+      setBuildingsLoading(true);
+      try {
+        const colRef = collection(db, "buildings");
+        // Example membership filter if you store array of member UIDs:
+        // const qy = query(colRef, where("members", "array-contains", uid));
+        const qy = query(colRef, limit(100));
+        const snap = await getDocs(qy);
+        const list: Building[] = snap.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as any),
+        }));
+        setBuildings(list);
+      } catch (e) {
+        console.error("Failed to load buildings:", e);
+        Alert.alert("Error", "Could not load buildings.");
+      } finally {
+        setBuildingsLoading(false);
+      }
+    })();
+  }, [uid]);
+
+  // Resolve current building name for header
+  const currentBuildingName = useMemo(() => {
+    if (!buildingId) return null;
+    const b = buildings.find((x) => x.id === buildingId);
+    return b?.name || `#${buildingId.slice(0, 6)}`;
+  }, [buildingId, buildings]);
+
+  // ---- AsyncStorage helpers (shift) ----
   const shiftKey = (uid: string) => `currentShiftId:${uid}`;
   const saveShiftId = async (uid: string, id: string) => {
     try {
@@ -121,9 +179,17 @@ function HomePage() {
     })();
   }, [uid]);
 
-  // Subscribe to latest report (for the View Reports button subtitle)
+  // 📥 Subscribe to latest report INSIDE the building (scoped)
   useEffect(() => {
-    const qy = query(collection(db, "reports"), orderBy("createdAt", "desc"), limit(1));
+    setLatestLoading(true);
+    if (!buildingId) {
+      setLatestReport(null);
+      setLatestLoading(false);
+      return;
+    }
+    const reportsRef = subcol("reports");
+    if (!reportsRef) return;
+    const qy = query(reportsRef, orderBy("createdAt", "desc"), limit(1));
     const unsub = onSnapshot(
       qy,
       (snap) => {
@@ -146,7 +212,7 @@ function HomePage() {
       () => setLatestLoading(false)
     );
     return () => unsub();
-  }, []);
+  }, [buildingId]);
 
   if (loading) {
     return (
@@ -157,7 +223,7 @@ function HomePage() {
     );
   }
 
-  // Clock In/Out
+  // ⏱️ Clock In/Out (user-scoped; not tied to building)
   const handleClockIn = async () => {
     const uid = auth.currentUser?.uid;
     if (!uid) {
@@ -191,16 +257,13 @@ function HomePage() {
     }
   };
 
-  // Helper: trim text for preview
   const trim = (s?: string, n: number = 64) => {
     if (!s) return "";
     return s.length > n ? s.slice(0, n - 1) + "…" : s;
   };
 
-  // ⚠️ Keep as requested — but also open the modal right away
-  const openVerifyCompleted = () => router.push("/home"); // do not change
+  const openVerifyCompleted = () => router.push("/home"); // keep
 
-  // Action button component
   const ActionButton = ({
     onPress,
     icon,
@@ -209,6 +272,7 @@ function HomePage() {
     fullWidth = false,
     size = "md",
     style,
+    disabled = false,
   }: {
     onPress: () => void;
     icon?: React.ReactNode;
@@ -217,14 +281,21 @@ function HomePage() {
     fullWidth?: boolean;
     size?: "md" | "lg" | "xl";
     style?: any;
+    disabled?: boolean;
   }) => {
     const sizeStyle = size === "xl" ? s.btnXL : size === "lg" ? s.btnLG : s.btnMD;
-
     return (
       <TouchableOpacity
         onPress={onPress}
-        style={[s.btnBase, sizeStyle, fullWidth && { width: "100%" }, style]}
-        activeOpacity={0.9}
+        style={[
+          s.btnBase,
+          sizeStyle,
+          fullWidth && { width: "100%" },
+          style,
+          disabled && { opacity: 0.5 },
+        ]}
+        activeOpacity={disabled ? 1 : 0.9}
+        disabled={disabled}
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       >
         <View style={s.iconPill}>
@@ -266,6 +337,26 @@ function HomePage() {
           <View style={{ flexDirection: "row", alignItems: "baseline" }}>
             <Text style={s.headerTitle}>Home</Text>
             {!!role && <Text style={s.headerRole}> • {role}</Text>}
+            {/* Current building pill */}
+            <TouchableOpacity
+              onPress={() => setBuildingPickerOpen(true)}
+              style={s.buildingPill}
+              activeOpacity={0.85}
+            >
+              <Ionicons
+                name="business-outline"
+                size={14}
+                color={isDark ? "#E5E7EB" : "#111827"}
+              />
+              <Text style={s.buildingPillText} numberOfLines={1}>
+                {currentBuildingName ?? "Select Building"}
+              </Text>
+              <Ionicons
+                name="chevron-down"
+                size={14}
+                color={isDark ? "#E5E7EB" : "#111827"}
+              />
+            </TouchableOpacity>
           </View>
 
           {role === "manager" && (
@@ -280,13 +371,23 @@ function HomePage() {
           )}
         </View>
 
-        {/* Employee quick status */}
-        {role === "employee" && (
-          <View style={s.statusRow}>
-            <View style={[s.statusChip, currentShiftId ? s.statusOn : s.statusOff]}>
-              <View style={[s.dot, { backgroundColor: currentShiftId ? "#10B981" : "#9CA3AF" }]} />
-              <Text style={s.statusText}>
-                {currentShiftId ? `On shift • ${hhmmss}` : "Not clocked in"}
+        {/* If no building selected, nudge */}
+        {!buildingId && (
+          <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+            <View
+              style={{
+                padding: 12,
+                borderRadius: 10,
+                backgroundColor: isDark ? "#1F2937" : "#FFF7ED",
+                borderWidth: 1,
+                borderColor: isDark ? "#334155" : "#FED7AA",
+              }}
+            >
+              <Text style={{ fontWeight: "800", color: isDark ? "#F3F4F6" : "#7C2D12" }}>
+                Select a building to continue
+              </Text>
+              <Text style={{ marginTop: 4, color: isDark ? "#CBD5E1" : "#7C2D12" }}>
+                All actions and lists are scoped to the chosen building.
               </Text>
             </View>
           </View>
@@ -311,20 +412,30 @@ function HomePage() {
                 <View style={s.row}>
                   <View style={s.half}>
                     <ActionButton
-                      onPress={() => setTaskModal(true)}
+                      onPress={() =>
+                        buildingId
+                          ? setTaskModal(true)
+                          : Alert.alert("Pick a building first")
+                      }
                       icon={<FontAwesome5 name="project-diagram" size={18} color="#FFFFFF" />}
                       label="Add New Task"
                       size="lg"
                       style={s.equalHeight}
+                      disabled={!buildingId}
                     />
                   </View>
                   <View style={s.half}>
                     <ActionButton
-                      onPress={() => router.push("/scheduler")}
+                      onPress={() =>
+                        buildingId
+                          ? router.push("/scheduler")
+                          : Alert.alert("Pick a building first")
+                      }
                       icon={<Ionicons name="calendar" size={20} color="#FFFFFF" />}
                       label="Scheduler"
                       size="lg"
                       style={s.equalHeight}
+                      disabled={!buildingId}
                     />
                   </View>
                 </View>
@@ -332,20 +443,30 @@ function HomePage() {
                 <View style={s.twoThirdsSpacer} />
 
                 <ActionButton
-                  onPress={() => setManagerViewReportModal(true)}
+                  onPress={() =>
+                    buildingId
+                      ? setManagerViewReportModal(true)
+                      : Alert.alert("Pick a building first")
+                  }
                   icon={<MaterialIcons name="assessment" size={20} color="#FFFFFF" />}
                   label="View Reports"
                   subtitle={reportsSubtitle}
                   size="xl"
                   fullWidth
+                  disabled={!buildingId}
                 />
                 <View style={{ height: 10 }} />
                 <ActionButton
-                  onPress={() => router.push("/manageEmployees")}
+                  onPress={() =>
+                    buildingId
+                      ? router.push("/manageEmployees")
+                      : Alert.alert("Pick a building first")
+                  }
                   icon={<Ionicons name="people" size={20} color="#FFFFFF" />}
                   label="Manage Employees"
                   size="xl"
                   fullWidth
+                  disabled={!buildingId}
                 />
               </View>
 
@@ -353,8 +474,9 @@ function HomePage() {
               <View style={[s.verifyCard, { backgroundColor: isDark ? "#1F2937" : "#F3F4F6" }]}>
                 <TouchableOpacity
                   onPress={() => {
-                    openVerifyCompleted();   // keep your existing call
-                    setReviewModal(true);    // 👈 ALSO open the modal
+                    if (!buildingId) return Alert.alert("Pick a building first");
+                    openVerifyCompleted();
+                    setReviewModal(true);
                   }}
                   style={[s.verifyBtn, { backgroundColor: isDark ? "#2563EB" : "#3B82F6" }]}
                   activeOpacity={0.9}
@@ -386,39 +508,145 @@ function HomePage() {
                 fullWidth
               />
               <ActionButton
-                onPress={() => setCurrentTaskModal(true)}
+                onPress={() =>
+                  buildingId
+                    ? setCurrentTaskModal(true)
+                    : Alert.alert("Pick a building first")
+                }
                 icon={<MaterialIcons name="assignment" size={18} color="#FFFFFF" />}
                 label="View Current Tasks"
                 size="lg"
                 fullWidth
+                disabled={!buildingId}
               />
               <ActionButton
-                onPress={() => setReportModal(true)}
+                onPress={() =>
+                  buildingId ? setReportModal(true) : Alert.alert("Pick a building first")
+                }
                 icon={<MaterialIcons name="report-problem" size={18} color="#FFFFFF" />}
                 label="Report Issue"
                 size="lg"
                 fullWidth
+                disabled={!buildingId}
               />
             </View>
           )}
         </ScrollView>
       </SafeAreaView>
 
-      {/* Modals */}
-      {taskModal && <ProjectModal visible={taskModal} onClose={() => setTaskModal(false)} />}
-      {currentTaskModal && (
+      {/* Modals (open only when buildingId exists) */}
+      {taskModal && buildingId && (
+        <ProjectModal visible={taskModal} onClose={() => setTaskModal(false)} />
+      )}
+      {currentTaskModal && buildingId && (
         <CurrentTaskModal visible={currentTaskModal} onClose={() => setCurrentTaskModal(false)} />
       )}
-      {reportModal && <ReportModal visible={reportModal} onClose={() => setReportModal(false)} />}
-      {managerViewReportModal && (
+      {reportModal && buildingId && (
+        <ReportModal visible={reportModal} onClose={() => setReportModal(false)} />
+      )}
+      {managerViewReportModal && buildingId && (
         <ManagerViewReportsModal
           visible={managerViewReportModal}
           onClose={() => setManagerViewReportModal(false)}
         />
       )}
-      {reviewModal && (
+      {reviewModal && buildingId && (
         <TaskReviewModal visible={reviewModal} onClose={() => setReviewModal(false)} />
       )}
+
+      {/* Building Picker Modal */}
+      <Modal
+        visible={buildingPickerOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setBuildingPickerOpen(false)}
+      >
+        <View style={s.modalBackdrop}>
+          <View style={[s.modalCard, { backgroundColor: isDark ? "#111827" : "#FFFFFF" }]}>
+            <View style={s.modalHeader}>
+              <Text style={s.modalTitle}>Select Building</Text>
+              <TouchableOpacity onPress={() => setBuildingPickerOpen(false)} style={s.closeBtn}>
+                <Ionicons name="close" size={20} color={isDark ? "#E5E7EB" : "#111827"} />
+              </TouchableOpacity>
+            </View>
+
+            {buildingsLoading ? (
+              <View style={[s.center, { paddingVertical: 16 }]}>
+                <ActivityIndicator />
+                <Text style={[s.cardSubtitle, { marginTop: 8 }]}>Loading buildings…</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={buildings}
+                keyExtractor={(b) => b.id}
+                ItemSeparatorComponent={() => <View style={{ height: 6 }} />}
+                renderItem={({ item }) => {
+                  const selected = item.id === buildingId;
+                  return (
+                    <TouchableOpacity
+                      onPress={() => {
+                        setBuildingId(item.id);
+                        setBuildingPickerOpen(false);
+                      }}
+                      style={[
+                        s.buildingItem,
+                        {
+                          backgroundColor: selected
+                            ? isDark
+                              ? "#0B3B2F"
+                              : "#ECFDF5"
+                            : isDark
+                            ? "#1F2937"
+                            : "#F3F4F6",
+                          borderColor: selected
+                            ? isDark
+                              ? "#10B981"
+                              : "#34D399"
+                            : isDark
+                            ? "#111827"
+                            : "#E5E7EB",
+                        },
+                      ]}
+                      activeOpacity={0.9}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          style={[
+                            s.buildingName,
+                            { color: isDark ? "#F3F4F6" : "#0F172A" },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {item.name || "Unnamed Building"}
+                        </Text>
+                        {!!item.address && (
+                          <Text
+                            style={[
+                              s.buildingAddress,
+                              { color: isDark ? "#93A4B3" : "#4B5563" },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {item.address}
+                          </Text>
+                        )}
+                      </View>
+                      {selected && (
+                        <Ionicons name="checkmark-circle" size={20} color="#10B981" />
+                      )}
+                    </TouchableOpacity>
+                  );
+                }}
+                ListEmptyComponent={
+                  <Text style={[s.cardSubtitle, { alignSelf: "center", paddingVertical: 12 }]}>
+                    No buildings found.
+                  </Text>
+                }
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -454,6 +682,25 @@ const getStyles = (isDark: boolean) =>
       fontWeight: "700",
       color: isDark ? "#93A4B3" : "#4B5563",
       marginLeft: 8,
+    },
+
+    buildingPill: {
+      marginLeft: 10,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 999,
+      backgroundColor: isDark ? "#111827" : "#E5E7EB",
+      borderWidth: isDark ? 1 : 0,
+      borderColor: isDark ? "#1F2937" : "transparent",
+      maxWidth: 180,
+    },
+    buildingPillText: {
+      fontSize: 12,
+      fontWeight: "800",
+      color: isDark ? "#E5E7EB" : "#111827",
     },
 
     headerIconBtn: {
@@ -605,5 +852,56 @@ const getStyles = (isDark: boolean) =>
       color: "#fff",
       fontWeight: "800",
       fontSize: 16,
+    },
+
+    // Modal styles
+    modalBackdrop: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.35)",
+      justifyContent: "flex-end",
+    },
+    modalCard: {
+      padding: 14,
+      borderTopLeftRadius: 16,
+      borderTopRightRadius: 16,
+      maxHeight: SCREEN_H * 0.55,
+    },
+    modalHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 8,
+    },
+    modalTitle: {
+      fontSize: 16,
+      fontWeight: "900",
+      color: isDark ? "#F3F4F6" : "#0F172A",
+    },
+    closeBtn: {
+      width: 34,
+      height: 34,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: isDark ? "#1F2937" : "#E5E7EB",
+    },
+    buildingItem: {
+      borderRadius: 12,
+      paddingVertical: 12,
+      paddingHorizontal: 12,
+      borderWidth: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+    },
+    buildingName: {
+      fontSize: 15,
+      fontWeight: "900",
+    },
+    buildingAddress: {
+      fontSize: 12,
+      fontWeight: "700",
+      opacity: 0.9,
+      marginTop: 2,
     },
   });

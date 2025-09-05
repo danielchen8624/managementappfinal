@@ -405,6 +405,6 @@ const stylesCard = {
   pill: {
     width: 8,
     borderRadius: 8,
-    height: "80%" as `${number}%`, // ✅ typed percentage fixes TS error
+    height: "80%" as `${number}%`, 
   },
 };
