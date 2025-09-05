@@ -51,7 +51,7 @@ export default function PrivacyPolicyScreen() {
             {"\n\n"}
             **5. Contact**
             {"\n"}If you have questions, please contact us at
-            support@yourapp.com.
+            dcoasismanagement@gmail.com.
           </Text>
         </View>
 

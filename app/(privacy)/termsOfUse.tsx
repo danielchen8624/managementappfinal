@@ -48,7 +48,7 @@ export default function TermsOfUseScreen() {
             5. **Changes**: We may update these terms from time to time. Your
             continued use of the app means you accept the updated terms.
             {"\n\n"}
-            If you have questions, contact us at support@yourapp.com.
+            If you have questions, contact us at dcoasismanagement@gmail.com.
           </Text>
         </View>
 

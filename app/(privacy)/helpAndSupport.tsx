@@ -1,4 +1,3 @@
-// app/helpAndSupport.tsx
 import React, { useMemo } from "react";
 import {
   SafeAreaView,
@@ -16,12 +15,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "./../ThemeContext"; 
 import { router } from "expo-router";
 
-const SUPPORT_EMAIL = "support@yourapp.com";
+const SUPPORT_EMAIL = "dcoasismanagement@gmail.com";
+const SUPPORT_PHONE = "6479154852";
 const SUPPORT_URL = "https://yourapp.com/support";
 const PRIVACY_URL = "https://yourapp.com/privacy";
 const TERMS_URL = "https://yourapp.com/terms";
 const ABOUT_TEXT =
-  "YourApp helps property managers schedule, assign, and track housekeeping & maintenance tasks in real time.";
+  "DCOasis helps property managers schedule, assign, and track housekeeping & maintenance tasks in real time.";
 
 export default function HelpAndSupport() {
   const { theme } = useTheme();
@@ -30,10 +30,8 @@ export default function HelpAndSupport() {
 
   const openExternal = async (url: string) => {
     try {
-      // Open in in-app browser when available; fallback to system browser.
       const result = await WebBrowser.openBrowserAsync(url);
       if (result.type === "cancel") {
-        // If user cancels or in-app browser isn't available, try system
         const canOpen = await Linking.canOpenURL(url);
         if (canOpen) Linking.openURL(url);
       }
@@ -62,7 +60,6 @@ export default function HelpAndSupport() {
       if (canOpen) {
         await Linking.openURL(mailto);
       } else {
-        // Fallback: copy email to clipboard so user can paste in their mail app
         await Clipboard.setStringAsync(to);
         Alert.alert(
           "Email app not found",
@@ -75,6 +72,20 @@ export default function HelpAndSupport() {
         "Something went wrong",
         `We copied ${to} to your clipboard. Paste it into your email app to contact us.`
       );
+    }
+  };
+
+  const openPhone = async (phone: string) => {
+    const telUrl = `tel:${phone}`;
+    try {
+      const canOpen = await Linking.canOpenURL(telUrl);
+      if (canOpen) {
+        await Linking.openURL(telUrl);
+      } else {
+        Alert.alert("Unable to make a call", `Please dial ${phone} manually.`);
+      }
+    } catch {
+      Alert.alert("Something went wrong", `Please dial ${phone} manually.`);
     }
   };
 
@@ -117,6 +128,12 @@ export default function HelpAndSupport() {
               })
             }
             testID="contact-email"
+          />
+          <Item
+            icon="call-outline"
+            label="Call Support"
+            onPress={() => openPhone(SUPPORT_PHONE)}
+            testID="contact-phone"
           />
           <Item
             icon="globe-outline"
@@ -174,6 +191,12 @@ export default function HelpAndSupport() {
             <Text style={s.metaLabel}>Support Email</Text>
             <TouchableOpacity onPress={() => openEmail({})}>
               <Text style={s.linkText}>{SUPPORT_EMAIL}</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={s.metaRow}>
+            <Text style={s.metaLabel}>Support Phone</Text>
+            <TouchableOpacity onPress={() => openPhone(SUPPORT_PHONE)}>
+              <Text style={s.linkText}>{SUPPORT_PHONE}</Text>
             </TouchableOpacity>
           </View>
         </View>

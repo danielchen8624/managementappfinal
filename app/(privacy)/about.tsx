@@ -28,7 +28,7 @@ export default function AboutScreen() {
 
         <View style={s.card}>
           <Text style={s.sectionText}>
-            <Text style={{ fontWeight: "700" }}>YourApp</Text> helps property
+            <Text style={{ fontWeight: "700" }}>DCOasis</Text> helps property
             managers and employees organize, assign, and track housekeeping and
             maintenance tasks in real time. It’s built to streamline workflows,
             improve communication, and keep everyone on the same page.
@@ -44,7 +44,7 @@ export default function AboutScreen() {
           <Text style={s.sectionLabel}>Developer</Text>
           <Text style={s.sectionText}>Daniel Chen</Text>
           <Text style={[s.sectionText, { marginTop: 4 }]}>
-            Support: support@yourapp.com
+            Support: dcoasismanagement@gmail.com
           </Text>
         </View>
 

@@ -14,7 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../ThemeContext";
 import { router } from "expo-router";
 
-const SUPPORT_EMAIL = "support@yourapp.com";
+const SUPPORT_EMAIL = "dcoasismanagement@gmail.com";
 const SUPPORT_URL = "https://yourapp.com/support";
 const TWITTER_URL = "https://twitter.com/yourapp"; // optional
 const INSTAGRAM_URL = "https://instagram.com/yourapp"; // optional
