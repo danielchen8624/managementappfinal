@@ -280,9 +280,9 @@ function TaskPage() {
     // Build refs here to avoid identity churn across renders
     const tasksRef = collection(db, "buildings", buildingId, "tasks");
 
-    const q1 = query(tasksRef, where("priority", "==", 1), where("forToday", "==", true), orderBy("order", "asc"));
-    const q2 = query(tasksRef, where("priority", "==", 2), where("forToday", "==", true), orderBy("order", "asc"));
-    const q3 = query(tasksRef, where("priority", "==", 3), where("forToday", "==", true), orderBy("order", "asc"));
+    const q1 = query(tasksRef, where("priority", "==", 1), where("forToday", "==", true));
+    const q2 = query(tasksRef, where("priority", "==", 2), where("forToday", "==", true));
+    const q3 = query(tasksRef, where("priority", "==", 3), where("forToday", "==", true));
 
     const u1 = onSnapshot(q1, (snap) => {
       const items: any[] = [];

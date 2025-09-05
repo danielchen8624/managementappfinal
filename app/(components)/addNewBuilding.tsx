@@ -9,6 +9,9 @@ import {
   where,
   onSnapshot,
 } from "firebase/firestore";
+import { useBuilding } from "../BuildingContext";
+import { useUser } from "../UserContext";
+import { router } from "expo-router";
 
 function AddNewBuilding() {
   const [buildingName, setBuildingName] = useState("");
@@ -29,7 +32,8 @@ function AddNewBuilding() {
         });
         setBuildingName("");
         setAddress("");
-        alert("Building added successfully");
+        alert("Building added successfully. Restart app to see changes");
+        router.back();
       } catch (error) {
         console.error("Error adding building: ", error);
         alert("Error adding building");

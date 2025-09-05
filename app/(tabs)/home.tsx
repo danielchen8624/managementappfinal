@@ -43,6 +43,7 @@ import { useShiftTimer } from "../(hooks)/secondsCounter";
 
 // 🔑 Building context
 import { useBuilding } from "../BuildingContext";
+import { set } from "firebase/database";
 
 const { height: SCREEN_H } = Dimensions.get("window");
 
@@ -638,10 +639,23 @@ function HomePage() {
                   );
                 }}
                 ListEmptyComponent={
+                  <View style={s.center}>
                   <Text style={[s.cardSubtitle, { alignSelf: "center", paddingVertical: 12 }]}>
                     No buildings found.
                   </Text>
+                  <TouchableOpacity
+                    onPress = {() => {
+                      setBuildingPickerOpen(false)
+                      router.push("/addNewBuilding")
+                    }}
+                    style={[s.btnBase, { backgroundColor: isDark ? "#2563EB" : "#3B82F6", alignSelf: "center", paddingHorizontal: 20 }]}
+                    activeOpacity={0.9}
+                  >
+                    <Text style={s.btnText}>Add New Building</Text>
+                  </TouchableOpacity>
+                  </View>
                 }
+                
               />
             )}
           </View>
