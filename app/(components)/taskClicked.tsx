@@ -24,6 +24,7 @@ import {
 import { useTheme } from "../ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
 import { useUser } from "../UserContext";
+import { useBuilding } from "../BuildingContext";
 
 type Employee = {
   id: string;
@@ -31,6 +32,8 @@ type Employee = {
 };
 
 export default function ToDoScreen() {
+  const { buildingId } = useBuilding();
+
   const { theme } = useTheme();
   const isDark = theme === "dark";
   const s = getStyles(isDark);
@@ -51,10 +54,10 @@ export default function ToDoScreen() {
 
   const [employees, setEmployees] = useState<Employee[]>([]);
 
-  // Subscribe to task
+  // Subscribe to the building-scoped task
   useEffect(() => {
-    if (!taskId) return;
-    const ref = doc(db, "tasks", taskId);
+    if (!taskId || !buildingId) return;
+    const ref = doc(db, "buildings", buildingId, "tasks", taskId); // fixed path
     const unsub = onSnapshot(ref, (snap) => {
       if (!snap.exists()) return;
       const data = snap.data() || {};
@@ -65,7 +68,7 @@ export default function ToDoScreen() {
       );
     });
     return () => unsub();
-  }, [taskId]);
+  }, [taskId, buildingId]); // include buildingId
 
   // Fetch employees (manager only)
   useEffect(() => {
@@ -92,6 +95,7 @@ export default function ToDoScreen() {
 
   const handleCompleteTask = async () => {
     if (!taskId) return console.error("No task ID found!");
+    if (!buildingId) return Alert.alert("Pick a building first.");
     if (managerHasReviewed) {
       Alert.alert(
         "Already reviewed",
@@ -100,7 +104,7 @@ export default function ToDoScreen() {
       return;
     }
     try {
-      const taskRef = doc(db, "tasks", taskId);
+      const taskRef = doc(db, "buildings", buildingId, "tasks", taskId);
       await updateDoc(taskRef, {
         status: "completed",
         completedAt: serverTimestamp(),
@@ -117,12 +121,13 @@ export default function ToDoScreen() {
 
   const handleAccept = async () => {
     if (!taskId) return console.error("No task ID found!");
+    if (!buildingId) return Alert.alert("Pick a building first.");
     if (managerHasReviewed) {
       Alert.alert("Already reviewed", "This task is finalized by a manager.");
       return;
     }
     try {
-      const taskRef = doc(db, "tasks", taskId);
+      const taskRef = doc(db, "buildings", buildingId, "tasks", taskId);
       await updateDoc(taskRef, {
         status: "in_progress",
         assignedWorkers: arrayUnion(auth.currentUser?.uid || "unknown"),
@@ -145,9 +150,10 @@ export default function ToDoScreen() {
 
   const saveAssignees = async () => {
     if (!taskId) return;
+    if (!buildingId) return Alert.alert("Pick a building first.");
     setSaving(true);
     try {
-      const taskRef = doc(db, "tasks", taskId);
+      const taskRef = doc(db, "buildings", buildingId, "tasks", taskId);
       await updateDoc(taskRef, { assignedWorkers });
       Alert.alert("Saved", "Assignees updated.");
     } catch (e) {
@@ -336,14 +342,20 @@ export default function ToDoScreen() {
                 </>
               ) : showAcceptSection ? (
                 <>
-                  <Text style={s.question}>Do you want to accept this task?</Text>
+                  <Text style={s.question}>
+                    Do you want to accept this task?
+                  </Text>
                   <View style={s.buttonCol}>
                     <TouchableOpacity
                       onPress={handleAccept}
                       style={s.primaryBtn}
                       activeOpacity={0.9}
                     >
-                      <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={18}
+                        color="#fff"
+                      />
                       <Text style={s.primaryBtnText}>Yes, I’ll take it</Text>
                     </TouchableOpacity>
 
@@ -371,7 +383,9 @@ export default function ToDoScreen() {
                       activeOpacity={0.9}
                     >
                       <Ionicons name="checkmark-done" size={18} color="#fff" />
-                      <Text style={s.primaryBtnText}>I’ve completed this task</Text>
+                      <Text style={s.primaryBtnText}>
+                        I’ve completed this task
+                      </Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -501,7 +515,6 @@ const getStyles = (isDark: boolean) =>
       backgroundColor: isDark ? "#0B1220" : "#F3F4F6",
       paddingVertical: 4,
       paddingHorizontal: 6,
-      // The height cap lives on the FlatList style prop above
     },
     checkRow: {
       flexDirection: "row",

@@ -15,6 +15,7 @@ import {
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { db, auth } from "../../firebaseConfig";
 import { useTheme } from "../ThemeContext";
+import { useBuilding } from "../BuildingContext"; // 👈 pull current building
 
 type ReportModalProps = {
   visible: boolean;
@@ -33,6 +34,9 @@ export default function ReportModal({ visible, onClose }: ReportModalProps) {
   const isDark = theme === "dark";
   const s = getStyles(isDark);
 
+  // 🌆 current building
+  const { buildingId } = useBuilding();
+
   // Toggle (animated thumb)
   const ToggleSwitch = ({
     label,
@@ -44,7 +48,6 @@ export default function ReportModal({ visible, onClose }: ReportModalProps) {
     onToggle: () => void;
   }) => {
     const translate = new Animated.Value(value ? 22 : 0);
-    // animate thumb on each render when value changes
     Animated.timing(translate, {
       toValue: value ? 22 : 0,
       duration: 160,
@@ -88,9 +91,14 @@ export default function ReportModal({ visible, onClose }: ReportModalProps) {
 
   const handleSubmit = async () => {
     if (submitting) return;
+
     const user = auth.currentUser;
     if (!user) {
       Alert.alert("You must be logged in to submit a report.");
+      return;
+    }
+    if (!buildingId) {
+      Alert.alert("Select a building first", "Reports are scoped per building.");
       return;
     }
     if (!title.trim() || !description.trim()) {
@@ -106,7 +114,9 @@ export default function ReportModal({ visible, onClose }: ReportModalProps) {
 
     try {
       setSubmitting(true);
-      await addDoc(collection(db, "reports"), {
+
+      // 👇 write inside the building's reports subcollection
+      await addDoc(collection(db, "buildings", buildingId, "reports"), {
         title: title.trim(),
         description: description.trim(),
         aptNumber: aptNumber.trim() || null,
@@ -115,6 +125,7 @@ export default function ReportModal({ visible, onClose }: ReportModalProps) {
         createdAt: serverTimestamp(),
         visibility: "manager_supervisor",
         managerHasReviewed: false,
+        buildingId, // helpful for admin/global queries
       });
 
       Alert.alert("Report submitted");
@@ -284,7 +295,6 @@ const getStyles = (isDark: boolean) =>
       textAlignVertical: "top",
     },
 
-    // Toggles
     toggleRow: {
       flexDirection: "row",
       alignItems: "center",
@@ -304,7 +314,6 @@ const getStyles = (isDark: boolean) =>
       backgroundColor: "#fff",
     },
 
-    // Submit
     submitBtn: {
       marginTop: 12,
       backgroundColor: isDark ? "#2563EB" : "#1D4ED8",

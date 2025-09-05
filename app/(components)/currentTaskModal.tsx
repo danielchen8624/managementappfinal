@@ -8,12 +8,18 @@ import {
   ScrollView,
 } from "react-native";
 import { db, auth } from "../../firebaseConfig";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
+import {
+  collection,
+  query,
+  where,
+  onSnapshot,
+} from "firebase/firestore";
 import React, { useState, useEffect, useMemo } from "react";
 import { useUser } from "../UserContext";
 import { useTheme } from "../ThemeContext";
 import { router } from "expo-router";
 import ElapsedTimer from "./elapsedTimer";
+import { useBuilding } from "../BuildingContext";
 
 type Task = {
   id: string;
@@ -39,14 +45,23 @@ function CurrentTaskModal({ visible, onClose }: TaskModalProps) {
   const isDark = theme === "dark";
   const s = getStyles(isDark);
 
+  // ✅ building scope
+  const { buildingId } = useBuilding();
+
   useEffect(() => {
     const uid = auth.currentUser?.uid;
-    if (!uid) return;
+    if (!uid || !visible) return;
+    if (!buildingId) {
+      setCurrentTasks([]);
+      return;
+    }
 
+    // ✅ read from /buildings/{buildingId}/tasks
+    // include both "assigned" (pre-accept) and "in_progress" (after accept)
     const tasksQ = query(
-      collection(db, "tasks"),
+      collection(db, "buildings", buildingId, "tasks"),
       where("assignedWorkers", "array-contains", uid),
-      where("status", "==", "assigned"),
+      where("status", "in", ["assigned", "in_progress"]),
       where("forToday", "==", true)
     );
 
@@ -62,20 +77,21 @@ function CurrentTaskModal({ visible, onClose }: TaskModalProps) {
     );
 
     return () => unsub();
-  }, [role]);
+  }, [role, buildingId, visible]);
 
   const getStatusColor = (t: Task) => {
-    // status rail color (green if assigned, fallback soft)
-    if ((t.status || "").toLowerCase() === "assigned") return "#22C55E";
+    const st = (t.status || "").toLowerCase();
+    if (st === "assigned") return "#22C55E";     // green
+    if (st === "in_progress") return "#3B82F6";  // blue
     return isDark ? "#475569" : "#E5E7EB";
-    // (If you later add more statuses, expand here.)
   };
 
   const headerTitle = useMemo(() => {
     if (loading) return "Loading…";
+    if (!buildingId) return "Select a Building";
     if (!currentTasks.length) return "No Current Tasks";
     return "Your Current Tasks";
-  }, [loading, currentTasks.length]);
+  }, [loading, currentTasks.length, buildingId]);
 
   const openScreen = (task: Task) => {
     router.push({
@@ -95,6 +111,10 @@ function CurrentTaskModal({ visible, onClose }: TaskModalProps) {
 
   if (!visible) return null;
 
+  const showBodyLoading = loading;
+  const showNoBuilding = !loading && !buildingId;
+  const showEmpty = !loading && buildingId && currentTasks.length === 0;
+
   return (
     <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
       <View style={s.overlay}>
@@ -108,12 +128,18 @@ function CurrentTaskModal({ visible, onClose }: TaskModalProps) {
           </View>
 
           {/* Body */}
-          {loading ? (
+          {showBodyLoading ? (
             <View style={s.center}>
               <ActivityIndicator color={isDark ? "#E5E7EB" : "#111827"} />
               <Text style={s.loadingText}>Fetching tasks…</Text>
             </View>
-          ) : currentTasks.length === 0 ? (
+          ) : showNoBuilding ? (
+            <View style={s.center}>
+              <Text style={s.emptyText}>
+                Pick a building first to view your tasks.
+              </Text>
+            </View>
+          ) : showEmpty ? (
             <View style={s.center}>
               <Text style={s.emptyText}>You have no assigned tasks right now.</Text>
             </View>
@@ -131,7 +157,7 @@ function CurrentTaskModal({ visible, onClose }: TaskModalProps) {
                 >
                   <View style={{ paddingRight: 20 }}>
                     <View style={s.titleRow}>
-                      <Text style={s.taskTitle}>{task.title|| "Untitled Task"}</Text>
+                      <Text style={s.taskTitle}>{task.title || "Untitled Task"}</Text>
                       {!!task.priority && (
                         <View style={s.priorityPill}>
                           <Text style={s.priorityText}>P{task.priority}</Text>
@@ -140,7 +166,7 @@ function CurrentTaskModal({ visible, onClose }: TaskModalProps) {
                     </View>
 
                     <Text style={s.taskMeta}>Room: {task.roomNumber || "N/A"}</Text>
-                    
+
                     {!!task.description && <Text style={s.taskBody}>{task.description}</Text>}
 
                     <ElapsedTimer

@@ -284,7 +284,8 @@ function HomePage() {
     style?: any;
     disabled?: boolean;
   }) => {
-    const sizeStyle = size === "xl" ? s.btnXL : size === "lg" ? s.btnLG : s.btnMD;
+    const sizeStyle =
+      size === "xl" ? s.btnXL : size === "lg" ? s.btnLG : s.btnMD;
     return (
       <TouchableOpacity
         onPress={onPress}
@@ -317,19 +318,23 @@ function HomePage() {
     );
   };
 
-  const reportsSubtitle =
-    latestLoading
-      ? "Loading latest…"
-      : latestReport
-      ? `Latest: ${trim(latestReport.title || latestReport.description || "Untitled")}`
-      : "No reports yet";
+  const reportsSubtitle = latestLoading
+    ? "Loading latest…"
+    : latestReport
+    ? `Latest: ${trim(
+        latestReport.title || latestReport.description || "Untitled"
+      )}`
+    : "No reports yet";
 
   return (
     <View style={s.container}>
       {/* crossfade layers */}
       <View style={[StyleSheet.absoluteFill, { backgroundColor: "#F8FAFC" }]} />
       <Animated.View
-        style={[StyleSheet.absoluteFill, { backgroundColor: "#0F172A", opacity: themeAnim }]}
+        style={[
+          StyleSheet.absoluteFill,
+          { backgroundColor: "#0F172A", opacity: themeAnim },
+        ]}
       />
 
       <SafeAreaView style={{ flex: 1 }}>
@@ -367,10 +372,26 @@ function HomePage() {
               activeOpacity={0.9}
               accessibilityLabel="Request History"
             >
-              <MaterialIcons name="history" size={18} color={isDark ? "#E5E7EB" : "#111827"} />
+              <MaterialIcons
+                name="history"
+                size={18}
+                color={isDark ? "#E5E7EB" : "#111827"}
+              />
             </TouchableOpacity>
           )}
         </View>
+
+        {/* Thin on-shift pill UNDER the header */}
+        {role === "employee" && !!currentShiftId && (
+          <View style={s.shiftThinWrap}>
+            <View style={s.shiftThinBar}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Ionicons name="time-outline" size={14} color="#ECFDF5" />
+                <Text style={s.shiftThinText}>On shift • {hhmmss}</Text>
+              </View>
+            </View>
+          </View>
+        )}
 
         {/* If no building selected, nudge */}
         {!buildingId && (
@@ -384,10 +405,17 @@ function HomePage() {
                 borderColor: isDark ? "#334155" : "#FED7AA",
               }}
             >
-              <Text style={{ fontWeight: "800", color: isDark ? "#F3F4F6" : "#7C2D12" }}>
+              <Text
+                style={{
+                  fontWeight: "800",
+                  color: isDark ? "#F3F4F6" : "#7C2D12",
+                }}
+              >
                 Select a building to continue
               </Text>
-              <Text style={{ marginTop: 4, color: isDark ? "#CBD5E1" : "#7C2D12" }}>
+              <Text
+                style={{ marginTop: 4, color: isDark ? "#CBD5E1" : "#7C2D12" }}
+              >
                 All actions and lists are scoped to the chosen building.
               </Text>
             </View>
@@ -407,7 +435,9 @@ function HomePage() {
               <View className="card" style={s.card}>
                 <View style={s.cardHeader}>
                   <Text style={s.cardTitle}>Manager</Text>
-                  <Text style={s.cardSubtitle}>Quick actions to run the floor</Text>
+                  <Text style={s.cardSubtitle}>
+                    Quick actions to run the floor
+                  </Text>
                 </View>
 
                 <View style={s.row}>
@@ -418,7 +448,13 @@ function HomePage() {
                           ? setTaskModal(true)
                           : Alert.alert("Pick a building first")
                       }
-                      icon={<FontAwesome5 name="project-diagram" size={18} color="#FFFFFF" />}
+                      icon={
+                        <FontAwesome5
+                          name="project-diagram"
+                          size={18}
+                          color="#FFFFFF"
+                        />
+                      }
                       label="Add New Task"
                       size="lg"
                       style={s.equalHeight}
@@ -432,7 +468,9 @@ function HomePage() {
                           ? router.push("/scheduler")
                           : Alert.alert("Pick a building first")
                       }
-                      icon={<Ionicons name="calendar" size={20} color="#FFFFFF" />}
+                      icon={
+                        <Ionicons name="calendar" size={20} color="#FFFFFF" />
+                      }
                       label="Scheduler"
                       size="lg"
                       style={s.equalHeight}
@@ -449,7 +487,13 @@ function HomePage() {
                       ? setManagerViewReportModal(true)
                       : Alert.alert("Pick a building first")
                   }
-                  icon={<MaterialIcons name="assessment" size={20} color="#FFFFFF" />}
+                  icon={
+                    <MaterialIcons
+                      name="assessment"
+                      size={20}
+                      color="#FFFFFF"
+                    />
+                  }
                   label="View Reports"
                   subtitle={reportsSubtitle}
                   size="xl"
@@ -472,14 +516,23 @@ function HomePage() {
               </View>
 
               {/* Verify Completed Tasks Card */}
-              <View style={[s.verifyCard, { backgroundColor: isDark ? "#1F2937" : "#F3F4F6" }]}>
+              <View
+                style={[
+                  s.verifyCard,
+                  { backgroundColor: isDark ? "#1F2937" : "#F3F4F6" },
+                ]}
+              >
                 <TouchableOpacity
                   onPress={() => {
-                    if (!buildingId) return Alert.alert("Pick a building first");
+                    if (!buildingId)
+                      return Alert.alert("Pick a building first");
                     openVerifyCompleted();
                     setReviewModal(true);
                   }}
-                  style={[s.verifyBtn, { backgroundColor: isDark ? "#2563EB" : "#3B82F6" }]}
+                  style={[
+                    s.verifyBtn,
+                    { backgroundColor: isDark ? "#2563EB" : "#3B82F6" },
+                  ]}
                   activeOpacity={0.9}
                 >
                   <Text style={s.verifyBtnText}>Verify Completed Tasks</Text>
@@ -493,7 +546,9 @@ function HomePage() {
             <View style={s.card}>
               <View style={s.cardHeader}>
                 <Text style={s.cardTitle}>My Work</Text>
-                <Text style={s.cardSubtitle}>Clock in, check tasks, report issues</Text>
+                <Text style={s.cardSubtitle}>
+                  Clock in, check tasks, report issues
+                </Text>
               </View>
               <ActionButton
                 onPress={handleClockIn}
@@ -514,7 +569,9 @@ function HomePage() {
                     ? setCurrentTaskModal(true)
                     : Alert.alert("Pick a building first")
                 }
-                icon={<MaterialIcons name="assignment" size={18} color="#FFFFFF" />}
+                icon={
+                  <MaterialIcons name="assignment" size={18} color="#FFFFFF" />
+                }
                 label="View Current Tasks"
                 size="lg"
                 fullWidth
@@ -522,9 +579,17 @@ function HomePage() {
               />
               <ActionButton
                 onPress={() =>
-                  buildingId ? setReportModal(true) : Alert.alert("Pick a building first")
+                  buildingId
+                    ? setReportModal(true)
+                    : Alert.alert("Pick a building first")
                 }
-                icon={<MaterialIcons name="report-problem" size={18} color="#FFFFFF" />}
+                icon={
+                  <MaterialIcons
+                    name="report-problem"
+                    size={18}
+                    color="#FFFFFF"
+                  />
+                }
                 label="Report Issue"
                 size="lg"
                 fullWidth
@@ -540,10 +605,16 @@ function HomePage() {
         <ProjectModal visible={taskModal} onClose={() => setTaskModal(false)} />
       )}
       {currentTaskModal && buildingId && (
-        <CurrentTaskModal visible={currentTaskModal} onClose={() => setCurrentTaskModal(false)} />
+        <CurrentTaskModal
+          visible={currentTaskModal}
+          onClose={() => setCurrentTaskModal(false)}
+        />
       )}
       {reportModal && buildingId && (
-        <ReportModal visible={reportModal} onClose={() => setReportModal(false)} />
+        <ReportModal
+          visible={reportModal}
+          onClose={() => setReportModal(false)}
+        />
       )}
       {managerViewReportModal && buildingId && (
         <ManagerViewReportsModal
@@ -552,7 +623,10 @@ function HomePage() {
         />
       )}
       {reviewModal && buildingId && (
-        <TaskReviewModal visible={reviewModal} onClose={() => setReviewModal(false)} />
+        <TaskReviewModal
+          visible={reviewModal}
+          onClose={() => setReviewModal(false)}
+        />
       )}
 
       {/* Building Picker Modal */}
@@ -563,18 +637,32 @@ function HomePage() {
         onRequestClose={() => setBuildingPickerOpen(false)}
       >
         <View style={s.modalBackdrop}>
-          <View style={[s.modalCard, { backgroundColor: isDark ? "#111827" : "#FFFFFF" }]}>
+          <View
+            style={[
+              s.modalCard,
+              { backgroundColor: isDark ? "#111827" : "#FFFFFF" },
+            ]}
+          >
             <View style={s.modalHeader}>
               <Text style={s.modalTitle}>Select Building</Text>
-              <TouchableOpacity onPress={() => setBuildingPickerOpen(false)} style={s.closeBtn}>
-                <Ionicons name="close" size={20} color={isDark ? "#E5E7EB" : "#111827"} />
+              <TouchableOpacity
+                onPress={() => setBuildingPickerOpen(false)}
+                style={s.closeBtn}
+              >
+                <Ionicons
+                  name="close"
+                  size={20}
+                  color={isDark ? "#E5E7EB" : "#111827"}
+                />
               </TouchableOpacity>
             </View>
 
             {buildingsLoading ? (
               <View style={[s.center, { paddingVertical: 16 }]}>
                 <ActivityIndicator />
-                <Text style={[s.cardSubtitle, { marginTop: 8 }]}>Loading buildings…</Text>
+                <Text style={[s.cardSubtitle, { marginTop: 8 }]}>
+                  Loading buildings…
+                </Text>
               </View>
             ) : (
               <FlatList
@@ -633,29 +721,44 @@ function HomePage() {
                         )}
                       </View>
                       {selected && (
-                        <Ionicons name="checkmark-circle" size={20} color="#10B981" />
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={20}
+                          color="#10B981"
+                        />
                       )}
                     </TouchableOpacity>
                   );
                 }}
                 ListEmptyComponent={
                   <View style={s.center}>
-                  <Text style={[s.cardSubtitle, { alignSelf: "center", paddingVertical: 12 }]}>
-                    No buildings found.
-                  </Text>
-                  <TouchableOpacity
-                    onPress = {() => {
-                      setBuildingPickerOpen(false)
-                      router.push("/addNewBuilding")
-                    }}
-                    style={[s.btnBase, { backgroundColor: isDark ? "#2563EB" : "#3B82F6", alignSelf: "center", paddingHorizontal: 20 }]}
-                    activeOpacity={0.9}
-                  >
-                    <Text style={s.btnText}>Add New Building</Text>
-                  </TouchableOpacity>
+                    <Text
+                      style={[
+                        s.cardSubtitle,
+                        { alignSelf: "center", paddingVertical: 12 },
+                      ]}
+                    >
+                      No buildings found.
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setBuildingPickerOpen(false);
+                        router.push("/addNewBuilding");
+                      }}
+                      style={[
+                        s.btnBase,
+                        {
+                          backgroundColor: isDark ? "#2563EB" : "#3B82F6",
+                          alignSelf: "center",
+                          paddingHorizontal: 20,
+                        },
+                      ]}
+                      activeOpacity={0.9}
+                    >
+                      <Text style={s.btnText}>Add New Building</Text>
+                    </TouchableOpacity>
                   </View>
                 }
-                
               />
             )}
           </View>
@@ -917,5 +1020,44 @@ const getStyles = (isDark: boolean) =>
       fontWeight: "700",
       opacity: 0.9,
       marginTop: 2,
+    },
+    shiftThinWrap: {
+      paddingHorizontal: 16,
+      marginTop: 6,
+      marginBottom: 6,
+    },
+    shiftThinBar: {
+      height: 30,
+      borderRadius: 999,
+      backgroundColor: "#10B981", // green
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 12,
+      shadowColor: "#000",
+      shadowOpacity: 0.08,
+      shadowRadius: 4,
+      shadowOffset: { width: 0, height: 2 },
+      borderWidth: 1,
+      borderColor: "rgba(6,78,59,0.35)",
+    },
+    shiftThinText: {
+      color: "#FFFFFF",
+      fontWeight: "800",
+      fontSize: 12,
+      letterSpacing: 0.2,
+    },
+    shiftThinBtn: {
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 999,
+      backgroundColor: "rgba(255,255,255,0.16)",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.28)",
+    },
+    shiftThinBtnText: {
+      color: "#FFFFFF",
+      fontWeight: "800",
+      fontSize: 12,
     },
   });
