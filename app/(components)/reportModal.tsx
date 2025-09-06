@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   Modal,
   View,
@@ -11,11 +11,12 @@ import {
   KeyboardAvoidingView,
   Keyboard,
   Platform,
+  TouchableWithoutFeedback,
 } from "react-native";
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { addDoc, collection, serverTimestamp, doc, getDoc } from "firebase/firestore";
 import { db, auth } from "../../firebaseConfig";
 import { useTheme } from "../ThemeContext";
-import { useBuilding } from "../BuildingContext"; // 👈 pull current building
+import { useBuilding } from "../BuildingContext"; // current building
 
 type ReportModalProps = {
   visible: boolean;
@@ -34,10 +35,11 @@ export default function ReportModal({ visible, onClose }: ReportModalProps) {
   const isDark = theme === "dark";
   const s = getStyles(isDark);
 
-  // 🌆 current building
+  // current building
   const { buildingId } = useBuilding();
 
-  // Toggle (animated thumb)
+  const descRef = useRef<TextInput>(null);
+
   const ToggleSwitch = ({
     label,
     value,
@@ -59,7 +61,11 @@ export default function ReportModal({ visible, onClose }: ReportModalProps) {
         <Text style={[s.label, { flex: 1 }]}>{label}</Text>
         <TouchableOpacity
           activeOpacity={0.9}
-          onPress={onToggle}
+          onPress={() => {
+            descRef.current?.blur();
+            Keyboard.dismiss();
+            onToggle();
+          }}
           style={[
             s.toggleContainer,
             { backgroundColor: value ? "#22C55E" : isDark ? "#374151" : "#D1D5DB" },
@@ -73,7 +79,6 @@ export default function ReportModal({ visible, onClose }: ReportModalProps) {
     );
   };
 
-  // Mutually exclusive toggles
   const onToggleFixed = () => {
     setIsFixed((prev) => {
       const next = !prev;
@@ -91,6 +96,9 @@ export default function ReportModal({ visible, onClose }: ReportModalProps) {
 
   const handleSubmit = async () => {
     if (submitting) return;
+
+    descRef.current?.blur();
+    Keyboard.dismiss();
 
     const user = auth.currentUser;
     if (!user) {
@@ -115,21 +123,33 @@ export default function ReportModal({ visible, onClose }: ReportModalProps) {
     try {
       setSubmitting(true);
 
-      // 👇 write inside the building's reports subcollection
+      // 🔑 fetch reporter_name from users/{uid}
+      let reporter_name: string | null = null;
+      try {
+        const userRef = doc(db, "users", user.uid);
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+          const data = userSnap.data() as any;
+          reporter_name = data.firstName ?? null;
+        }
+      } catch (err) {
+        console.error("Failed to fetch reporter_name:", err);
+      }
+
       await addDoc(collection(db, "buildings", buildingId, "reports"), {
         title: title.trim(),
         description: description.trim(),
         aptNumber: aptNumber.trim() || null,
-        status, // "fixed" | "need_assistance" | "open"
+        status,
         createdBy: user.uid,
         createdAt: serverTimestamp(),
         visibility: "manager_supervisor",
         managerHasReviewed: false,
-        buildingId, // helpful for admin/global queries
+        buildingId,
+        reporter_name, // 👈 add reporter_name here
       });
 
       Alert.alert("Report submitted");
-      // reset
       setTitle("");
       setAptNumber("");
       setDescription("");
@@ -150,88 +170,111 @@ export default function ReportModal({ visible, onClose }: ReportModalProps) {
         behavior={Platform.select({ ios: "padding", android: undefined })}
         style={s.overlay}
       >
-        <View style={[s.sheet, { backgroundColor: isDark ? "#121826" : "#FFFFFF" }]}>
-          {/* Header */}
-          <View style={s.headerRow}>
-            <Text style={s.headerTitle}>New Report</Text>
-            <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Text style={s.close}>×</Text>
+        <TouchableWithoutFeedback
+          onPress={() => {
+            descRef.current?.blur();
+            Keyboard.dismiss();
+          }}
+        >
+          <View style={[s.sheet, { backgroundColor: isDark ? "#121826" : "#FFFFFF" }]}>
+            {/* Header */}
+            <View style={s.headerRow}>
+              <Text style={s.headerTitle}>New Report</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  descRef.current?.blur();
+                  Keyboard.dismiss();
+                  onClose();
+                }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={s.close}>×</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Title */}
+            <Text style={s.label}>Issue Title</Text>
+            <TextInput
+              placeholder="Short title (e.g., Outlet not working)"
+              placeholderTextColor={isDark ? "#9CA3AF" : "#9AA0A6"}
+              value={title}
+              onChangeText={setTitle}
+              style={[
+                s.input,
+                {
+                  backgroundColor: isDark ? "#1F2937" : "#FFFFFF",
+                  borderColor: isDark ? "#374151" : "#E5E7EB",
+                  color: isDark ? "#F9FAFB" : "#111827",
+                },
+              ]}
+              returnKeyType="next"
+            />
+
+            {/* Apartment # */}
+            <Text style={s.label}>Apartment #</Text>
+            <TextInput
+              placeholder="e.g., 1205 (optional)"
+              placeholderTextColor={isDark ? "#9CA3AF" : "#9AA0A6"}
+              value={aptNumber}
+              onChangeText={setAptNumber}
+              style={[
+                s.input,
+                {
+                  backgroundColor: isDark ? "#1F2937" : "#FFFFFF",
+                  borderColor: isDark ? "#374151" : "#E5E7EB",
+                  color: isDark ? "#F9FAFB" : "#111827",
+                },
+              ]}
+              keyboardType="numbers-and-punctuation"
+              returnKeyType="next"
+            />
+
+            {/* Description */}
+            <Text style={s.label}>Description</Text>
+            <TextInput
+              ref={descRef}
+              placeholder="Describe the issue…"
+              placeholderTextColor={isDark ? "#9CA3AF" : "#9AA0A6"}
+              value={description}
+              onChangeText={setDescription}
+              returnKeyType="done"
+              multiline
+              numberOfLines={4}
+              blurOnSubmit
+              onSubmitEditing={() => {
+                descRef.current?.blur();
+                Keyboard.dismiss();
+              }}
+              style={[
+                s.input,
+                s.textarea,
+                {
+                  backgroundColor: isDark ? "#1F2937" : "#FFFFFF",
+                  borderColor: isDark ? "#374151" : "#E5E7EB",
+                  color: isDark ? "#F9FAFB" : "#111827",
+                },
+              ]}
+            />
+
+            {/* Toggles */}
+            <View style={{ marginTop: 4 }}>
+              <ToggleSwitch label="Fixed" value={isFixed} onToggle={onToggleFixed} />
+              <ToggleSwitch label="Need assistance" value={needsHelp} onToggle={onToggleNeedsHelp} />
+            </View>
+
+            {/* Submit */}
+            <TouchableOpacity
+              style={[s.submitBtn, submitting && { opacity: 0.7 }]}
+              onPress={handleSubmit}
+              activeOpacity={0.9}
+              disabled={submitting}
+            >
+              <Text style={s.submitText}>
+                {submitting ? "Submitting…" : "Submit Report"}
+              </Text>
             </TouchableOpacity>
           </View>
-
-          {/* Title */}
-          <Text style={s.label}>Issue Title</Text>
-          <TextInput
-            placeholder="Short title (e.g., Outlet not working)"
-            placeholderTextColor={isDark ? "#9CA3AF" : "#9AA0A6"}
-            value={title}
-            onChangeText={setTitle}
-            style={[
-              s.input,
-              { backgroundColor: isDark ? "#1F2937" : "#FFFFFF", borderColor: isDark ? "#374151" : "#E5E7EB", color: isDark ? "#F9FAFB" : "#111827" },
-            ]}
-            returnKeyType="next"
-          />
-
-          {/* Apartment # */}
-          <Text style={s.label}>Apartment #</Text>
-          <TextInput
-            placeholder="e.g., 1205 (optional)"
-            placeholderTextColor={isDark ? "#9CA3AF" : "#9AA0A6"}
-            value={aptNumber}
-            onChangeText={setAptNumber}
-            style={[
-              s.input,
-              { backgroundColor: isDark ? "#1F2937" : "#FFFFFF", borderColor: isDark ? "#374151" : "#E5E7EB", color: isDark ? "#F9FAFB" : "#111827" },
-            ]}
-            keyboardType="numbers-and-punctuation"
-            returnKeyType="next"
-          />
-
-          {/* Description */}
-          <Text style={s.label}>Description</Text>
-          <TextInput
-            placeholder="Describe the issue…"
-            placeholderTextColor={isDark ? "#9CA3AF" : "#9AA0A6"}
-            value={description}
-            onChangeText={(t) => {
-              if (t.endsWith("\n")) {
-                setDescription(t.replace(/\n/g, ""));
-                Keyboard.dismiss();
-              } else {
-                setDescription(t);
-              }
-            }}
-            returnKeyType="done"
-            onSubmitEditing={() => Keyboard.dismiss()}
-            onKeyPress={({ nativeEvent }) => {
-              if (nativeEvent.key === "Enter") Keyboard.dismiss();
-            }}
-            multiline
-            numberOfLines={4}
-            style={[
-              s.input,
-              s.textarea,
-              { backgroundColor: isDark ? "#1F2937" : "#FFFFFF", borderColor: isDark ? "#374151" : "#E5E7EB", color: isDark ? "#F9FAFB" : "#111827" },
-            ]}
-          />
-
-          {/* Toggles */}
-          <View style={{ marginTop: 4 }}>
-            <ToggleSwitch label="Fixed" value={isFixed} onToggle={onToggleFixed} />
-            <ToggleSwitch label="Need assistance" value={needsHelp} onToggle={onToggleNeedsHelp} />
-          </View>
-
-          {/* Submit */}
-          <TouchableOpacity
-            style={[s.submitBtn, submitting && { opacity: 0.7 }]}
-            onPress={handleSubmit}
-            activeOpacity={0.9}
-            disabled={submitting}
-          >
-            <Text style={s.submitText}>{submitting ? "Submitting…" : "Submit Report"}</Text>
-          </TouchableOpacity>
-        </View>
+        </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -326,5 +369,10 @@ const getStyles = (isDark: boolean) =>
       shadowOffset: { width: 0, height: 3 },
       elevation: 5,
     },
-    submitText: { color: "#fff", fontSize: 16, fontWeight: "800", letterSpacing: 0.3 },
+    submitText: {
+      color: "#fff",
+      fontSize: 16,
+      fontWeight: "800",
+      letterSpacing: 0.3,
+    },
   });

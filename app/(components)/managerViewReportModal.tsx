@@ -14,7 +14,7 @@ import { useTheme } from "../ThemeContext";
 import { useUser } from "../UserContext";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useBuilding } from "../BuildingContext"; // 👈 NEW
+import { useBuilding } from "../BuildingContext"; 
 
 type Report = {
   id: string;
@@ -27,6 +27,8 @@ type Report = {
   aptNumber?: string;
   description?: string;
   status?: string;
+  reporter_name?: string; 
+  title: string;
 };
 
 type ReportModalProps = {
@@ -47,13 +49,11 @@ function ManagerViewReportsModal({ visible, onClose }: ReportModalProps) {
   useEffect(() => {
     if (!visible) return;
 
-    // If there's no building selected, clear and bail
     if (!buildingId) {
       setPendingReports([]);
       return;
     }
 
-    // /buildings/{buildingId}/reports where managerHasReviewed == false
     const qReports = query(
       collection(db, "buildings", buildingId, "reports"),
       where("managerHasReviewed", "==", false)
@@ -84,15 +84,17 @@ function ManagerViewReportsModal({ visible, onClose }: ReportModalProps) {
     router.push({
       pathname: "/reportClicked",
       params: {
-        buildingId, // 👈 pass it through
+        buildingId,
         reportId: r.id,
-        type: r.type ?? "",
         location: r.location ?? "",
         createdBy: r.createdBy ?? "",
         createdAt: r.createdAt?.toDate().toLocaleString() ?? "",
         aptNumber: r.aptNumber ?? "",
         description: r.description ?? "",
         status: r.status ?? "",
+        // pass reporter_name if your detail screen wants it:
+         reporter_name: r.reporter_name ?? "",
+         title: r.title
       },
     });
     onClose();
@@ -146,9 +148,10 @@ function ManagerViewReportsModal({ visible, onClose }: ReportModalProps) {
               {pendingReports.map((r) => (
                 <TouchableOpacity key={r.id} onPress={() => openReport(r)} activeOpacity={0.9}>
                   <View style={s.card}>
+                    {/* Title row */}
                     <View style={s.cardHeader}>
                       <Text style={s.cardTitle}>
-                        Apt {r.aptNumber || "N/A"}
+                        {r.title || "Untitled"} {/* 👈 show title first */}
                       </Text>
                       <Ionicons
                         name="chevron-forward"
@@ -157,11 +160,14 @@ function ManagerViewReportsModal({ visible, onClose }: ReportModalProps) {
                       />
                     </View>
 
-                    <Text style={s.cardLine} numberOfLines={2}>
-                      {r.description || "No description"}
+                    {/* Room number under title */}
+                    <Text style={s.cardLine}>
+                      Apt {r.aptNumber || "N/A"}
                     </Text>
+
+                    {/* Created by (use reporter_name) */}
                     <Text style={s.metaLine}>
-                      Created by {r.createdBy || "Unknown"} ·{" "}
+                      By {r.reporter_name || "Unknown"} ·{" "}
                       {r.createdAt?.toDate().toLocaleString() || "—"}
                     </Text>
 
