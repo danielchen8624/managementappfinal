@@ -156,7 +156,7 @@ const getStyles = (isDark: boolean) =>
       alignItems: "center",
       justifyContent: "center",
       marginTop: 4,
-      marginBottom: 28, // ⬅️ extra space before the review section
+      marginBottom: 28,
     },
     imageHint: {
       fontSize: 12,

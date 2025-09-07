@@ -184,7 +184,6 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
 
     try {
       setSubmitting(true);
-      // 👇 write into /buildings/{buildingId}/tasks
       await addDoc(collection(db, "buildings", buildingId, "tasks"), {
         taskAddress,
         title: taskType,

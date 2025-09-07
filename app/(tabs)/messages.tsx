@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
   Easing,
 } from "react-native";
 import { router } from "expo-router";
-import { db, auth } from "../../firebaseConfig";
+import { db } from "../../firebaseConfig";
 import {
   collection,
   onSnapshot,
@@ -21,27 +21,18 @@ import {
 } from "firebase/firestore";
 import { useTheme } from "../ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
+import { useBuilding } from "../BuildingContext";
 
 type Message = {
   id: string;
   title: string;
   content: string;
-  createdBy: string;
+  createdBy: string;   // firstName, per your sendMessage change
+  author_email?: string;
   createdAt?: Timestamp;
 };
 
-function timeAgo(ts?: Timestamp) {
-  if (!ts?.toDate) return "";
-  const d = ts.toDate().getTime();
-  const s = Math.floor((Date.now() - d) / 1000);
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const days = Math.floor(h / 24);
-  return `${days}d ago`;
-}
+type TabKey = "local" | "global";
 
 function formatDate(ts?: Timestamp) {
   if (!ts) return "Unknown date";
@@ -58,12 +49,21 @@ function formatDate(ts?: Timestamp) {
     .replace(",", " at");
 }
 
+// NEW: helper for 24h window
+const isNewWithin24h = (ts?: Timestamp) => {
+  if (!ts?.toDate) return false;
+  const ageMs = Date.now() - ts.toDate().getTime();
+  return ageMs < 24 * 60 * 60 * 1000;
+};
+
 function MessagePage() {
-  const currentUserName = auth.currentUser?.displayName;
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === "dark";
   const styles = getStyles(isDark);
 
+  const { buildingId } = useBuilding();
+
+  const [activeTab, setActiveTab] = useState<TabKey>("local");
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -78,10 +78,24 @@ function MessagePage() {
     }).start();
   }, [isDark, themeAnim]);
 
+  // Subscribe per tab
   useEffect(() => {
-    const q = query(collection(db, "messages"), orderBy("createdAt", "desc"));
+    setLoading(true);
+
+    if (activeTab === "local" && !buildingId) {
+      setMessages([]);
+      setLoading(false);
+      return;
+    }
+
+    const colRef =
+      activeTab === "global"
+        ? collection(db, "global_messages")
+        : collection(db, "buildings", String(buildingId), "messages");
+
+    const qy = query(colRef, orderBy("createdAt", "desc"));
     const unsub = onSnapshot(
-      q,
+      qy,
       (snap) => {
         const data: Message[] = snap.docs.map((d) => ({
           id: d.id,
@@ -95,52 +109,32 @@ function MessagePage() {
         setLoading(false);
       }
     );
+
     return () => unsub();
-  }, []);
+  }, [activeTab, buildingId]);
 
   const renderItem = ({ item }: { item: Message }) => {
-    const ago = timeAgo(item.createdAt);
-    const isNew =
-      item.createdAt?.toDate &&
-      Date.now() - item.createdAt.toDate().getTime() < 24 * 60 * 60 * 1000;
-
-    const initials =
-      (item.createdBy || "?")
-        .split(/\s+/)
-        .map((s) => s[0])
-        .join("")
-        .slice(0, 2)
-        .toUpperCase() || "?";
+    const when = formatDate(item.createdAt);
+    const fresh = isNewWithin24h(item.createdAt); // NEW
 
     return (
-      <View style={styles.card}>
+      <View style={[styles.card, fresh && styles.cardNew]}>
+        {/* Top row: Name (left) • Time (right) */}
+        <View style={styles.topRow}>
+          <Text style={styles.topName} numberOfLines={1}>
+            {item.createdBy || "Unknown"}
+          </Text>
+          <Text style={styles.topTime} numberOfLines={1}>
+            {when}
+          </Text>
+        </View>
+
         {/* Title */}
         <Text style={styles.title} numberOfLines={2}>
           {item.title || "(No title)"}
         </Text>
 
-        {/* Meta row */}
-        <View style={styles.metaRow}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initials}</Text>
-          </View>
-          <Text style={styles.metaText} numberOfLines={1}>
-            {item.createdBy || "Unknown"} • {formatDate(item.createdAt)}
-          </Text>
-          {!!ago && (
-            <View style={styles.agoPill}>
-              <Ionicons name="time-outline" size={12} color="#fff" />
-              <Text style={styles.agoPillText}>{ago}</Text>
-            </View>
-          )}
-          {isNew && (
-            <View style={styles.newPill}>
-              <Text style={styles.newPillText}>New</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Body */}
+        {/* Description */}
         <Text style={styles.content}>{item.content}</Text>
       </View>
     );
@@ -159,7 +153,30 @@ function MessagePage() {
 
       {/* Header */}
       <View style={styles.headerBar}>
-        <Text style={styles.headerTitle}>Messages</Text>
+        {/* Tabs - percentage widths to stretch near the + button */}
+        <View style={styles.tabsRow}>
+          <TouchableOpacity
+            onPress={() => setActiveTab("local")}
+            style={[styles.tabBtn, activeTab === "local" && styles.tabBtnActive]}
+            accessibilityLabel="Local messages"
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <Text style={[styles.tabText, activeTab === "local" && styles.tabTextActive]}>
+              Local
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setActiveTab("global")}
+            style={[styles.tabBtn, activeTab === "global" && styles.tabBtnActive]}
+            accessibilityLabel="Global messages"
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <Text style={[styles.tabText, activeTab === "global" && styles.tabTextActive]}>
+              Global
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         <View style={{ flexDirection: "row", gap: 10 }}>
           {/* Add message */}
           <TouchableOpacity
@@ -168,11 +185,7 @@ function MessagePage() {
             accessibilityLabel="New message"
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Ionicons
-              name="add"
-              size={20}
-              color={isDark ? "#E5E7EB" : "#111827"}
-            />
+            <Ionicons name="add" size={20} color={isDark ? "#E5E7EB" : "#111827"} />
           </TouchableOpacity>
           {/* Theme toggle */}
           <TouchableOpacity
@@ -181,17 +194,17 @@ function MessagePage() {
             accessibilityLabel="Toggle theme"
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Ionicons
-              name={isDark ? "sunny-outline" : "moon-outline"}
-              size={18}
-              color={isDark ? "#FDE68A" : "#111827"}
-            />
+            <Ionicons name={isDark ? "sunny-outline" : "moon-outline"} size={18} color={isDark ? "#FDE68A" : "#111827"} />
           </TouchableOpacity>
         </View>
       </View>
 
       {/* Content */}
-      {loading ? (
+      {activeTab === "local" && !buildingId ? (
+        <View style={styles.center}>
+          <Text style={styles.empty}>Select a building to view local messages.</Text>
+        </View>
+      ) : loading ? (
         <View style={styles.center}>
           <ActivityIndicator />
           <Text style={styles.loadingText}>Loading…</Text>
@@ -233,12 +246,37 @@ const getStyles = (isDark: boolean) =>
       paddingTop: 8,
       paddingBottom: 8,
     },
-    headerTitle: {
-      fontSize: 22,
+
+    // Tabs use % widths to stretch near the + icon
+    tabsRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      width: "72%",
+    },
+    tabBtn: {
+      width: "48%",
+      paddingVertical: 6,
+      borderRadius: 10,
+      alignItems: "center",
+      backgroundColor: isDark ? "#111827" : "#E5E7EB",
+      borderWidth: isDark ? 1 : 0,
+      borderColor: isDark ? "#1F2937" : "transparent",
+    },
+    tabBtnActive: {
+      backgroundColor: isDark ? "#1E3A8A" : "#3B82F6",
+      borderColor: "transparent",
+    },
+    tabText: {
+      fontSize: 13,
       fontWeight: "800",
-      color: isDark ? "#F3F4F6" : "#111827",
+      color: isDark ? "#C7D2FE" : "#1E3A8A",
       letterSpacing: 0.2,
     },
+    tabTextActive: {
+      color: "#FFFFFF",
+    },
+
     smallGreyBtn: {
       width: 36,
       height: 36,
@@ -282,6 +320,36 @@ const getStyles = (isDark: boolean) =>
       borderWidth: isDark ? 1 : 0,
       borderColor: isDark ? "#111827" : "transparent",
     },
+
+    // NEW: highlighted border for <24h old messages
+    cardNew: {
+      borderWidth: 2,
+      borderColor: isDark ? "#60A5FA" : "#2563EB",
+      shadowOpacity: 0.18,
+      shadowRadius: 8,
+      shadowColor: isDark ? "#60A5FA" : "#2563EB",
+    },
+
+    // Top row: name left, time right
+    topRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 6,
+    },
+    topName: {
+      flexShrink: 1,
+      fontSize: 13,
+      fontWeight: "800",
+      color: isDark ? "#E5E7EB" : "#111827",
+      marginRight: 8,
+    },
+    topTime: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: isDark ? "#B6C2CF" : "#4B5563",
+    },
+
     title: {
       fontSize: 16,
       fontWeight: "800",
@@ -289,65 +357,6 @@ const getStyles = (isDark: boolean) =>
       marginBottom: 6,
     },
 
-    /* Meta row */
-    metaRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-      marginBottom: 8,
-      flexWrap: "nowrap",
-    },
-    avatar: {
-      width: 24,
-      height: 24,
-      borderRadius: 12,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: isDark ? "#0B1220" : "#E5E7EB",
-      borderWidth: isDark ? 1 : 0,
-      borderColor: isDark ? "#1F2937" : "transparent",
-    },
-    avatarText: {
-      fontSize: 11,
-      fontWeight: "800",
-      color: isDark ? "#E5E7EB" : "#111827",
-    },
-    metaText: {
-      flexShrink: 1,
-      flexGrow: 1,
-      fontSize: 12,
-      color: isDark ? "#B6C2CF" : "#4B5563",
-    },
-    agoPill: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-      borderRadius: 999,
-      backgroundColor: "#3B82F6",
-    },
-    agoPillText: {
-      color: "#fff",
-      fontSize: 11,
-      fontWeight: "700",
-      letterSpacing: 0.2,
-    },
-    newPill: {
-      marginLeft: 6,
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-      borderRadius: 999,
-      backgroundColor: "#10B981",
-    },
-    newPillText: {
-      color: "#fff",
-      fontSize: 11,
-      fontWeight: "800",
-      letterSpacing: 0.2,
-    },
-
-    /* Body */
     content: {
       fontSize: 14,
       color: isDark ? "#CBD5E1" : "#334155",

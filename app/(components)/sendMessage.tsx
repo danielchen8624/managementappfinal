@@ -15,19 +15,26 @@ import {
   ScrollView,
 } from "react-native";
 import { db, auth } from "../../firebaseConfig";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp, doc, getDoc } from "firebase/firestore";
 import { router } from "expo-router";
 import { useTheme } from "../ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
+// NEW: building context
+import { useBuilding } from "../BuildingContext";
 
 function SendMessage() {
   const [messageTitle, setMessageTitle] = useState("");
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
+  // NEW: toggle state
+  const [sendGlobal, setSendGlobal] = useState(false);
 
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === "dark";
   const styles = getStyles(isDark);
+
+  // read buildingId from context (matches your example)
+  const { buildingId } = useBuilding();
 
   // THEME CROSSFADE
   const themeAnim = useRef(new Animated.Value(isDark ? 1 : 0)).current;
@@ -60,18 +67,59 @@ function SendMessage() {
       Alert.alert("Please add a title and message.");
       return;
     }
+    if (!sendGlobal && !buildingId) {
+      Alert.alert("No building selected", "Select a building or toggle Send globally.");
+      return;
+    }
 
     try {
       setSending(true);
-      await addDoc(collection(db, "messages"), {
+
+      // Resolve firstName from /users/{uid} with fallbacks
+      let firstName = "";
+      try {
+        const uref = doc(db, "users", currentUser.uid);
+        const usnap = await getDoc(uref);
+        if (usnap.exists()) {
+          const udata = usnap.data() as any;
+          firstName =
+            (udata.firstName && String(udata.firstName)) ||
+            (udata.name && String(udata.name).split(" ")[0]) ||
+            (currentUser.displayName && currentUser.displayName.split(" ")[0]) ||
+            (currentUser.email ? currentUser.email.split("@")[0] : "");
+        } else {
+          firstName =
+            (currentUser.displayName && currentUser.displayName.split(" ")[0]) ||
+            (currentUser.email ? currentUser.email.split("@")[0] : "");
+        }
+      } catch (e) {
+        console.warn("Could not resolve firstName from /users:", e);
+        firstName =
+          (currentUser.displayName && currentUser.displayName.split(" ")[0]) ||
+          (currentUser.email ? currentUser.email.split("@")[0] : "") ||
+          currentUser.uid;
+      }
+
+      const colRef = sendGlobal
+        ? collection(db, "global_messages")
+        : collection(db, "buildings", String(buildingId), "messages");
+
+      await addDoc(colRef, {
         title: trimmedTitle.slice(0, TITLE_MAX),
         content: trimmedBody.slice(0, BODY_MAX),
-        // Store both for flexibility:
-        createdBy: currentUser.displayName || currentUser.email || currentUser.uid, // human-friendly (for list UI)
+
+        // UPDATED FIELDS:
+        createdBy: firstName,                          // 👈 show firstName instead of email
+        author_email: currentUser.email || null,       // 👈 new field with email
+
+        // Keep your existing metadata
         createdByName: currentUser.displayName || null,
         createdById: currentUser.uid,
         createdAt: serverTimestamp(),
+        scope: sendGlobal ? "global" : "building",
+        ...(sendGlobal ? {} : { buildingId: String(buildingId) }),
       });
+
       Alert.alert("Message Sent!");
       router.back();
     } catch (error: any) {
@@ -81,6 +129,7 @@ function SendMessage() {
       setSending(false);
       setMessageTitle("");
       setMessage("");
+      setSendGlobal(false);
     }
   };
 
@@ -192,6 +241,38 @@ function SendMessage() {
                 {trimmedBody.length}/{BODY_MAX}
               </Text>
             </View>
+          </View>
+
+          {/* Send globally toggle (minimal, matches your tones) */}
+          <View style={styles.toggleRow}>
+            <TouchableOpacity
+              onPress={() => setSendGlobal((v) => !v)}
+              style={[
+                styles.toggleBtn,
+                {
+                  backgroundColor: isDark ? "#111827" : "#E5E7EB",
+                  borderColor: isDark ? "#1F2937" : "transparent",
+                },
+              ]}
+              accessibilityLabel="Send globally"
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              activeOpacity={0.9}
+            >
+              <Ionicons
+                name={sendGlobal ? "checkmark-circle" : "ellipse-outline"}
+                size={18}
+                color={isDark ? "#C7D2FE" : "#1E3A8A"}
+              />
+            </TouchableOpacity>
+            <Text
+              style={{
+                fontSize: 14,
+                fontWeight: "700",
+                color: isDark ? "#C7D2FE" : "#1E3A8A",
+              }}
+            >
+              Send globally
+            </Text>
           </View>
 
           <TouchableOpacity
@@ -314,6 +395,24 @@ const getStyles = (isDark: boolean) =>
       color: isDark ? "#CBD5E1" : "#475569",
     },
 
+    // minimal row for the toggle
+    toggleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      paddingHorizontal: 2,
+      marginTop: 4,
+      marginBottom: 4,
+    },
+    toggleBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: isDark ? 1 : 0,
+    },
+
     sendButton: {
       borderRadius: 12,
       paddingVertical: 14,
@@ -333,3 +432,4 @@ const getStyles = (isDark: boolean) =>
       letterSpacing: 0.3,
     },
   });
+""
