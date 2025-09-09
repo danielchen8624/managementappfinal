@@ -97,6 +97,9 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
 
   const [isDescFocused, setIsDescFocused] = useState(false);
 
+  // 👇 NEW: Project toggle state
+  const [isProject, setIsProject] = useState(false);
+
   // entry animation
   const sheetY = useRef(new Animated.Value(40)).current;
   const sheetOpacity = useRef(new Animated.Value(0)).current;
@@ -165,6 +168,7 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
     setUrgent(false);
     setImportant(false);
     setSelectedAssignees([]);
+    setIsProject(false);
   };
 
   const handleSubmit = async () => {
@@ -184,7 +188,10 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
 
     try {
       setSubmitting(true);
-      await addDoc(collection(db, "buildings", buildingId, "tasks"), {
+
+      const subcollection = isProject ? "projects" : "tasks";
+
+      await addDoc(collection(db, "buildings", buildingId, subcollection), {
         taskAddress,
         title: taskType,
         description: taskDescription,
@@ -197,6 +204,7 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
         forToday: true,
         buildingId, // denormalize for collectionGroup queries later
       });
+
       Alert.alert("Request Submitted!");
       resetForm();
       onClose();
@@ -367,6 +375,8 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
               {/* Toggles */}
               <Toggle label="Urgent" value={urgent} onToggle={() => setUrgent((v) => !v)} />
               <Toggle label="Important" value={important} onToggle={() => setImportant((v) => !v)} />
+              {/* 👇 NEW: Project toggle (when ON, submit goes to buildings/{id}/projects) */}
+              <Toggle label="Project" value={isProject} onToggle={() => setIsProject((v) => !v)} />
 
               {/* Submit */}
               <TouchableOpacity

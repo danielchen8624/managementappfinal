@@ -24,7 +24,7 @@ import {
 } from "firebase/firestore";
 import { useUser } from "../UserContext";
 import { useTheme } from "../ThemeContext";
-import { useServerTime, priorityWindows } from "../serverTimeContext";
+import { useServerTime, priorityWindows, PROJECT_WINDOW } from "../serverTimeContext";
 import { DateTime } from "luxon";
 import SwipeableItem, { UnderlayParams } from "react-native-swipeable-item";
 import { Ionicons } from "@expo/vector-icons";
@@ -53,6 +53,11 @@ function getActiveWindowEnd(tzNow: DateTime) {
   });
   if (!w) return null;
   const [eh, em] = w.end.split(":").map(Number);
+  return tzNow.set({ hour: eh, minute: em, second: 0, millisecond: 0 });
+}
+// NEW: project window end helper
+function getProjectEnd(tzNow: DateTime) {
+  const [eh, em] = PROJECT_WINDOW.end.split(":").map(Number);
   return tzNow.set({ hour: eh, minute: em, second: 0, millisecond: 0 });
 }
 
@@ -250,7 +255,7 @@ function TaskPage() {
   const styles = getStyles(isDark);
   const { role, loading } = useUser();
 
-  const { activePriority, tzNow, nextBoundary } = useServerTime();
+  const { activePriority, tzNow, nextBoundary, isProjectTime } = useServerTime();
   const todayISO = useMemo(() => tzNow().toISODate(), [tzNow]);
 
   const uid = auth.currentUser?.uid || null;
@@ -302,9 +307,9 @@ function TaskPage() {
       setMP3(sortByOrder(items));
     });
 
-    // Projects
+    // Projects (MANAGER): show all projects where forToday is true
     const projectsRef = collection(db, "buildings", buildingId, "projects");
-    const projectsQ = query(projectsRef, where("status", "==", "pending"));
+    const projectsQ = query(projectsRef, where("forToday", "==", true));
     const uProj = onSnapshot(projectsQ, (snap) => {
       const items: any[] = [];
       snap.forEach((d) => items.push({ id: d.id, ...d.data() }));
@@ -315,7 +320,7 @@ function TaskPage() {
     return () => {
       u1(); u2(); u3(); uProj();
     };
-  }, [buildingId, todayISO]); // re-evaluate if building or day changes
+  }, [buildingId, todayISO]);
 
   /* ---------- data subscriptions: EMPLOYEE (assigned only, in this building) ---------- */
   useEffect(() => {
@@ -352,7 +357,7 @@ function TaskPage() {
         })
       );
 
-      // assignedTo == uid
+      // assignedTo == uid (kept for backward compatibility)
       const qAT = query(
         tasksRef,
         where("priority", "==", priority),
@@ -472,7 +477,7 @@ function TaskPage() {
     );
   }, [role, buildingId]);
 
-  // pulse for active tasks
+  // pulse for active tasks/projects
   const pulse = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const loop = Animated.loop(
@@ -511,8 +516,9 @@ function TaskPage() {
     } as any;
   }, [isDark, pulse]);
 
-  const renderCard = useCallback((item: any) => {
-    const isActive = item.priority === activePriority;
+  // UPDATED: allow marking project cards as active during project time
+  const renderCard = useCallback((item: any, isProjectItem: boolean = false) => {
+    const isActive = isProjectItem ? isProjectTime : item.priority === activePriority;
     const canDelete = role === "manager";
 
     return (
@@ -560,7 +566,9 @@ function TaskPage() {
                 )}
               </View>
               <Text style={styles.taskText}>Room: {item.roomNumber || "N/A"}</Text>
-              <Text style={styles.taskText}>Priority: {item.priority ?? "Unassigned"}</Text>
+              <Text style={styles.taskText}>
+                {isProjectItem ? "Project" : `Priority: ${item.priority ?? "Unassigned"}`}
+              </Text>
               {typeof item.estimatedMinutes === "number" && (
                 <Text style={styles.taskSubtle}>ETA: ~{item.estimatedMinutes} min</Text>
               )}
@@ -572,7 +580,7 @@ function TaskPage() {
         </Animated.View>
       </SwipeableItem>
     );
-  }, [activePriority, role, styles, confirmDeleteTask, glowStyle, openScreen]);
+  }, [activePriority, isProjectTime, role, styles, confirmDeleteTask, glowStyle, openScreen]);
 
   const openHistory = useCallback(() => router.push("/completedTasks"), []);
 
@@ -581,6 +589,10 @@ function TaskPage() {
   const countdown = end
     ? Math.max(0, Math.floor(end.diff(tz, "minutes").minutes))
     : null;
+
+  // NEW: project countdown
+  const projEnd = getProjectEnd(tz);
+  const projCountdown = Math.max(0, Math.floor(projEnd.diff(tz, "minutes").minutes));
 
   // If no building selected, gently nudge
   if (!buildingId) {
@@ -648,6 +660,14 @@ function TaskPage() {
             <Text style={styles.bannerSubtitle}>
               {windowLabel(activePriority)}
               {countdown !== null ? `  ·  ${countdown} min left` : ""}
+            </Text>
+          </>
+        ) : isProjectTime ? (
+          <>
+            <Text style={styles.bannerTitle}>Project time</Text>
+            <Text style={styles.bannerSubtitle}>
+              {`${PROJECT_WINDOW.start}–${PROJECT_WINDOW.end}`}
+              {Number.isFinite(projCountdown) ? `  ·  ${projCountdown} min left` : ""}
             </Text>
           </>
         ) : (
@@ -737,7 +757,7 @@ function TaskPage() {
                 (currentProjects.length === 0 ? (
                   <Text style={styles.emptyText}>No pending projects available.</Text>
                 ) : (
-                  currentProjects.map((item) => renderCard(item))
+                  currentProjects.map((item) => renderCard(item, true))
                 ))}
             </>
           }

@@ -1,13 +1,4 @@
-// src/context/ServerTimeContext.tsx
-// Server-authoritative, timezone-aware time context with active priority windows.
-// - Primary time source: Firebase Realtime Database .info/serverTimeOffset
-// - Fallback: HTTPS callable that returns Date.now() from your backend
-// - Timezone handling: Luxon in a fixed business TZ
-//
-// How to use:
-// 1) Wrap your app with <ServerTimeProvider> in App.tsx
-// 2) const { now, tzNow, activePriority } = useServerTime()
-// 3) Use activePriority to filter queries, tzNow() for business-day logic
+
 
 import React, {
   createContext,
@@ -28,10 +19,13 @@ const DEFAULT_BUSINESS_TZ = "America/Toronto";
 
 // Priority windows in local business time
 const DEFAULT_PRIORITY_WINDOWS = [
-  { priority: 1, start: "9:00", end: "10:30" },
-  { priority: 2, start: "11:00", end: "12:00" },
-  { priority: 3, start: "13:00", end: "22:00" },
+  { priority: 1, start: "7:00",  end: "10:15" },
+  { priority: 2, start: "10:30", end: "12:45" },
+  { priority: 3, start: "13:15", end: "14:45" },
 ];
+
+// Project time slot
+const PROJECT_WINDOW = { start: "15:00", end: "15:30" } as const;
 
 // Weekdays only by default
 const isActiveBusinessDay = (d: Date) => true;
@@ -60,7 +54,7 @@ function getActivePriorityFromDate(
   return null;
 }
 
-// NEW: compute the next change boundary (start or end of any window) from a given time
+// compute the next change boundary (start or end of any window) from a given time
 function getNextBoundary(
   date: Date,
   BUSINESS_TZ: string,
@@ -76,6 +70,16 @@ function getNextBoundary(
     const endToday = dt.set({ hour: eh, minute: em, second: 0, millisecond: 0 });
     if (startToday > dt) candidates.push(startToday);
     if (endToday > dt) candidates.push(endToday);
+  }
+
+  // include project window boundaries
+  {
+    const [psh, psm] = PROJECT_WINDOW.start.split(":").map(Number);
+    const [peh, pem] = PROJECT_WINDOW.end.split(":").map(Number);
+    const pStart = dt.set({ hour: psh, minute: psm, second: 0, millisecond: 0 });
+    const pEnd   = dt.set({ hour: peh, minute: pem, second: 0, millisecond: 0 });
+    if (pStart > dt) candidates.push(pStart);
+    if (pEnd > dt) candidates.push(pEnd);
   }
 
   // also consider tomorrow’s first window just in case we’re after all windows
@@ -131,14 +135,15 @@ type ServerTimeCtx = {
   tzNow: () => DateTime;          // Luxon DateTime in BUSINESS_TZ
   offsetMs: number;               // server - device delta in ms
   activePriority: number | null;  // 1 | 2 | 3 | null
-  nextBoundary: DateTime | null;  // NEW: next start/end change in BUSINESS_TZ
-  secondsToNextChange: number | null; // NEW: countdown helper
+  nextBoundary: DateTime | null;  // next start/end change in BUSINESS_TZ
+  secondsToNextChange: number | null; // countdown helper
+  isProjectTime: boolean;         // true 15:00–15:30
 };
 
 type ServerTimeProviderProps = {
   children: React.ReactNode;
-  businessTz?: string;                // NEW: override TZ if needed
-  windows?: WindowDef[];              // NEW: override windows if needed
+  businessTz?: string;
+  windows?: WindowDef[];
 };
 
 const Ctx = createContext<ServerTimeCtx | null>(null);
@@ -147,14 +152,14 @@ const Ctx = createContext<ServerTimeCtx | null>(null);
 
 export const ServerTimeProvider: React.FC<ServerTimeProviderProps> = ({
   children,
-  businessTz = DEFAULT_BUSINESS_TZ, // NEW
-  windows = DEFAULT_PRIORITY_WINDOWS, // NEW
+  businessTz = DEFAULT_BUSINESS_TZ,
+  windows = DEFAULT_PRIORITY_WINDOWS,
 }) => {
   const [offsetMs, setOffsetMs] = useState(0);
   const haveRTDBOffset = useRef(false);
 
   // Keep a lightweight tick so consumers update smoothly
-  const [tick, setTick] = useState(0); // NEW: keep the tick value
+  const [tick, setTick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => setTick((x) => x + 1), 5000);
     return () => clearInterval(id);
@@ -167,11 +172,9 @@ export const ServerTimeProvider: React.FC<ServerTimeProviderProps> = ({
       setOffsetMs(ms);
     });
 
-    // If RTDB does not report within a short window, try callable once
     const fallbackTimer = setTimeout(async () => {
       if (!haveRTDBOffset.current) {
         const ms = await fetchClockOffsetViaCallable();
-        // Only set if RTDB has not set it yet
         if (!haveRTDBOffset.current) setOffsetMs(ms);
       }
     }, 2000);
@@ -185,17 +188,24 @@ export const ServerTimeProvider: React.FC<ServerTimeProviderProps> = ({
   const value = useMemo<ServerTimeCtx>(() => {
     const now = () => new Date(Date.now() + offsetMs);
     const tzNow = () =>
-      DateTime.fromMillis(Date.now() + offsetMs).setZone(businessTz); // NEW use injected TZ
+      DateTime.fromMillis(Date.now() + offsetMs).setZone(businessTz);
 
     const d = now();
+
     const activePriority = isActiveBusinessDay(d)
-      ? getActivePriorityFromDate(d, businessTz, windows) // NEW use injected windows
+      ? getActivePriorityFromDate(d, businessTz, windows)
       : null;
 
-    // NEW: compute next boundary + countdown
     const boundary = getNextBoundary(d, businessTz, windows);
     const secondsToNextChange =
       boundary ? Math.max(0, Math.floor((boundary.toMillis() - (Date.now() + offsetMs)) / 1000)) : null;
+
+    // project slot: 15:00–15:30 local
+    const dt = DateTime.fromJSDate(d).setZone(businessTz);
+    const mins = dt.hour * 60 + dt.minute;
+    const projStart = toMins(PROJECT_WINDOW.start);
+    const projEnd   = toMins(PROJECT_WINDOW.end);
+    const isProjectTime = mins >= projStart && mins <= projEnd;
 
     return {
       now,
@@ -204,9 +214,9 @@ export const ServerTimeProvider: React.FC<ServerTimeProviderProps> = ({
       activePriority,
       nextBoundary: boundary,
       secondsToNextChange,
+      isProjectTime,
     };
-    // IMPORTANT: include tick so this recomputes every interval even when offsetMs doesn't change
-  }, [offsetMs, tick, businessTz, windows]); // NEW: added tick, TZ, windows to deps
+  }, [offsetMs, tick, businessTz, windows]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 };
@@ -222,8 +232,9 @@ export function useServerTime(): ServerTimeCtx {
 /* ---------------------------- optional exports ---------------------------- */
 // Export these if you want to unit test or reuse defaults elsewhere
 export {
-  DEFAULT_BUSINESS_TZ as BUSINESS_TZ,                // keep name parity with your old export
+  DEFAULT_BUSINESS_TZ as BUSINESS_TZ,
   DEFAULT_PRIORITY_WINDOWS as priorityWindows,
+  PROJECT_WINDOW,
   isActiveBusinessDay,
   getActivePriorityFromDate,
 };

@@ -15,9 +15,7 @@ import {
   Platform,
 } from "react-native";
 import {
-  createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  fetchSignInMethodsForEmail,
 } from "firebase/auth";
 import { auth, db } from "../../firebaseConfig";
 import { router, useLocalSearchParams } from "expo-router";
@@ -61,45 +59,6 @@ export default function LoginScreen() {
       ? "Employee"
       : userType;
 
-  // --- AUTH FLOWS ---
-  const handleSignUp = async () => {
-    if (!canSubmit || working) return;
-    setWorking("signup");
-    const e = trimmedEmail;
-    const p = trimmedPass;
-
-    try {
-      const methods = await fetchSignInMethodsForEmail(auth, e);
-      if (methods.length && !methods.includes("password")) {
-        Alert.alert(
-          "Email in use",
-          `This email is linked to: ${methods.join(", ")}. Sign in with that provider first, then set a password from your profile.`
-        );
-        setWorking(null);
-        return;
-      }
-
-      const { user } = await createUserWithEmailAndPassword(auth, e, p);
-
-      await setDoc(
-        doc(db, "users", user.uid),
-        {
-          userID: user.uid,
-          role: userType,
-          email: e,
-          createdAt: new Date(),
-        },
-        { merge: true }
-      );
-
-      Alert.alert("Success!", "User registered.");
-    } catch (error: any) {
-      Alert.alert("Sign Up Failed", error.code || error.message || "Try again.");
-    } finally {
-      setWorking(null);
-    }
-  };
-
   const handleLogin = async () => {
     if (!canSubmit || working) return;
     setWorking("login");
@@ -136,19 +95,6 @@ export default function LoginScreen() {
 
       Alert.alert("Success!", "Logged in.");
     } catch (err: any) {
-      if (err?.code === "auth/user-not-found") {
-        try {
-          const methods = await fetchSignInMethodsForEmail(auth, e);
-          if (methods.length && !methods.includes("password")) {
-            Alert.alert(
-              "Use other provider",
-              `This email is linked to: ${methods.join(", ")}. Sign in with that provider.`
-            );
-            setWorking(null);
-            return;
-          }
-        } catch {}
-      }
       Alert.alert("Login Failed", err?.code || err?.message || "Try again.");
     } finally {
       setWorking(null);
@@ -275,18 +221,15 @@ export default function LoginScreen() {
                   opacity: !canSubmit || working ? 0.95 : 1,
                 },
               ]}
-              onPress={handleSignUp}
-              disabled={!canSubmit || !!working}
+              onPress={() =>   router.push({ pathname: "/signUp", params: { role: userType } })
+}
+              disabled={false}
               activeOpacity={0.9}
             >
-              {working === "signup" ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <>
-                  <Ionicons name="person-add-outline" size={18} color="#fff" />
-                  <Text style={s.primaryBtnText}>Sign Up</Text>
-                </>
-              )}
+              <>
+                <Ionicons name="person-add-outline" size={18} color="#fff" />
+                <Text style={s.primaryBtnText}>Sign Up</Text>
+              </>
             </TouchableOpacity>
 
             <TouchableOpacity

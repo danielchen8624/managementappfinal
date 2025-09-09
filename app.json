@@ -1,42 +1,75 @@
 {
   "expo": {
-    "name": "my-app",
-    "slug": "my-app",
+    "name": "DCOasis",
+    "slug": "dcoasis",
     "version": "1.0.0",
+    "owner": "daniel.chen0113",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "myapp",
+    "scheme": "dcoasis",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "ios": {
-      "supportsTablet": true
+
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "backgroundColor": "#0B1220",
+      "resizeMode": "contain"
     },
+
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.daniel.chen0113.dcoasis",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSCameraUsageDescription": "DCOasis needs camera access so workers can take a photo when clocking in.",
+        "NSLocationWhenInUseUsageDescription": "DCOasis uses your location to attach site context to clock-ins."
+      }
+    },
+
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.daniel.chen0113.dcoasis",
+      "versionCode": 1,
+      "permissions": [
+        "CAMERA",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "POST_NOTIFICATIONS"
+      ]
     },
+
+    "androidStatusBar": {
+      "backgroundColor": "#0B1220",
+      "barStyle": "light-content",
+      "translucent": false
+    },
+
     "web": {
       "bundler": "metro",
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
+
     "plugins": [
       "expo-router",
+      "expo-camera",
+      "expo-location",
+      "expo-system-ui",
       [
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
+          "backgroundColor": "#0B1220"
         }
-      ]
+      ],
+      "expo-notifications"
     ],
-    "experiments": {
-      "typedRoutes": true
-    }
+
+    "experiments": { "typedRoutes": true }
   }
 }
