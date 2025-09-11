@@ -12,6 +12,8 @@ import { router } from "expo-router";
 import { useTheme } from "../ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
 
+type RoleKey = "supervisor" | "manager" | "security" | "employee";
+
 function SelectLogin() {
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === "dark";
@@ -28,7 +30,7 @@ function SelectLogin() {
     }).start();
   }, [isDark, themeAnim]);
 
-  const handleSelect = (role: string) => {
+  const handleSelect = (role: RoleKey) => {
     router.replace({
       pathname: "../login",
       params: { role },
@@ -46,14 +48,13 @@ function SelectLogin() {
         ]}
       />
 
-      {/* header bar */}
+      {/* header */}
       <View style={s.headerBar}>
         <Text style={s.headerTitle}>Select Login</Text>
         <TouchableOpacity
           onPress={toggleTheme}
           style={s.smallGreyBtn}
           accessibilityLabel="Toggle theme"
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <Ionicons
             name={isDark ? "sunny-outline" : "moon-outline"}
@@ -67,43 +68,43 @@ function SelectLogin() {
       <View style={s.container}>
         <Text style={s.subtitle}>Choose a sign-in path</Text>
 
-        <TouchableOpacity
-          style={[s.card, s.employeeCard]}
-          activeOpacity={0.9}
-          onPress={() => handleSelect("employee")}
-        >
-          <View style={s.iconWrap}>
-            <Ionicons name="construct-outline" size={22} color="#fff" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={s.cardTitle}>Employee Login</Text>
-            <Text style={s.cardText}>Track shifts, view tasks, submit reports.</Text>
-          </View>
-          <Ionicons
-            name="chevron-forward"
-            size={18}
-            color={isDark ? "#C7D2FE" : "#1E3A8A"}
+        <View style={s.grid}>
+          {/* Supervisor (renamed from Manager) */}
+          <RoleCircle
+            isDark={isDark}
+            label="Supervisor"
+            color="#6366F1"
+            icon="people-circle-outline"
+            onPress={() => handleSelect("supervisor")}
           />
-        </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[s.card, s.managerCard]}
-          activeOpacity={0.9}
-          onPress={() => handleSelect("manager")}
-        >
-          <View style={[s.iconWrap, { backgroundColor: "#10B981" }]}>
-            <Ionicons name="briefcase-outline" size={22} color="#fff" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={s.cardTitle}>Manager Login</Text>
-            <Text style={s.cardText}>Assign tasks, review reports, manage team.</Text>
-          </View>
-          <Ionicons
-            name="chevron-forward"
-            size={18}
-            color={isDark ? "#C7D2FE" : "#1E3A8A"}
+          {/* Manager */}
+          <RoleCircle
+            isDark={isDark}
+            label="Manager"
+            color="#10B981"
+            icon="briefcase-outline"
+            onPress={() => handleSelect("manager")}
           />
-        </TouchableOpacity>
+
+          {/* Security */}
+          <RoleCircle
+            isDark={isDark}
+            label="Security"
+            color="#F59E0B"
+            icon="shield-checkmark-outline"
+            onPress={() => handleSelect("security")}
+          />
+
+          {/* Employee */}
+          <RoleCircle
+            isDark={isDark}
+            label="Employee"
+            color="#3B82F6"
+            icon="construct-outline"
+            onPress={() => handleSelect("employee")}
+          />
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -111,13 +112,63 @@ function SelectLogin() {
 
 export default SelectLogin;
 
+function RoleCircle({
+  isDark,
+  label,
+  color,
+  icon,
+  onPress,
+}: {
+  isDark: boolean;
+  label: string;
+  color: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  onPress: () => void;
+}) {
+  return (
+    <View style={{ alignItems: "center", gap: 6 }}>
+      <TouchableOpacity
+        onPress={onPress}
+        activeOpacity={0.9}
+        accessibilityRole="button"
+        accessibilityLabel={`${label} login`}
+        style={{
+          width: 84,
+          height: 84,
+          borderRadius: 999,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: color,
+          shadowColor: "#000",
+          shadowOpacity: 0.15,
+          shadowRadius: 8,
+          shadowOffset: { width: 0, height: 4 },
+          elevation: 6,
+          borderWidth: isDark ? 1 : 0,
+          borderColor: isDark ? "rgba(255,255,255,0.06)" : "transparent",
+        }}
+      >
+        <Ionicons name={icon} size={32} color="#fff" />
+      </TouchableOpacity>
+      <Text
+        style={{
+          fontSize: 13,
+          fontWeight: "700",
+          color: isDark ? "#E5E7EB" : "#111827",
+        }}
+      >
+        {label}
+      </Text>
+    </View>
+  );
+}
+
 const getStyles = (isDark: boolean) =>
   StyleSheet.create({
     screen: {
       flex: 1,
       backgroundColor: isDark ? "#0F172A" : "#F8FAFC",
     },
-
     headerBar: {
       flexDirection: "row",
       alignItems: "center",
@@ -130,7 +181,6 @@ const getStyles = (isDark: boolean) =>
       fontSize: 22,
       fontWeight: "800",
       color: isDark ? "#F3F4F6" : "#111827",
-      letterSpacing: 0.2,
     },
     smallGreyBtn: {
       width: 36,
@@ -139,60 +189,26 @@ const getStyles = (isDark: boolean) =>
       alignItems: "center",
       justifyContent: "center",
       backgroundColor: isDark ? "#111827" : "#E5E7EB",
-      borderWidth: isDark ? 1 : 0,
-      borderColor: isDark ? "#1F2937" : "transparent",
     },
-
     container: {
       flex: 1,
-      alignItems: "stretch",
       justifyContent: "center",
-      paddingHorizontal: 16,
-      gap: 12,
+      alignItems: "center",
+      gap: 14,
     },
     subtitle: {
       textAlign: "center",
-      marginBottom: 6,
+      marginBottom: 10,
       fontSize: 14,
       fontWeight: "700",
       color: isDark ? "#B6C2CF" : "#4B5563",
     },
-
-    card: {
+    grid: {
+      width: "80%",
       flexDirection: "row",
-      alignItems: "center",
-      gap: 12,
-      backgroundColor: isDark ? "#1F2937" : "#FFFFFF",
-      borderRadius: 16,
-      padding: 14,
-      shadowColor: "#000",
-      shadowOpacity: 0.1,
-      shadowRadius: 6,
-      shadowOffset: { width: 0, height: 2 },
-      elevation: 6,
-      borderWidth: isDark ? 1 : 0,
-      borderColor: isDark ? "#111827" : "transparent",
-    },
-    employeeCard: {},
-    managerCard: {},
-
-    iconWrap: {
-      width: 40,
-      height: 40,
-      borderRadius: 12,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: "#3B82F6",
-    },
-    cardTitle: {
-      fontSize: 16,
-      fontWeight: "800",
-      color: isDark ? "#F3F4F6" : "#0F172A",
-    },
-    cardText: {
-      marginTop: 2,
-      fontSize: 12,
-      fontWeight: "600",
-      color: isDark ? "#9CA3AF" : "#4B5563",
+      flexWrap: "wrap",
+      justifyContent: "space-around",
+      rowGap: 20,
+      columnGap: 20,
     },
   });

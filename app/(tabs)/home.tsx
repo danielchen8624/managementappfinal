@@ -365,7 +365,7 @@ function HomePage() {
             </TouchableOpacity>
           </View>
 
-          {role === "manager" && (
+          {role === "supervisor" && (
             <TouchableOpacity
               onPress={() => router.push("/requestHistory")}
               style={s.headerIconBtn}
@@ -430,7 +430,7 @@ function HomePage() {
           showsVerticalScrollIndicator={false}
         >
           {/* Manager area */}
-          {role === "manager" && (
+          {role === "supervisor" && (
             <>
               <View className="card" style={s.card}>
                 <View style={s.cardHeader}>

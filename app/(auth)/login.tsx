@@ -14,22 +14,72 @@ import {
   ActivityIndicator,
   Platform,
 } from "react-native";
-import {
-  signInWithEmailAndPassword,
-} from "firebase/auth";
+import { signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { auth, db } from "../../firebaseConfig";
 import { router, useLocalSearchParams } from "expo-router";
-import { doc, setDoc, getDoc } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { useTheme } from "../ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
 
+/** ---------- roles & helpers ---------- */
+type Role = "supervisor" | "manager" | "security" | "employee";
+
+const ROLE_LIST: Role[] = ["supervisor", "manager", "security", "employee"];
+
+function parseRole(raw: unknown): Role | null {
+  if (typeof raw !== "string") return null;
+  const lower = raw.toLowerCase();
+  return (ROLE_LIST as string[]).includes(lower) ? (lower as Role) : null;
+}
+
+const ROLE_META: Record<
+  Role,
+  { label: string; icon: keyof typeof Ionicons.glyphMap; pillBgLight: string; pillBgDark: string }
+> = {
+  supervisor: {
+    label: "Supervisor",
+    icon: "people-circle-outline",
+    pillBgLight: "#4338CA",
+    pillBgDark: "#6366F1",
+  },
+  manager: {
+    label: "Manager",
+    icon: "briefcase-outline",
+    pillBgLight: "#047857",
+    pillBgDark: "#10B981",
+  },
+  security: {
+    label: "Security",
+    icon: "shield-checkmark-outline",
+    pillBgLight: "#B45309",
+    pillBgDark: "#F59E0B",
+  },
+  employee: {
+    label: "Employee",
+    icon: "construct-outline",
+    pillBgLight: "#1D4ED8",
+    pillBgDark: "#3B82F6",
+  },
+};
+
 export default function LoginScreen() {
   const params = useLocalSearchParams();
-  const userType = (params.role as string) || "worker";
+  const selectedRole = parseRole(params.role);
 
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === "dark";
-  const s = getStyles(isDark);
+  const s = getStyles(isDark, selectedRole ?? "employee"); // style needs a color; won't be shown if invalid
+
+  // if role is missing/invalid, bounce to selector immediately
+  useEffect(() => {
+    if (!selectedRole) {
+      Alert.alert(
+        "Select a role",
+        "Please choose a login role to continue.",
+        [{ text: "OK", onPress: () => router.replace("/selectLogin") }]
+      );
+    }
+  }, [selectedRole]);
 
   // theme crossfade
   const themeAnim = useRef(new Animated.Value(isDark ? 1 : 0)).current;
@@ -52,15 +102,20 @@ export default function LoginScreen() {
   const trimmedPass = useMemo(() => password.trim(), [password]);
   const canSubmit = trimmedEmail.length > 0 && trimmedPass.length > 0;
 
-  const roleLabel =
-    userType === "manager"
-      ? "Manager"
-      : userType === "employee"
-      ? "Employee"
-      : userType;
+  const roleMeta = selectedRole ? ROLE_META[selectedRole] : null;
+
+  const safeBounceToSelector = () => {
+    router.replace("/selectLogin");
+  };
 
   const handleLogin = async () => {
+    if (!selectedRole) {
+      // should already be bounced, but double-guard
+      safeBounceToSelector();
+      return;
+    }
     if (!canSubmit || working) return;
+
     setWorking("login");
     const e = trimmedEmail;
     const p = trimmedPass;
@@ -68,38 +123,56 @@ export default function LoginScreen() {
     try {
       const { user } = await signInWithEmailAndPassword(auth, e, p);
 
+      // STRICT: do not create user doc on login.
       const ref = doc(db, "users", user.uid);
       const snap = await getDoc(ref);
+
       if (!snap.exists()) {
-        await setDoc(
-          ref,
-          {
-            userID: user.uid,
-            email: e,
-            role: userType,
-            createdAt: new Date(),
-          },
-          { merge: true }
+        // No user doc → not provisioned; block
+        await signOut(auth).catch(() => {});
+        Alert.alert(
+          "No Access",
+          "Your account is not provisioned. Please contact your supervisor/manager or sign up via the correct flow."
         );
-      } else {
-        const firestoreRole = snap.data()?.role;
-        if (firestoreRole && firestoreRole !== userType) {
-          Alert.alert(
-            "Access Denied",
-            `This user is registered as "${firestoreRole}", not "${userType}". Use the correct login option.`
-          );
-          setWorking(null);
-          return;
-        }
+        setWorking(null);
+        return;
       }
 
+      const firestoreRole = parseRole(snap.data()?.role);
+      if (!firestoreRole) {
+        await signOut(auth).catch(() => {});
+        Alert.alert(
+          "Role Missing",
+          "Your role is not configured. Please contact your supervisor/manager."
+        );
+        setWorking(null);
+        return;
+      }
+
+      if (firestoreRole !== selectedRole) {
+        await signOut(auth).catch(() => {});
+        Alert.alert(
+          "Access Denied",
+          `This account is registered as "${ROLE_META[firestoreRole].label}". Please use the "${ROLE_META[firestoreRole].label}" login option.`
+        );
+        setWorking(null);
+        return;
+      }
+
+      // success; proceed into app
       Alert.alert("Success!", "Logged in.");
+      // e.g., router.replace("/(tabs)");
     } catch (err: any) {
       Alert.alert("Login Failed", err?.code || err?.message || "Try again.");
     } finally {
       setWorking(null);
     }
   };
+
+  // If role invalid, render nothing (alert will navigate)
+  if (!selectedRole) {
+    return null;
+  }
 
   return (
     <SafeAreaView style={s.screen}>
@@ -132,12 +205,8 @@ export default function LoginScreen() {
           </TouchableOpacity>
 
           <View style={s.rolePill}>
-            <Ionicons
-              name={userType === "manager" ? "briefcase-outline" : "construct-outline"}
-              size={14}
-              color="#fff"
-            />
-            <Text style={s.rolePillText}>{roleLabel}</Text>
+            <Ionicons name={roleMeta!.icon} size={14} color="#fff" />
+            <Text style={s.rolePillText}>{roleMeta!.label}</Text>
           </View>
 
           <TouchableOpacity
@@ -154,10 +223,7 @@ export default function LoginScreen() {
           </TouchableOpacity>
         </View>
 
-        <ScrollView
-          contentContainerStyle={s.scroll}
-          keyboardShouldPersistTaps="handled"
-        >
+        <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
           <View style={s.card}>
             <Text style={s.title}>Login</Text>
 
@@ -221,8 +287,10 @@ export default function LoginScreen() {
                   opacity: !canSubmit || working ? 0.95 : 1,
                 },
               ]}
-              onPress={() =>   router.push({ pathname: "/signUp", params: { role: userType } })
-}
+              onPress={() =>
+                // Only pass a valid role through to signUp
+                router.push({ pathname: "/signUp", params: { role: selectedRole } })
+              }
               disabled={false}
               activeOpacity={0.9}
             >
@@ -272,7 +340,7 @@ export default function LoginScreen() {
   );
 }
 
-const getStyles = (isDark: boolean) =>
+const getStyles = (isDark: boolean, role: Role) =>
   StyleSheet.create({
     screen: {
       flex: 1,
@@ -304,7 +372,9 @@ const getStyles = (isDark: boolean) =>
       paddingHorizontal: 10,
       paddingVertical: 6,
       borderRadius: 999,
-      backgroundColor: userPillBg(isDark),
+      backgroundColor: isDark
+        ? ROLE_META[role].pillBgDark
+        : ROLE_META[role].pillBgLight,
     },
     rolePillText: {
       color: "#fff",
@@ -421,8 +491,3 @@ const getStyles = (isDark: boolean) =>
       fontWeight: "700",
     },
   });
-
-// helper to avoid style closure referencing props
-function userPillBg(isDark: boolean) {
-  return isDark ? "#2563EB" : "#1D4ED8";
-}

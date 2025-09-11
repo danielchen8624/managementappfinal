@@ -23,7 +23,7 @@ const _Layout = () => {
           position: "absolute", // pins to bottom
           left: 0,
           right: 0,
-          bottom: 0,
+          bottom: 0, 
           elevation: 10, // Android drop shadow
           shadowColor: "#000", // iOS shadow
           shadowOpacity: 0.1,
