@@ -537,6 +537,30 @@ function HomePage() {
                 >
                   <Text style={s.verifyBtnText}>Verify Completed Tasks</Text>
                 </TouchableOpacity>
+                
+              </View>
+              {/* security card */}
+              <View
+                style={[
+                  s.verifyCard,
+                  { backgroundColor: isDark ? "#1F2937" : "#F3F4F6" },
+                ]}
+              >
+                <TouchableOpacity
+                  onPress={() => {
+                    if (!buildingId)
+                      return Alert.alert("Pick a building first");
+                    router.push("/securityChecklistCreator");
+                  }}
+                  style={[
+                    s.verifyBtn,
+                    { backgroundColor: isDark ? "#2563EB" : "#3B82F6" },
+                  ]}
+                  activeOpacity={0.9}
+                >
+                  <Text style={s.verifyBtnText}>Security Checklist</Text>
+                </TouchableOpacity>
+                
               </View>
             </>
           )}

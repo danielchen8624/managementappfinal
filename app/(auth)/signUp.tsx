@@ -1,5 +1,4 @@
-// /(auth)/signUp.tsx
-import React, { useMemo, useRef, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -8,7 +7,6 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
-  Platform,
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -17,20 +15,66 @@ import {
   sendEmailVerification,
   fetchSignInMethodsForEmail,
 } from "firebase/auth";
-import { auth } from "../../firebaseConfig";
+import { auth, db } from "../../firebaseConfig";
 import { Ionicons } from "@expo/vector-icons";
+import {
+  doc,
+  setDoc,
+  updateDoc,
+  serverTimestamp,
+  getDoc,
+} from "firebase/firestore";
 
 const STORAGE_EMAIL_KEY = "signup.email";
 
+type Role = "supervisor" | "manager" | "security" | "employee";
+const ROLES: Role[] = ["supervisor", "manager", "security", "employee"];
+function parseRole(raw: unknown): Role | null {
+  if (typeof raw !== "string") return null;
+  const lower = raw.toLowerCase();
+  return (ROLES as string[]).includes(lower) ? (lower as Role) : null;
+}
+
 export default function SignUp() {
-  const { role = "employee" } = useLocalSearchParams<{ role?: string }>();
+  const params = useLocalSearchParams<{ role?: string }>();
+
+  // role can come from param OR from Firestore (if RootLayout redirected without param)
+  const [role, setRole] = useState<Role | null>(parseRole(params.role));
+
+  // keep state in sync with route changes
+  useEffect(() => {
+    setRole(parseRole(params.role));
+  }, [params.role]);
+
+  // If role missing but user is logged in, try to hydrate from user doc
+  useEffect(() => {
+    (async () => {
+      if (!role && auth.currentUser?.uid) {
+        try {
+          const snap = await getDoc(doc(db, "users", auth.currentUser.uid));
+          const found = parseRole(snap.data()?.role);
+          if (found) setRole(found);
+        } catch {}
+      }
+    })();
+  }, [role]);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
 
-  const [working, setWorking] = useState<null | "send" | "resend" | "check">(null);
+  const [working, setWorking] = useState<null | "send" | "resend" | "check">(
+    null
+  );
   const [verificationSent, setVerificationSent] = useState(false);
+
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(
+    () => () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    },
+    []
+  );
 
   // hydrate saved email if we have it (handy if user navigates back)
   useEffect(() => {
@@ -42,33 +86,91 @@ export default function SignUp() {
 
   const trimmedEmail = useMemo(() => email.trim(), [email]);
   const trimmedPass = useMemo(() => password.trim(), [password]);
+  const canSubmit =
+    !!role && trimmedEmail.length > 3 && trimmedPass.length >= 6 && !working;
 
-  const canSubmit = trimmedEmail.length > 3 && trimmedPass.length >= 6 && !working;
+  const startVerificationPoll = () => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(async () => {
+      const user = auth.currentUser;
+      if (!user) return;
+      await user.reload();
+      if (user.emailVerified) {
+        try {
+          await updateDoc(doc(db, "users", user.uid), {
+            emailVerified: true,
+            verifiedAt: serverTimestamp(),
+            signup_complete: false,
+          });
+        } catch {
+          // ensure doc exists minimally
+          await setDoc(
+            doc(db, "users", user.uid),
+            {
+              userID: user.uid,
+              email: user.email,
+              emailVerified: true,
+              verifiedAt: serverTimestamp(),
+              signup_complete: false,
+              signup_stage: "awaiting_email_verification",
+            },
+            { merge: true }
+          );
+        } finally {
+          if (pollRef.current) clearInterval(pollRef.current);
+        }
+
+        router.replace("/(auth)/signUpInfo");
+      }
+    }, 3000);
+  };
 
   const handleSendVerification = async () => {
-    if (!canSubmit) return;
+    if (!canSubmit || !role) return;
     setWorking("send");
     try {
-      // If this email already exists with a different method, guide the user
       const methods = await fetchSignInMethodsForEmail(auth, trimmedEmail);
       if (methods.length && !methods.includes("password")) {
         Alert.alert(
           "Email already in use",
-          `This email is registered with: ${methods.join(", ")}. Please sign in with that method first, then set a password from your profile.`
+          `This email is registered with: ${methods.join(
+            ", "
+          )}. Sign in with that method and set a password from Profile.`
         );
         setWorking(null);
         return;
       }
 
-      // Create account (this signs the user in)
-      const { user } = await createUserWithEmailAndPassword(auth, trimmedEmail, trimmedPass);
+      const { user } = await createUserWithEmailAndPassword(
+        auth,
+        trimmedEmail,
+        trimmedPass
+      );
 
-      // Send verification email
+      await setDoc(
+        doc(db, "users", user.uid),
+        {
+          userID: user.uid,
+          email: trimmedEmail,
+          role,
+          createdAt: serverTimestamp(),
+          emailVerified: false,
+          signup_complete: false,
+          signup_stage: "awaiting_email_verification",
+        },
+        { merge: true }
+      );
+
       await sendEmailVerification(user);
-
       await AsyncStorage.setItem(STORAGE_EMAIL_KEY, trimmedEmail);
       setVerificationSent(true);
-      Alert.alert("Verify your email", "We sent a verification link to your inbox.");
+
+      startVerificationPoll();
+
+      Alert.alert(
+        "Verify your email",
+        "We sent a verification link to your inbox."
+      );
     } catch (e: any) {
       let msg = e?.message || "Something went wrong.";
       if (e?.code === "auth/email-already-in-use") {
@@ -87,7 +189,10 @@ export default function SignUp() {
     try {
       const user = auth.currentUser;
       if (!user) {
-        Alert.alert("Not signed in", "Please enter your email and password again.");
+        Alert.alert(
+          "Not signed in",
+          "Please enter your email and password again."
+        );
         setWorking(null);
         return;
       }
@@ -112,13 +217,32 @@ export default function SignUp() {
       }
       await user.reload();
       if (user.emailVerified) {
-        // proceed to the next step (collect profile info)
-        router.replace({
-          pathname: "/(auth)/signUpInfo",
-          params: { role: String(role || "employee"), email: trimmedEmail },
-        });
+        try {
+          await updateDoc(doc(db, "users", user.uid), {
+            emailVerified: true,
+            verifiedAt: serverTimestamp(),
+            signup_complete: false,
+          });
+        } catch {
+          await setDoc(
+            doc(db, "users", user.uid),
+            {
+              userID: user.uid,
+              email: user.email,
+              emailVerified: true,
+              verifiedAt: serverTimestamp(),
+              signup_complete: false,
+              signup_stage: "awaiting_email_verification",
+            },
+            { merge: true }
+          );
+        }
+        router.replace("/(auth)/signUpInfo");
       } else {
-        Alert.alert("Still not verified", "Please open the link we emailed you.");
+        Alert.alert(
+          "Still not verified",
+          "Please open the link we emailed you."
+        );
       }
     } catch (e: any) {
       Alert.alert("Check failed", e?.message || "Try again.");
@@ -126,6 +250,24 @@ export default function SignUp() {
       setWorking(null);
     }
   };
+
+  // If there's truly no role (param + Firestore both missing), show a friendly gate
+  if (!role) {
+    return (
+      <View style={styles.container}>
+        <Text style={[styles.title, { marginBottom: 8 }]}>Select a role</Text>
+        <Text style={{ color: "#94A3B8" }}>
+          We couldn’t determine your role. Please pick one to continue.
+        </Text>
+        <TouchableOpacity
+          onPress={() => router.replace("/selectLogin")}
+          style={[styles.primaryBtn, { marginTop: 20 }]}
+        >
+          <Text style={styles.primaryBtnText}>Go to role picker</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -211,7 +353,11 @@ export default function SignUp() {
               <ActivityIndicator color="#fff" />
             ) : (
               <>
-                <Ionicons name="checkmark-done-outline" size={18} color="#fff" />
+                <Ionicons
+                  name="checkmark-done-outline"
+                  size={18}
+                  color="#fff"
+                />
                 <Text style={styles.successBtnText}>I’ve verified</Text>
               </>
             )}
@@ -220,16 +366,27 @@ export default function SignUp() {
       )}
 
       <Text style={styles.note}>
-        We’ll ask for your details and a profile photo after you verify your email.
+        We’ll ask for your details and a profile photo after you verify your
+        email.
       </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, paddingTop: 60, backgroundColor: "#0B1220" },
+  container: {
+    flex: 1,
+    padding: 20,
+    paddingTop: 60,
+    backgroundColor: "#0B1220",
+  },
   title: { fontSize: 22, fontWeight: "800", color: "#fff", marginBottom: 16 },
-  label: { color: "#C7D2FE", fontWeight: "800", marginBottom: 6, letterSpacing: 0.2 },
+  label: {
+    color: "#C7D2FE",
+    fontWeight: "800",
+    marginBottom: 6,
+    letterSpacing: 0.2,
+  },
   inputWrap: {
     flexDirection: "row",
     alignItems: "center",
@@ -242,12 +399,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#111827",
     borderColor: "#1F2937",
   },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    color: "#E5E7EB",
-    padding: 0,
-  },
+  input: { flex: 1, fontSize: 16, color: "#E5E7EB", padding: 0 },
   primaryBtn: {
     marginTop: 8,
     flexDirection: "row",

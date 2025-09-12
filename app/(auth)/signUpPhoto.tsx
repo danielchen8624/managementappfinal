@@ -15,7 +15,7 @@ import {
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { auth, db } from "../../firebaseConfig";
-import { doc, setDoc } from "firebase/firestore";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { router } from "expo-router";
 import { useTheme } from "../ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
@@ -27,7 +27,6 @@ export default function SignUpPhoto() {
   const isDark = theme === "dark";
   const s = getStyles(isDark);
 
-  // theme crossfade
   const themeAnim = useRef(new Animated.Value(isDark ? 1 : 0)).current;
   useEffect(() => {
     Animated.timing(themeAnim, {
@@ -44,7 +43,10 @@ export default function SignUpPhoto() {
   const pickFromLibrary = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert("Permission required", "We need access to your photo library.");
+      Alert.alert(
+        "Permission required",
+        "We need access to your photo library."
+      );
       return;
     }
     const res = await ImagePicker.launchImageLibraryAsync({
@@ -59,7 +61,10 @@ export default function SignUpPhoto() {
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert("Permission required", "We need camera access to take a photo.");
+      Alert.alert(
+        "Permission required",
+        "We need camera access to take a photo."
+      );
       return;
     }
     const res = await ImagePicker.launchCameraAsync({
@@ -81,18 +86,17 @@ export default function SignUpPhoto() {
     }
     setUploading(true);
     try {
-      // Same behavior as EditProfile: store the URI directly on the user doc
       await setDoc(
         doc(db, "users", uid),
         {
           profileImageUri: imageUri,
-          progressStep: "done",
-          onboardingComplete: true,
+          signup_stage: "complete",
+          signup_complete: true,
+          completedAt: serverTimestamp(),
         },
         { merge: true }
       );
 
-      // ✅ Alert before finishing; navigate on OK
       Alert.alert("Account created!", "You're all set.", [
         { text: "OK", onPress: () => router.replace("/home") },
       ]);
@@ -107,7 +111,9 @@ export default function SignUpPhoto() {
   if (!uid) {
     return (
       <SafeAreaView style={s.container}>
-        <View style={[s.fill, { alignItems: "center", justifyContent: "center" }]}>
+        <View
+          style={[s.fill, { alignItems: "center", justifyContent: "center" }]}
+        >
           <Text style={{ color: isDark ? "#E5E7EB" : "#111827" }}>
             You need to verify your email first.
           </Text>
@@ -118,7 +124,6 @@ export default function SignUpPhoto() {
 
   return (
     <SafeAreaView style={s.container}>
-      {/* background layers */}
       <View style={[StyleSheet.absoluteFill, { backgroundColor: "#F8FAFC" }]} />
       <Animated.View
         style={[
@@ -127,13 +132,11 @@ export default function SignUpPhoto() {
         ]}
       />
 
-      {/* Header */}
       <View style={s.headerBar}>
         <TouchableOpacity
-          onPress={() => router.replace("/signUpInfo")}
+          onPress={() => router.replace("/(auth)/signUpInfo")}
           style={s.smallGreyBtn}
           accessibilityLabel="Back"
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <Ionicons
             name="chevron-back"
@@ -141,14 +144,11 @@ export default function SignUpPhoto() {
             color={isDark ? "#E5E7EB" : "#111827"}
           />
         </TouchableOpacity>
-
         <Text style={s.headerTitle}>Add Profile Photo</Text>
-
         <TouchableOpacity
           onPress={toggleTheme}
           style={s.smallGreyBtn}
           accessibilityLabel="Toggle theme"
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <Ionicons
             name={isDark ? "sunny-outline" : "moon-outline"}
@@ -158,7 +158,6 @@ export default function SignUpPhoto() {
         </TouchableOpacity>
       </View>
 
-      {/* Content */}
       <View style={s.body}>
         <View style={s.card}>
           <Text style={s.title}>Let’s put a face to your name</Text>
@@ -186,7 +185,10 @@ export default function SignUpPhoto() {
 
           <View style={s.actionsRow}>
             <TouchableOpacity
-              style={[s.actionBtn, { backgroundColor: isDark ? "#111827" : "#FFFFFF" }]}
+              style={[
+                s.actionBtn,
+                { backgroundColor: isDark ? "#111827" : "#FFFFFF" },
+              ]}
               onPress={pickFromLibrary}
               activeOpacity={0.9}
             >
@@ -195,13 +197,21 @@ export default function SignUpPhoto() {
                 size={18}
                 color={isDark ? "#E5E7EB" : "#111827"}
               />
-              <Text style={[s.actionBtnText, { color: isDark ? "#E5E7EB" : "#111827" }]}>
+              <Text
+                style={[
+                  s.actionBtnText,
+                  { color: isDark ? "#E5E7EB" : "#111827" },
+                ]}
+              >
                 Choose Photo
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[s.actionBtn, { backgroundColor: isDark ? "#111827" : "#FFFFFF" }]}
+              style={[
+                s.actionBtn,
+                { backgroundColor: isDark ? "#111827" : "#FFFFFF" },
+              ]}
               onPress={takePhoto}
               activeOpacity={0.9}
             >
@@ -210,7 +220,12 @@ export default function SignUpPhoto() {
                 size={18}
                 color={isDark ? "#E5E7EB" : "#111827"}
               />
-              <Text style={[s.actionBtnText, { color: isDark ? "#E5E7EB" : "#111827" }]}>
+              <Text
+                style={[
+                  s.actionBtnText,
+                  { color: isDark ? "#E5E7EB" : "#111827" },
+                ]}
+              >
                 Take Photo
               </Text>
             </TouchableOpacity>
@@ -220,9 +235,14 @@ export default function SignUpPhoto() {
             style={[
               s.primaryBtn,
               {
-                backgroundColor: imageUri && !uploading
-                  ? (isDark ? "#2563EB" : "#1D4ED8")
-                  : (isDark ? "#1E3A8A" : "#93C5FD"),
+                backgroundColor:
+                  imageUri && !uploading
+                    ? isDark
+                      ? "#2563EB"
+                      : "#1D4ED8"
+                    : isDark
+                    ? "#1E3A8A"
+                    : "#93C5FD",
               },
             ]}
             disabled={!imageUri || uploading}
@@ -233,7 +253,11 @@ export default function SignUpPhoto() {
               <ActivityIndicator color="#fff" />
             ) : (
               <>
-                <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
+                <Ionicons
+                  name="checkmark-circle-outline"
+                  size={18}
+                  color="#fff"
+                />
                 <Text style={s.primaryBtnText}>Finish</Text>
               </>
             )}
@@ -250,7 +274,7 @@ export default function SignUpPhoto() {
 
 function ringShadow(isDark: boolean): ViewStyle {
   return {
-    shadowColor: isDark ? "#000" : "#000",
+    shadowColor: "#000",
     shadowOpacity: 0.25,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
@@ -260,13 +284,8 @@ function ringShadow(isDark: boolean): ViewStyle {
 
 const getStyles = (isDark: boolean) =>
   StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: isDark ? "#0F172A" : "#F8FAFC",
-    },
+    container: { flex: 1, backgroundColor: isDark ? "#0F172A" : "#F8FAFC" },
     fill: { flex: 1 },
-
-    /* Header */
     headerBar: {
       flexDirection: "row",
       alignItems: "center",
@@ -291,13 +310,7 @@ const getStyles = (isDark: boolean) =>
       borderWidth: isDark ? 1 : 0,
       borderColor: isDark ? "#1F2937" : "transparent",
     },
-
-    /* Content */
-    body: {
-      flex: 1,
-      paddingHorizontal: 16,
-      paddingBottom: 20,
-    },
+    body: { flex: 1, paddingHorizontal: 16, paddingBottom: 20 },
     card: {
       marginTop: 8,
       backgroundColor: isDark ? "#1F2937" : "#FFFFFF",
@@ -353,12 +366,7 @@ const getStyles = (isDark: boolean) =>
       color: isDark ? "#9CA3AF" : "#94A3B8",
       fontWeight: "700",
     },
-
-    actionsRow: {
-      flexDirection: "row",
-      gap: 12,
-      marginTop: 14,
-    },
+    actionsRow: { flexDirection: "row", gap: 12, marginTop: 14 },
     actionBtn: {
       flex: 1,
       flexDirection: "row",
@@ -370,10 +378,7 @@ const getStyles = (isDark: boolean) =>
       borderWidth: 1,
       borderColor: isDark ? "#1F2937" : "#E5E7EB",
     },
-    actionBtnText: {
-      fontWeight: "800",
-    },
-
+    actionBtnText: { fontWeight: "800" },
     primaryBtn: {
       marginTop: 16,
       flexDirection: "row",

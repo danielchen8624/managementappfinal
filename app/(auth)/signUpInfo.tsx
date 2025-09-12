@@ -1,4 +1,3 @@
-// app/(auth)/signUpInfo.tsx
 import React, { useMemo, useRef, useState, useEffect } from "react";
 import {
   View,
@@ -28,7 +27,6 @@ export default function SignUpInfo() {
   const isDark = theme === "dark";
   const s = getStyles(isDark);
 
-  // theme crossfade
   const themeAnim = useRef(new Animated.Value(isDark ? 1 : 0)).current;
   useEffect(() => {
     Animated.timing(themeAnim, {
@@ -41,14 +39,14 @@ export default function SignUpInfo() {
 
   const [firstName, setFirst] = useState("");
   const [lastName, setLast] = useState("");
-  const [birthday, setBirthday] = useState(""); // optional (YYYY-MM-DD)
-  const [employeeId, setEmployeeId] = useState(""); // optional
-
+  const [birthday, setBirthday] = useState("");
+  const [employeeId, setEmployeeId] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const canContinue = useMemo(() => {
-    return !!uid && firstName.trim().length > 0 && lastName.trim().length > 0;
-  }, [uid, firstName, lastName]);
+  const canContinue = useMemo(
+    () => !!uid && firstName.trim().length > 0 && lastName.trim().length > 0,
+    [uid, firstName, lastName]
+  );
 
   const submit = async () => {
     if (!canContinue || saving) return;
@@ -57,15 +55,7 @@ export default function SignUpInfo() {
       const displayName = `${firstName.trim()} ${lastName.trim()}`.trim();
       const ref = doc(db, "users", uid!);
 
-      // Ensure user doc exists (merge keeps any prior fields)
-      await setDoc(
-        ref,
-        {
-          userID: uid,
-          email,
-        },
-        { merge: true }
-      );
+      await setDoc(ref, { userID: uid, email }, { merge: true });
 
       await updateDoc(ref, {
         firstName: firstName.trim(),
@@ -73,7 +63,8 @@ export default function SignUpInfo() {
         displayName,
         birthday: birthday.trim() || null,
         employeeId: employeeId.trim() || null,
-        progressStep: "photo",
+        signup_stage: "awaiting_profile_image",
+        signup_complete: false,
       });
 
       router.replace("/(auth)/signUpPhoto");
@@ -88,7 +79,9 @@ export default function SignUpInfo() {
   if (!uid) {
     return (
       <SafeAreaView style={s.container}>
-        <View style={[s.fill, { alignItems: "center", justifyContent: "center" }]}>
+        <View
+          style={[s.fill, { alignItems: "center", justifyContent: "center" }]}
+        >
           <Text style={{ color: isDark ? "#E5E7EB" : "#111827" }}>
             You need to verify your email first.
           </Text>
@@ -99,7 +92,6 @@ export default function SignUpInfo() {
 
   return (
     <SafeAreaView style={s.container}>
-      {/* background layers */}
       <View style={[StyleSheet.absoluteFill, { backgroundColor: "#F8FAFC" }]} />
       <Animated.View
         style={[
@@ -108,17 +100,12 @@ export default function SignUpInfo() {
         ]}
       />
 
-      {/* Header */}
       <View style={s.headerBar}>
-       
-
         <Text style={s.headerTitle}>Your Details</Text>
-
         <TouchableOpacity
           onPress={toggleTheme}
           style={s.smallGreyBtn}
           accessibilityLabel="Toggle theme"
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <Ionicons
             name={isDark ? "sunny-outline" : "moon-outline"}
@@ -134,7 +121,6 @@ export default function SignUpInfo() {
       >
         <View style={s.body}>
           <View style={s.card}>
-            {/* Email pill */}
             <View style={s.emailPill}>
               <Ionicons name="mail-outline" size={14} color="#fff" />
               <Text numberOfLines={1} style={s.emailText}>
@@ -147,7 +133,6 @@ export default function SignUpInfo() {
               We’ll use this to personalize your experience and your account.
             </Text>
 
-            {/* First name */}
             <Text style={s.label}>First name</Text>
             <View style={s.inputWrap}>
               <Ionicons
@@ -162,11 +147,9 @@ export default function SignUpInfo() {
                 placeholder="Jane"
                 placeholderTextColor={isDark ? "#9CA3AF" : "#9AA1AA"}
                 autoCapitalize="words"
-                returnKeyType="next"
               />
             </View>
 
-            {/* Last name */}
             <Text style={s.label}>Last name</Text>
             <View style={s.inputWrap}>
               <Ionicons
@@ -181,11 +164,9 @@ export default function SignUpInfo() {
                 placeholder="Doe"
                 placeholderTextColor={isDark ? "#9CA3AF" : "#9AA1AA"}
                 autoCapitalize="words"
-                returnKeyType="next"
               />
             </View>
 
-            {/* Birthday (optional) */}
             <Text style={s.label}>Birthday (optional)</Text>
             <View style={s.inputWrap}>
               <Ionicons
@@ -200,11 +181,9 @@ export default function SignUpInfo() {
                 placeholder="YYYY-MM-DD"
                 placeholderTextColor={isDark ? "#9CA3AF" : "#9AA1AA"}
                 keyboardType="numbers-and-punctuation"
-                returnKeyType="next"
               />
             </View>
 
-            {/* Employee ID (optional) */}
             <Text style={s.label}>Employee ID (optional)</Text>
             <View style={s.inputWrap}>
               <Ionicons
@@ -219,18 +198,20 @@ export default function SignUpInfo() {
                 placeholder="S12345"
                 placeholderTextColor={isDark ? "#9CA3AF" : "#9AA1AA"}
                 autoCapitalize="characters"
-                returnKeyType="done"
               />
             </View>
 
-            {/* Continue */}
             <TouchableOpacity
               style={[
                 s.primaryBtn,
                 {
                   backgroundColor: canContinue
-                    ? (isDark ? "#2563EB" : "#1D4ED8")
-                    : (isDark ? "#1E3A8A" : "#93C5FD"),
+                    ? isDark
+                      ? "#2563EB"
+                      : "#1D4ED8"
+                    : isDark
+                    ? "#1E3A8A"
+                    : "#93C5FD",
                 },
               ]}
               disabled={!canContinue || saving}
@@ -241,7 +222,11 @@ export default function SignUpInfo() {
                 <ActivityIndicator color="#fff" />
               ) : (
                 <>
-                  <Ionicons name="arrow-forward-circle-outline" size={18} color="#fff" />
+                  <Ionicons
+                    name="arrow-forward-circle-outline"
+                    size={18}
+                    color="#fff"
+                  />
                   <Text style={s.primaryBtnText}>Continue</Text>
                 </>
               )}
@@ -259,13 +244,8 @@ export default function SignUpInfo() {
 
 const getStyles = (isDark: boolean) =>
   StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: isDark ? "#0F172A" : "#F8FAFC",
-    },
+    container: { flex: 1, backgroundColor: isDark ? "#0F172A" : "#F8FAFC" },
     fill: { flex: 1 },
-
-    /* Header */
     headerBar: {
       flexDirection: "row",
       alignItems: "center",
@@ -290,13 +270,7 @@ const getStyles = (isDark: boolean) =>
       borderWidth: isDark ? 1 : 0,
       borderColor: isDark ? "#1F2937" : "transparent",
     },
-
-    /* Body/Card */
-    body: {
-      flex: 1,
-      paddingHorizontal: 16,
-      paddingBottom: 20,
-    },
+    body: { flex: 1, paddingHorizontal: 16, paddingBottom: 20 },
     card: {
       marginTop: 8,
       backgroundColor: isDark ? "#1F2937" : "#FFFFFF",
@@ -310,8 +284,6 @@ const getStyles = (isDark: boolean) =>
       borderWidth: isDark ? 1 : 0,
       borderColor: isDark ? "#111827" : "transparent",
     },
-
-    /* Email pill */
     emailPill: {
       alignSelf: "flex-start",
       flexDirection: "row",
@@ -331,7 +303,6 @@ const getStyles = (isDark: boolean) =>
       letterSpacing: 0.2,
       maxWidth: 240,
     },
-
     title: {
       fontSize: 20,
       fontWeight: "800",
@@ -343,7 +314,6 @@ const getStyles = (isDark: boolean) =>
       fontSize: 14,
       marginBottom: 8,
     },
-
     label: {
       fontSize: 12,
       fontWeight: "800",
@@ -369,7 +339,6 @@ const getStyles = (isDark: boolean) =>
       color: isDark ? "#E5E7EB" : "#111827",
       padding: 0,
     },
-
     primaryBtn: {
       marginTop: 16,
       flexDirection: "row",
