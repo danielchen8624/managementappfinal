@@ -27,7 +27,6 @@ import {
   getDocs,
   onSnapshot,
   orderBy,
-  // getDoc, setDoc // (keep handy if needed later)
 } from "firebase/firestore";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { db, auth } from "../../firebaseConfig";
@@ -40,10 +39,8 @@ import { useUser } from "../UserContext";
 import { Ionicons, MaterialIcons, FontAwesome5 } from "@expo/vector-icons";
 import { useTheme } from "../ThemeContext";
 import { useShiftTimer } from "../(hooks)/secondsCounter";
-
-// 🔑 Building context
 import { useBuilding } from "../BuildingContext";
-import { set } from "firebase/database";
+import SecurityHourlyNudge from "../(components)/securityHourlyNudge";
 
 const { height: SCREEN_H } = Dimensions.get("window");
 
@@ -94,25 +91,22 @@ function HomePage() {
   // 🌆 Building context
   const { buildingId, setBuildingId } = useBuilding();
 
-  // ---- Building-scoped refs (reads/writes only inside the current building) ----
+  // ---- Building-scoped helpers ----
   const subcol = (sub: "tasks" | "reports" | "messages") =>
     buildingId ? collection(db, "buildings", buildingId, sub) : null;
-
-  const docIn = (sub: "tasks" | "reports" | "messages", id: string) =>
-    buildingId ? doc(db, "buildings", buildingId, sub, id) : null;
 
   // ---- Building picker state ----
   const [buildingPickerOpen, setBuildingPickerOpen] = useState(false);
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [buildingsLoading, setBuildingsLoading] = useState(false);
 
-  // Load buildings the user can see (adjust filter to your membership model)
+  // Load buildings the user can see (tune as needed)
   useEffect(() => {
     (async () => {
       setBuildingsLoading(true);
       try {
         const colRef = collection(db, "buildings");
-        // Example membership filter if you store array of member UIDs:
+        // Example membership filter if you store members:
         // const qy = query(colRef, where("members", "array-contains", uid));
         const qy = query(colRef, limit(100));
         const snap = await getDocs(qy);
@@ -224,11 +218,14 @@ function HomePage() {
     );
   }
 
+  // Convenience: security should share worker-like capabilities
+  const isWorker = role === "employee" || role === "security";
+
   // ⏱️ Clock In/Out (user-scoped; not tied to building)
   const handleClockIn = async () => {
     const uid = auth.currentUser?.uid;
     if (!uid) {
-      Alert.alert("Please Sign In.");
+      Alert.alert("Please sign in.");
       return;
     }
     if (!currentShiftId) {
@@ -381,8 +378,11 @@ function HomePage() {
           )}
         </View>
 
-        {/* Thin on-shift pill UNDER the header */}
-        {role === "employee" && !!currentShiftId && (
+        {/* Security top bar*/}
+        {role === "security" && <SecurityHourlyNudge />}
+
+        {/* Thin on-shift pill — show for employees and security */}
+        {isWorker && !!currentShiftId && (
           <View style={s.shiftThinWrap}>
             <View style={s.shiftThinBar}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -429,7 +429,7 @@ function HomePage() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Manager area */}
+          {/* Manager area (unchanged) */}
           {role === "supervisor" && (
             <>
               <View className="card" style={s.card}>
@@ -537,9 +537,9 @@ function HomePage() {
                 >
                   <Text style={s.verifyBtnText}>Verify Completed Tasks</Text>
                 </TouchableOpacity>
-                
               </View>
-              {/* security card */}
+
+              {/* Security Checklist (admin/manager access to creator) */}
               <View
                 style={[
                   s.verifyCard,
@@ -560,12 +560,33 @@ function HomePage() {
                 >
                   <Text style={s.verifyBtnText}>Security Checklist</Text>
                 </TouchableOpacity>
-                
+              </View>
+
+               <View
+                style={[
+                  s.verifyCard,
+                  { backgroundColor: isDark ? "#1F2937" : "#F3F4F6" },
+                ]}
+              >
+                <TouchableOpacity
+                  onPress={() => {
+                    if (!buildingId)
+                      return Alert.alert("Pick a building first");
+                    router.push("/supervisorViewSecurity");
+                  }}
+                  style={[
+                    s.verifyBtn,
+                    { backgroundColor: isDark ? "#2563EB" : "#3B82F6" },
+                  ]}
+                  activeOpacity={0.9}
+                >
+                  <Text style={s.verifyBtnText}>View Latest Security Checks</Text>
+                </TouchableOpacity>
               </View>
             </>
           )}
 
-          {/* Employee area */}
+          {/* Employee area (unchanged) */}
           {role === "employee" && (
             <View style={s.card}>
               <View style={s.cardHeader}>
@@ -601,6 +622,67 @@ function HomePage() {
                 fullWidth
                 disabled={!buildingId}
               />
+              <ActionButton
+                onPress={() =>
+                  buildingId
+                    ? setReportModal(true)
+                    : Alert.alert("Pick a building first")
+                }
+                icon={
+                  <MaterialIcons
+                    name="report-problem"
+                    size={18}
+                    color="#FFFFFF"
+                  />
+                }
+                label="Report Issue"
+                size="lg"
+                fullWidth
+                disabled={!buildingId}
+              />
+            </View>
+          )}
+
+          {/* ⬇️ NEW: Security area (only for role === "security") */}
+          {role === "security" && (
+            <View style={s.card}>
+              <View style={s.cardHeader}>
+                <Text style={s.cardTitle}>Security</Text>
+                <Text style={s.cardSubtitle}>
+                  Clock in, open checklist, report issues
+                </Text>
+              </View>
+
+              {/* Clock In/Out (same behavior as employees) */}
+              <ActionButton
+                onPress={handleClockIn}
+                icon={
+                  <Ionicons
+                    name={currentShiftId ? "exit-outline" : "log-in-outline"}
+                    size={18}
+                    color="#FFFFFF"
+                  />
+                }
+                label={currentShiftId ? "Clock Out" : "Clock In"}
+                size="lg"
+                fullWidth
+              />
+
+              {/* Unique #1: Open Checklist */}
+              <ActionButton
+                onPress={() =>
+                  buildingId
+                    ? router.push("/securityChecklist")
+                    : Alert.alert("Pick a building first")
+                }
+                icon={<Ionicons name="shield-checkmark" size={18} color="#FFFFFF" />}
+                label="Open Checklist"
+                size="lg"
+                fullWidth
+                disabled={!buildingId}
+              />
+
+              {/* Report Issue (same as employees) */}
               <ActionButton
                 onPress={() =>
                   buildingId
@@ -823,6 +905,7 @@ const getStyles = (isDark: boolean) =>
       fontWeight: "700",
       color: isDark ? "#93A4B3" : "#4B5563",
       marginLeft: 8,
+      textTransform: "capitalize",
     },
 
     buildingPill: {
@@ -836,7 +919,7 @@ const getStyles = (isDark: boolean) =>
       backgroundColor: isDark ? "#111827" : "#E5E7EB",
       borderWidth: isDark ? 1 : 0,
       borderColor: isDark ? "#1F2937" : "transparent",
-      maxWidth: 180,
+      maxWidth: 200,
     },
     buildingPillText: {
       fontSize: 12,
@@ -946,6 +1029,7 @@ const getStyles = (isDark: boolean) =>
       elevation: 4,
       borderWidth: isDark ? 1 : 0,
       borderColor: isDark ? "#1E3A8A" : "transparent",
+      minHeight: 56,
     },
     iconPill: {
       width: 34,
@@ -1053,7 +1137,7 @@ const getStyles = (isDark: boolean) =>
     shiftThinBar: {
       height: 30,
       borderRadius: 999,
-      backgroundColor: "#10B981", // green
+      backgroundColor: "#10B981",
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",

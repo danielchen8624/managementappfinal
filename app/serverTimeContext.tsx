@@ -1,5 +1,4 @@
-
-
+// app/TimeContext.tsx
 import React, {
   createContext,
   useContext,
@@ -27,8 +26,8 @@ const DEFAULT_PRIORITY_WINDOWS = [
 // Project time slot
 const PROJECT_WINDOW = { start: "15:00", end: "15:30" } as const;
 
-// Weekdays only by default
-const isActiveBusinessDay = (d: Date) => true;
+// Weekday filter if needed; currently always true (24/7)
+const isActiveBusinessDay = (_d: Date) => true;
 
 /* ----------------------------- time utilities ----------------------------- */
 
@@ -54,7 +53,6 @@ function getActivePriorityFromDate(
   return null;
 }
 
-// compute the next change boundary (start or end of any window) from a given time
 function getNextBoundary(
   date: Date,
   BUSINESS_TZ: string,
@@ -67,9 +65,9 @@ function getNextBoundary(
     const [sh, sm] = w.start.split(":").map(Number);
     const [eh, em] = w.end.split(":").map(Number);
     const startToday = dt.set({ hour: sh, minute: sm, second: 0, millisecond: 0 });
-    const endToday = dt.set({ hour: eh, minute: em, second: 0, millisecond: 0 });
+    const endToday   = dt.set({ hour: eh, minute: em, second: 0, millisecond: 0 });
     if (startToday > dt) candidates.push(startToday);
-    if (endToday > dt) candidates.push(endToday);
+    if (endToday > dt)   candidates.push(endToday);
   }
 
   // include project window boundaries
@@ -79,19 +77,14 @@ function getNextBoundary(
     const pStart = dt.set({ hour: psh, minute: psm, second: 0, millisecond: 0 });
     const pEnd   = dt.set({ hour: peh, minute: pem, second: 0, millisecond: 0 });
     if (pStart > dt) candidates.push(pStart);
-    if (pEnd > dt) candidates.push(pEnd);
+    if (pEnd > dt)   candidates.push(pEnd);
   }
 
-  // also consider tomorrow’s first window just in case we’re after all windows
+  // fallback to tomorrow’s first window
   const tomorrow = dt.plus({ days: 1 }).startOf("day");
   const [firstStartH, firstStartM] = windows[0].start.split(":").map(Number);
   candidates.push(
-    tomorrow.set({
-      hour: firstStartH,
-      minute: firstStartM,
-      second: 0,
-      millisecond: 0,
-    })
+    tomorrow.set({ hour: firstStartH, minute: firstStartM, second: 0, millisecond: 0 })
   );
 
   if (candidates.length === 0) return null;
@@ -99,11 +92,44 @@ function getNextBoundary(
   return candidates[0];
 }
 
+/* -------------------- Security hourly cadence helpers --------------------- */
+
+const SECURITY_START_HOUR = 8;   // inclusive (08:00)
+const SECURITY_END_HOUR   = 22;  // inclusive (22:00)
+const SECURITY_ALERT_GRACE_SECONDS = 9 * 60; // show “it’s time” banner for first 9 min of the hour
+
+function nextSecurityPing(dt: DateTime): DateTime {
+  // If before 08:00 → 08:00 today
+  if (dt.hour < SECURITY_START_HOUR) {
+    return dt.set({ hour: SECURITY_START_HOUR, minute: 0, second: 0, millisecond: 0 });
+  }
+  // If between 08:00 and 22:00 → next top of hour (inclusive)
+  if (dt.hour < SECURITY_END_HOUR) {
+    const nextHour = dt.plus({ hours: 1 }).set({ minute: 0, second: 0, millisecond: 0 });
+    return nextHour;
+  }
+  // If at/after 22:00 → next day 08:00
+  const nextDay8 = dt.plus({ days: 1 }).set({
+    hour: SECURITY_START_HOUR,
+    minute: 0,
+    second: 0,
+    millisecond: 0,
+  });
+  return nextDay8;
+}
+
+function currentHourIsSecurityWindow(dt: DateTime): boolean {
+  return dt.hour >= SECURITY_START_HOUR && dt.hour <= SECURITY_END_HOUR;
+}
+
+function secondsIntoHour(dt: DateTime): number {
+  return dt.minute * 60 + dt.second;
+}
+
 /* --------------------- server clock offset implementations --------------------- */
 
-// Option A: Realtime Database live offset
 function watchClockOffsetRTDB(onOffset: (ms: number) => void): () => void {
-  const db = getDatabase(); // make sure you initialized RTDB in your firebaseConfig
+  const db = getDatabase();
   const offsetRef = ref(db, ".info/serverTimeOffset");
   const unsub = onValue(offsetRef, (snap) => {
     const offset = snap.val() ?? 0;
@@ -112,7 +138,6 @@ function watchClockOffsetRTDB(onOffset: (ms: number) => void): () => void {
   return () => unsub();
 }
 
-// Option B: HTTPS callable fallback (create a CF named "getServerTime")
 async function fetchClockOffsetViaCallable(): Promise<number> {
   try {
     const fn = httpsCallable(getFunctions(), "getServerTime");
@@ -131,13 +156,23 @@ async function fetchClockOffsetViaCallable(): Promise<number> {
 /* ------------------------------- context types ------------------------------- */
 
 type ServerTimeCtx = {
-  now: () => Date;                // JS Date using server offset
-  tzNow: () => DateTime;          // Luxon DateTime in BUSINESS_TZ
-  offsetMs: number;               // server - device delta in ms
-  activePriority: number | null;  // 1 | 2 | 3 | null
-  nextBoundary: DateTime | null;  // next start/end change in BUSINESS_TZ
-  secondsToNextChange: number | null; // countdown helper
-  isProjectTime: boolean;         // true 15:00–15:30
+  // existing
+  now: () => Date;
+  tzNow: () => DateTime;
+  offsetMs: number;
+  activePriority: number | null;
+  nextBoundary: DateTime | null;
+  secondsToNextChange: number | null;
+  isProjectTime: boolean;
+
+  // NEW: security cadence
+  security: {
+    isWithinSecurityHours: boolean;     // 08:00–22:59 (by hour)
+    isPingWindow: boolean;              // first ~9 min of each eligible hour
+    nextPing: DateTime;                 // next scheduled top-of-hour ping
+    secondsToNextPing: number;          // countdown to next top-of-hour
+    hourLabel: string;                  // e.g. "14:00"
+  };
 };
 
 type ServerTimeProviderProps = {
@@ -158,27 +193,25 @@ export const ServerTimeProvider: React.FC<ServerTimeProviderProps> = ({
   const [offsetMs, setOffsetMs] = useState(0);
   const haveRTDBOffset = useRef(false);
 
-  // Keep a lightweight tick so consumers update smoothly
+  // 1s tick so the security banner feels snappy
   const [tick, setTick] = useState(0);
   useEffect(() => {
-    const id = setInterval(() => setTick((x) => x + 1), 5000);
+    const id = setInterval(() => setTick((x) => x + 1), 1000);
     return () => clearInterval(id);
   }, []);
 
-  // Start RTDB offset listener, and also try callable as a one-shot fallback
+  // server offset sources
   useEffect(() => {
     const unsub = watchClockOffsetRTDB((ms) => {
       haveRTDBOffset.current = true;
       setOffsetMs(ms);
     });
-
     const fallbackTimer = setTimeout(async () => {
       if (!haveRTDBOffset.current) {
         const ms = await fetchClockOffsetViaCallable();
         if (!haveRTDBOffset.current) setOffsetMs(ms);
       }
     }, 2000);
-
     return () => {
       clearTimeout(fallbackTimer);
       unsub();
@@ -191,21 +224,36 @@ export const ServerTimeProvider: React.FC<ServerTimeProviderProps> = ({
       DateTime.fromMillis(Date.now() + offsetMs).setZone(businessTz);
 
     const d = now();
+    const dt = DateTime.fromJSDate(d).setZone(businessTz);
 
+    // existing
     const activePriority = isActiveBusinessDay(d)
       ? getActivePriorityFromDate(d, businessTz, windows)
       : null;
 
     const boundary = getNextBoundary(d, businessTz, windows);
     const secondsToNextChange =
-      boundary ? Math.max(0, Math.floor((boundary.toMillis() - (Date.now() + offsetMs)) / 1000)) : null;
+      boundary
+        ? Math.max(0, Math.floor((boundary.toMillis() - (Date.now() + offsetMs)) / 1000))
+        : null;
 
-    // project slot: 15:00–15:30 local
-    const dt = DateTime.fromJSDate(d).setZone(businessTz);
     const mins = dt.hour * 60 + dt.minute;
     const projStart = toMins(PROJECT_WINDOW.start);
     const projEnd   = toMins(PROJECT_WINDOW.end);
     const isProjectTime = mins >= projStart && mins <= projEnd;
+
+    // NEW: security cadence
+    const inHours = currentHourIsSecurityWindow(dt);
+    const nextPing = nextSecurityPing(dt);
+    const secondsToNextPing = Math.max(
+      0,
+      Math.floor((nextPing.toMillis() - dt.toMillis()) / 1000)
+    );
+
+    const secInto = secondsIntoHour(dt);
+    const isPingWindow = inHours && secInto <= SECURITY_ALERT_GRACE_SECONDS;
+
+    const hourLabel = dt.set({ minute: 0, second: 0, millisecond: 0 }).toFormat("HH:mm");
 
     return {
       now,
@@ -215,6 +263,13 @@ export const ServerTimeProvider: React.FC<ServerTimeProviderProps> = ({
       nextBoundary: boundary,
       secondsToNextChange,
       isProjectTime,
+      security: {
+        isWithinSecurityHours: inHours,
+        isPingWindow,
+        nextPing,
+        secondsToNextPing,
+        hourLabel,
+      },
     };
   }, [offsetMs, tick, businessTz, windows]);
 
@@ -230,7 +285,6 @@ export function useServerTime(): ServerTimeCtx {
 }
 
 /* ---------------------------- optional exports ---------------------------- */
-// Export these if you want to unit test or reuse defaults elsewhere
 export {
   DEFAULT_BUSINESS_TZ as BUSINESS_TZ,
   DEFAULT_PRIORITY_WINDOWS as priorityWindows,
