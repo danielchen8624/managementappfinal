@@ -450,6 +450,10 @@ function TaskPage() {
   /** navigation */
   const openTaskScreen = useCallback(
     (item: any) => {
+      if (role === "manager") {
+        console.log("hai");
+        return;
+      }
       router.push({
         pathname: "/taskClicked",
         params: {
@@ -465,11 +469,15 @@ function TaskPage() {
         },
       });
     },
-    [buildingId]
+    [buildingId, role]
   );
 
   const openProjectScreen = useCallback(
     (item: any) => {
+      if (role === "manager") {
+        console.log("hai");
+        return;
+      }
       router.push({
         pathname: "/projectClicked",
         params: {
@@ -484,7 +492,7 @@ function TaskPage() {
         },
       });
     },
-    [buildingId]
+    [buildingId, role]
   );
 
   /** status helpers */
@@ -513,8 +521,8 @@ function TaskPage() {
   /** delete */
   const confirmDelete = useCallback(
     (id: string, isProject: boolean, close?: () => void) => {
-      if (role !== "manager") {
-        Alert.alert("Not allowed", "Only managers can delete items.");
+      if (role !== "supervisor") {
+        Alert.alert("Not allowed", "Only supervisors can delete items.");
         return;
       }
       if (!buildingId) {
@@ -778,7 +786,7 @@ function TaskPage() {
 
   // counts for headers
   const tasksCount =
-    role === "supervisor"
+    role === "supervisor" || role === "manager"
       ? MP1.length + MP2.length + MP3.length
       : EP1.length + EP2.length + EP3.length;
 
@@ -866,7 +874,7 @@ function TaskPage() {
         <Text style={s.legendText}>Completed</Text>
       </View>
 
-      {role === "supervisor" ? (
+      {role === "supervisor" || role === "manager" ? (
         <FlatList
           data={[]}
           renderItem={null}

@@ -216,18 +216,6 @@ function SecurityChecklist() {
   const toggle = (id: string) =>
     setChecked((prev) => ({ ...prev, [id]: !prev[id] }));
 
-  const selectAll = () => {
-    const next: Record<string, boolean> = {};
-    items.forEach((it) => (next[it.id] = true));
-    setChecked(next);
-  };
-
-  const clearAll = () => {
-    const next: Record<string, boolean> = {};
-    items.forEach((it) => (next[it.id] = false));
-    setChecked(next);
-  };
-
   // ─────────────────────────────
   // 4) Submit run — Firestore docId now includes hour bucket (YYYY-MM-DD-HH:00)
   // ─────────────────────────────
@@ -435,56 +423,6 @@ function SecurityChecklist() {
                 ]}
               >
                 {onlyUnchecked ? "Showing unchecked" : "All items"}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={s.actionsRow}>
-            <TouchableOpacity
-              onPress={selectAll}
-              style={[
-                s.smallBtn,
-                {
-                  backgroundColor: isDark ? "#1E293B" : "#EEF2FF",
-                  borderColor: isDark ? "#334155" : "#C7D2FE",
-                },
-              ]}
-              activeOpacity={0.9}
-              disabled={disabledUI}
-            >
-              <Ionicons
-                name="checkmark-done"
-                size={14}
-                color={isDark ? "#93C5FD" : "#4338CA"}
-              />
-              <Text
-                style={[s.smallBtnText, { color: isDark ? "#E5E7EB" : "#1F2937" }]}
-              >
-                Select All
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={clearAll}
-              style={[
-                s.smallBtn,
-                {
-                  backgroundColor: isDark ? "#1F2937" : "#FDF2F2",
-                  borderColor: isDark ? "#374151" : "#FECACA",
-                },
-              ]}
-              activeOpacity={0.9}
-              disabled={disabledUI}
-            >
-              <Ionicons
-                name="close-circle"
-                size={14}
-                color={isDark ? "#FCA5A5" : "#B91C1C"}
-              />
-              <Text
-                style={[s.smallBtnText, { color: isDark ? "#F3F4F6" : "#991B1B" }]}
-              >
-                Clear All
               </Text>
             </TouchableOpacity>
           </View>

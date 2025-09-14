@@ -14,6 +14,7 @@ import {
   ScrollView,
   Modal,
   FlatList,
+  Platform,
 } from "react-native";
 import {
   addDoc,
@@ -44,6 +45,47 @@ import SecurityHourlyNudge from "../(components)/securityHourlyNudge";
 
 const { height: SCREEN_H } = Dimensions.get("window");
 
+/** -----------------------------------------------------------
+ *  Polished, professional color system (enterprise)
+ *  -----------------------------------------------------------
+ */
+const Pal = {
+  light: {
+    bg: "#F6F8FB",
+    surface: "#FFFFFF",
+    subtle: "#F0F2F6",
+    text: "#0F172A",
+    textMuted: "#4B5563",
+    outline: "#E6EAF0",
+    outlineBold: "#D4DAE3",
+    primary: "#1F4ED8",
+    primaryAlt: "#183EA9",
+    success: "#0F9B6E",
+    warning: "#B45309",
+    danger: "#DC2626",
+    accent: "#0EA5E9",
+  },
+  dark: {
+    bg: "#0A0F1A",
+    surface: "#101826",
+    subtle: "#0F172A",
+    text: "#E5E7EB",
+    textMuted: "#9CA3AF",
+    outline: "#1E293B",
+    outlineBold: "#334155",
+    primary: "#2563EB",
+    primaryAlt: "#1E3A8A",
+    success: "#10B981",
+    warning: "#F59E0B",
+    danger: "#F87171",
+    accent: "#38BDF8",
+  },
+};
+
+function Hairline({ style }: { style?: any }) {
+  return <View style={[{ height: StyleSheet.hairlineWidth }, style]} />;
+}
+
 type LatestReport = {
   id: string;
   title?: string;
@@ -66,6 +108,8 @@ function HomePage() {
   const [managerViewReportModal, setManagerViewReportModal] = useState(false);
   const [reviewModal, setReviewModal] = useState(false);
   const [currentShiftId, setCurrentShiftId] = useState("");
+  const [managerReportsOpen, setManagerReportsOpen] = useState(false);
+
 
   const [latestReport, setLatestReport] = useState<LatestReport | null>(null);
   const [latestLoading, setLatestLoading] = useState(true);
@@ -74,13 +118,16 @@ function HomePage() {
   const { theme } = useTheme();
   const isDark = theme === "dark";
   const s = getStyles(isDark);
+  const C = isDark ? Pal.dark : Pal.light;
+  const neutralIcon = isDark ? "#A3AED0" : "#64748B";
 
+  // Theme crossfade
   const themeAnim = useRef(new Animated.Value(isDark ? 1 : 0)).current;
   useEffect(() => {
     Animated.timing(themeAnim, {
       toValue: isDark ? 1 : 0,
-      duration: 220,
-      easing: Easing.inOut(Easing.quad),
+      duration: 240,
+      easing: Easing.out(Easing.quad),
       useNativeDriver: false,
     }).start();
   }, [isDark, themeAnim]);
@@ -88,26 +135,23 @@ function HomePage() {
   const uid = auth.currentUser?.uid;
   const { hhmmss } = useShiftTimer(uid);
 
-  // 🌆 Building context
+  // Building context
   const { buildingId, setBuildingId } = useBuilding();
 
-  // ---- Building-scoped helpers ----
+  // Building-scoped helpers
   const subcol = (sub: "tasks" | "reports" | "messages") =>
     buildingId ? collection(db, "buildings", buildingId, sub) : null;
 
-  // ---- Building picker state ----
-  const [buildingPickerOpen, setBuildingPickerOpen] = useState(false);
+  // Building picker state
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [buildingsLoading, setBuildingsLoading] = useState(false);
 
-  // Load buildings the user can see (tune as needed)
+  // Load buildings
   useEffect(() => {
     (async () => {
       setBuildingsLoading(true);
       try {
         const colRef = collection(db, "buildings");
-        // Example membership filter if you store members:
-        // const qy = query(colRef, where("members", "array-contains", uid));
         const qy = query(colRef, limit(100));
         const snap = await getDocs(qy);
         const list: Building[] = snap.docs.map((d) => ({
@@ -124,11 +168,12 @@ function HomePage() {
     })();
   }, [uid]);
 
-  // Resolve current building name for header
+  // Current building name (truncate at 7)
   const currentBuildingName = useMemo(() => {
     if (!buildingId) return null;
     const b = buildings.find((x) => x.id === buildingId);
-    return b?.name || `#${buildingId.slice(0, 6)}`;
+    const name = b?.name || `#${buildingId.slice(0, 6)}`;
+    return name.length > 7 ? name.slice(0, 7) + "…" : name;
   }, [buildingId, buildings]);
 
   // ---- AsyncStorage helpers (shift) ----
@@ -174,7 +219,7 @@ function HomePage() {
     })();
   }, [uid]);
 
-  // 📥 Subscribe to latest report INSIDE the building (scoped)
+  // Subscribe to latest report (scoped)
   useEffect(() => {
     setLatestLoading(true);
     if (!buildingId) {
@@ -218,10 +263,9 @@ function HomePage() {
     );
   }
 
-  // Convenience: security should share worker-like capabilities
   const isWorker = role === "employee" || role === "security";
 
-  // ⏱️ Clock In/Out (user-scoped; not tied to building)
+  // ⏱️ Clock In/Out
   const handleClockIn = async () => {
     const uid = auth.currentUser?.uid;
     if (!uid) {
@@ -262,7 +306,90 @@ function HomePage() {
 
   const openVerifyCompleted = () => router.push("/home"); // keep
 
+  /** -----------------------------------------------------------
+   *  Primary ActionButton (animated + crisp elevation)
+   *  -----------------------------------------------------------
+   */
   const ActionButton = ({
+    onPress,
+    icon,
+    label,
+    subtitle,
+    fullWidth = false,
+    size = "md",
+    style,
+    disabled = false,
+  }: {
+    onPress: () => void;
+    icon?: React.ReactNode;
+    label: string;
+    subtitle?: string;
+    fullWidth?: boolean;
+    size?: "md" | "lg" | "xl";
+    style?: any;
+    disabled?: boolean;
+  }) => {
+    const scale = useRef(new Animated.Value(1)).current;
+
+    const pressIn = () =>
+      Animated.spring(scale, {
+        toValue: 0.985,
+        useNativeDriver: true,
+        friction: 7,
+        tension: 120,
+      }).start();
+
+    const pressOut = () =>
+      Animated.spring(scale, {
+        toValue: 1,
+        useNativeDriver: true,
+        friction: 6,
+        tension: 160,
+      }).start();
+
+    const sizeStyle =
+      size === "xl" ? s.btnXL : size === "lg" ? s.btnLG : s.btnMD;
+
+    return (
+      <Animated.View style={{ transform: [{ scale }] }}>
+        <TouchableOpacity
+          onPress={onPress}
+          onPressIn={disabled ? undefined : pressIn}
+          onPressOut={disabled ? undefined : pressOut}
+          style={[
+            s.btnBase,
+            sizeStyle,
+            fullWidth && { width: "100%" },
+            style,
+            disabled && s.btnDisabled,
+          ]}
+          activeOpacity={disabled ? 1 : 0.88}
+          disabled={disabled}
+        >
+          <View style={s.iconPill}>
+            {icon ?? <Ionicons name="flash-outline" size={18} color="#fff" />}
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={s.btnText} numberOfLines={1}>
+              {label}
+            </Text>
+            {subtitle ? (
+              <Text style={s.btnSubText} numberOfLines={1}>
+                {subtitle}
+              </Text>
+            ) : null}
+          </View>
+          <Ionicons name="chevron-forward" size={18} color="#fff" />
+        </TouchableOpacity>
+      </Animated.View>
+    );
+  };
+
+  /** -----------------------------------------------------------
+   *  Neutral SurfaceButton (secondary actions)
+   *  -----------------------------------------------------------
+   */
+  const SurfaceButton = ({
     onPress,
     icon,
     label,
@@ -283,34 +410,44 @@ function HomePage() {
   }) => {
     const sizeStyle =
       size === "xl" ? s.btnXL : size === "lg" ? s.btnLG : s.btnMD;
+
     return (
       <TouchableOpacity
         onPress={onPress}
         style={[
-          s.btnBase,
+          s.surfaceBtnBase,
           sizeStyle,
           fullWidth && { width: "100%" },
           style,
-          disabled && { opacity: 0.5 },
+          disabled && s.surfaceBtnDisabled,
         ]}
         activeOpacity={disabled ? 1 : 0.9}
         disabled={disabled}
-        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       >
-        <View style={s.iconPill}>
-          {icon ?? <Ionicons name="flash-outline" size={18} color="#fff" />}
+        <View style={s.surfaceIconPill}>
+          {icon ?? (
+            <Ionicons
+              name="ellipse-outline"
+              size={16}
+              color={isDark ? "#A3AED0" : "#64748B"}
+            />
+          )}
         </View>
-        <View style={{ flex: 1 }}>
-          <Text style={s.btnText} numberOfLines={1}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={s.surfaceBtnText} numberOfLines={1}>
             {label}
           </Text>
           {subtitle ? (
-            <Text style={s.btnSubText} numberOfLines={1}>
+            <Text style={s.surfaceBtnSubText} numberOfLines={1}>
               {subtitle}
             </Text>
           ) : null}
         </View>
-        <Ionicons name="chevron-forward" size={18} color="#fff" />
+        <Ionicons
+          name="chevron-forward"
+          size={18}
+          color={isDark ? "#A3AED0" : "#64748B"}
+        />
       </TouchableOpacity>
     );
   };
@@ -323,14 +460,16 @@ function HomePage() {
       )}`
     : "No reports yet";
 
+  const [buildingPickerOpen, setBuildingPickerOpen] = useState(false);
+
   return (
     <View style={s.container}>
       {/* crossfade layers */}
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: "#F8FAFC" }]} />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: Pal.light.bg }]} />
       <Animated.View
         style={[
           StyleSheet.absoluteFill,
-          { backgroundColor: "#0F172A", opacity: themeAnim },
+          { backgroundColor: Pal.dark.bg, opacity: themeAnim },
         ]}
       />
 
@@ -340,25 +479,18 @@ function HomePage() {
           <View style={{ flexDirection: "row", alignItems: "baseline" }}>
             <Text style={s.headerTitle}>Home</Text>
             {!!role && <Text style={s.headerRole}> • {role}</Text>}
-            {/* Current building pill */}
+
+            {/* Building pill */}
             <TouchableOpacity
               onPress={() => setBuildingPickerOpen(true)}
               style={s.buildingPill}
-              activeOpacity={0.85}
+              activeOpacity={0.95}
             >
-              <Ionicons
-                name="business-outline"
-                size={14}
-                color={isDark ? "#E5E7EB" : "#111827"}
-              />
+              <Ionicons name="business-outline" size={14} color={C.text} />
               <Text style={s.buildingPillText} numberOfLines={1}>
                 {currentBuildingName ?? "Select Building"}
               </Text>
-              <Ionicons
-                name="chevron-down"
-                size={14}
-                color={isDark ? "#E5E7EB" : "#111827"}
-              />
+              <Ionicons name="chevron-down" size={14} color={C.text} />
             </TouchableOpacity>
           </View>
 
@@ -366,22 +498,24 @@ function HomePage() {
             <TouchableOpacity
               onPress={() => router.push("/requestHistory")}
               style={s.headerIconBtn}
-              activeOpacity={0.9}
+              activeOpacity={0.88}
               accessibilityLabel="Request History"
             >
-              <MaterialIcons
-                name="history"
-                size={18}
-                color={isDark ? "#E5E7EB" : "#111827"}
-              />
+              <MaterialIcons name="history" size={18} color={C.text} />
             </TouchableOpacity>
           )}
         </View>
 
-        {/* Security top bar*/}
-        {role === "security" && <SecurityHourlyNudge />}
+        {/* Security top bar — next run / next shift */}
+        {role === "security" && (
+          <View style={{ paddingHorizontal: 16, marginBottom: 6 }}>
+            <View style={s.securityNudgeCard}>
+              <SecurityHourlyNudge />
+            </View>
+          </View>
+        )}
 
-        {/* Thin on-shift pill — show for employees and security */}
+        {/* On-shift pill */}
         {isWorker && !!currentShiftId && (
           <View style={s.shiftThinWrap}>
             <View style={s.shiftThinBar}>
@@ -393,51 +527,35 @@ function HomePage() {
           </View>
         )}
 
-        {/* If no building selected, nudge */}
+        {/* Nudge to select building */}
         {!buildingId && (
           <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
-            <View
-              style={{
-                padding: 12,
-                borderRadius: 10,
-                backgroundColor: isDark ? "#1F2937" : "#FFF7ED",
-                borderWidth: 1,
-                borderColor: isDark ? "#334155" : "#FED7AA",
-              }}
-            >
-              <Text
-                style={{
-                  fontWeight: "800",
-                  color: isDark ? "#F3F4F6" : "#7C2D12",
-                }}
-              >
-                Select a building to continue
-              </Text>
-              <Text
-                style={{ marginTop: 4, color: isDark ? "#CBD5E1" : "#7C2D12" }}
-              >
+            <View style={s.inlineBanner}>
+              <Text style={s.inlineBannerTitle}>Select a building to continue</Text>
+              <Text style={s.inlineBannerText}>
                 All actions and lists are scoped to the chosen building.
               </Text>
             </View>
           </View>
         )}
 
-        {/* Scrollable content */}
+        {/* Content */}
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={s.scrollContainer}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Manager area (unchanged) */}
+          {/* SUPERVISOR */}
           {role === "supervisor" && (
             <>
-              <View className="card" style={s.card}>
+              <View style={s.card}>
                 <View style={s.cardHeader}>
-                  <Text style={s.cardTitle}>Manager</Text>
-                  <Text style={s.cardSubtitle}>
-                    Quick actions to run the floor
-                  </Text>
+                  <View style={s.cardHeaderRow}>
+                    <Ionicons name="briefcase-outline" size={18} color={C.accent} />
+                    <Text style={s.cardTitle}>Supervisor</Text>
+                  </View>
+                  <Text style={s.cardSubtitle}>Run operations efficiently</Text>
                 </View>
 
                 <View style={s.row}>
@@ -448,13 +566,7 @@ function HomePage() {
                           ? setTaskModal(true)
                           : Alert.alert("Pick a building first")
                       }
-                      icon={
-                        <FontAwesome5
-                          name="project-diagram"
-                          size={18}
-                          color="#FFFFFF"
-                        />
-                      }
+                      icon={<FontAwesome5 name="project-diagram" size={18} color="#FFFFFF" />}
                       label="Add New Task"
                       size="lg"
                       style={s.equalHeight}
@@ -468,9 +580,7 @@ function HomePage() {
                           ? router.push("/scheduler")
                           : Alert.alert("Pick a building first")
                       }
-                      icon={
-                        <Ionicons name="calendar" size={20} color="#FFFFFF" />
-                      }
+                      icon={<Ionicons name="calendar" size={20} color="#FFFFFF" />}
                       label="Scheduler"
                       size="lg"
                       style={s.equalHeight}
@@ -479,7 +589,7 @@ function HomePage() {
                   </View>
                 </View>
 
-                <View style={s.twoThirdsSpacer} />
+                <Hairline style={s.hairline} />
 
                 <ActionButton
                   onPress={() =>
@@ -487,27 +597,22 @@ function HomePage() {
                       ? setManagerViewReportModal(true)
                       : Alert.alert("Pick a building first")
                   }
-                  icon={
-                    <MaterialIcons
-                      name="assessment"
-                      size={20}
-                      color="#FFFFFF"
-                    />
-                  }
+                  icon={<MaterialIcons name="assessment" size={20} color="#FFFFFF" />}
                   label="View Reports"
                   subtitle={reportsSubtitle}
                   size="xl"
                   fullWidth
                   disabled={!buildingId}
                 />
-                <View style={{ height: 10 }} />
-                <ActionButton
+
+                {/* Secondary action as neutral surface */}
+                <SurfaceButton
                   onPress={() =>
                     buildingId
                       ? router.push("/manageEmployees")
                       : Alert.alert("Pick a building first")
                   }
-                  icon={<Ionicons name="people" size={20} color="#FFFFFF" />}
+                  icon={<Ionicons name="people" size={20} color={neutralIcon} />}
                   label="Manage Employees"
                   size="xl"
                   fullWidth
@@ -515,69 +620,42 @@ function HomePage() {
                 />
               </View>
 
-              {/* Verify Completed Tasks Card */}
-              <View
-                style={[
-                  s.verifyCard,
-                  { backgroundColor: isDark ? "#1F2937" : "#F3F4F6" },
-                ]}
-              >
+              {/* Verify Completed Tasks */}
+              <View style={s.verifyCard}>
                 <TouchableOpacity
                   onPress={() => {
-                    if (!buildingId)
-                      return Alert.alert("Pick a building first");
+                    if (!buildingId) return Alert.alert("Pick a building first");
                     openVerifyCompleted();
                     setReviewModal(true);
                   }}
-                  style={[
-                    s.verifyBtn,
-                    { backgroundColor: isDark ? "#2563EB" : "#3B82F6" },
-                  ]}
+                  style={s.verifyBtn}
                   activeOpacity={0.9}
                 >
                   <Text style={s.verifyBtnText}>Verify Completed Tasks</Text>
                 </TouchableOpacity>
               </View>
 
-              {/* Security Checklist (admin/manager access to creator) */}
-              <View
-                style={[
-                  s.verifyCard,
-                  { backgroundColor: isDark ? "#1F2937" : "#F3F4F6" },
-                ]}
-              >
+              {/* Security Checklist Admin */}
+              <View style={s.verifyCard}>
                 <TouchableOpacity
                   onPress={() => {
-                    if (!buildingId)
-                      return Alert.alert("Pick a building first");
+                    if (!buildingId) return Alert.alert("Pick a building first");
                     router.push("/securityChecklistCreator");
                   }}
-                  style={[
-                    s.verifyBtn,
-                    { backgroundColor: isDark ? "#2563EB" : "#3B82F6" },
-                  ]}
+                  style={s.verifyBtn}
                   activeOpacity={0.9}
                 >
                   <Text style={s.verifyBtnText}>Security Checklist</Text>
                 </TouchableOpacity>
               </View>
 
-               <View
-                style={[
-                  s.verifyCard,
-                  { backgroundColor: isDark ? "#1F2937" : "#F3F4F6" },
-                ]}
-              >
+              <View style={s.verifyCard}>
                 <TouchableOpacity
                   onPress={() => {
-                    if (!buildingId)
-                      return Alert.alert("Pick a building first");
+                    if (!buildingId) return Alert.alert("Pick a building first");
                     router.push("/supervisorViewSecurity");
                   }}
-                  style={[
-                    s.verifyBtn,
-                    { backgroundColor: isDark ? "#2563EB" : "#3B82F6" },
-                  ]}
+                  style={s.verifyBtn}
                   activeOpacity={0.9}
                 >
                   <Text style={s.verifyBtnText}>View Latest Security Checks</Text>
@@ -586,14 +664,138 @@ function HomePage() {
             </>
           )}
 
-          {/* Employee area (unchanged) */}
+          {/* MANAGER (read-only) — refined layout */}
+          {role === "manager" && (
+            <View style={s.card}>
+              <View style={s.cardHeader}>
+                <View style={s.cardHeaderRow}>
+                  <Ionicons name="analytics-outline" size={18} color={C.accent} />
+                  <Text style={s.cardTitle}>Manager Dashboard</Text>
+                </View>
+                <Text style={s.cardSubtitle}>Read-only overview & activity log</Text>
+              </View>
+
+              {/* Primary focus */}
+              <ActionButton
+                onPress={() =>
+                  buildingId
+                    ? router.push("/manager_report")
+                    : Alert.alert("Pick a building first")
+                }
+                icon={<MaterialIcons name="assessment" size={20} color="#FFFFFF" />}
+                label="All Reports"
+                size="xl"
+                fullWidth
+                disabled={!buildingId}
+              />
+              <ActionButton
+                onPress={() =>
+                  buildingId
+                    ? console.log("hi: manager -> Activity Log (All Events)")
+                    : Alert.alert("Pick a building first")
+                }
+                icon={<MaterialIcons name="receipt-long" size={18} color="#FFFFFF" />}
+                label="Activity Log (All Events)"
+                subtitle="Tasks • Schedules • Reports • Security"
+                size="xl"
+                fullWidth
+                disabled={!buildingId}
+                style={{ marginTop: 6 }}
+              />
+
+              <Hairline style={s.hairline} />
+
+              {/* Secondary tools — two-column grid */}
+              <View style={s.gridRow}>
+                <View style={s.gridCol}>
+                  <SurfaceButton
+                    onPress={() =>
+                      buildingId
+                        ? router.push("/scheduledTasks")
+                        : Alert.alert("Pick a building first")
+                    }
+                    icon={<MaterialIcons name="assignment" size={18} color={neutralIcon} />}
+                    label="Scheduled Tasks"
+                    size="lg"
+                    fullWidth
+                    disabled={!buildingId}
+                  />
+                </View>
+                <View style={s.gridCol}>
+                  <SurfaceButton
+                    onPress={() =>
+                      buildingId
+                        ? router.push("/supervisorViewSecurity")
+                        : Alert.alert("Pick a building first")
+                    }
+                    icon={<Ionicons name="shield-checkmark" size={18} color={neutralIcon} />}
+                    label="Security Runs"
+                    size="lg"
+                    fullWidth
+                    disabled={!buildingId}
+                  />
+                </View>
+              </View>
+
+              <View style={s.gridRow}>
+                <View style={s.gridCol}>
+                  <SurfaceButton
+                    onPress={() =>
+                      buildingId
+                        ? router.push("/manager_scheduler")
+                        : Alert.alert("Pick a building first")
+                    }
+                    icon={<Ionicons name="calendar" size={20} color={neutralIcon} />}
+                    label="Scheduler"
+                    size="lg"
+                    fullWidth
+                    disabled={!buildingId}
+                  />
+                </View>
+                <View style={s.gridCol}>
+                  <SurfaceButton
+                    onPress={() =>
+                      buildingId
+                        ? router.push("/manager_securityChecklistCreator")
+                        : Alert.alert("Pick a building first")
+                    }
+                    icon={<Ionicons name="shield-outline" size={18} color={neutralIcon} />}
+                    label="Security Checklist"
+                    size="lg"
+                    fullWidth
+                    disabled={!buildingId}
+                  />
+                </View>
+              </View>
+
+              <View style={s.gridRow}>
+                <View style={s.gridCol}>
+                  <SurfaceButton
+                    onPress={() =>
+                      buildingId
+                        ? router.push("/manageEmployees")
+                        : Alert.alert("Pick a building first")
+                    }
+                    icon={<Ionicons name="people" size={20} color={neutralIcon} />}
+                    label="View Employees"
+                    size="lg"
+                    fullWidth
+                    disabled={!buildingId}
+                  />
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* EMPLOYEE */}
           {role === "employee" && (
             <View style={s.card}>
               <View style={s.cardHeader}>
-                <Text style={s.cardTitle}>My Work</Text>
-                <Text style={s.cardSubtitle}>
-                  Clock in, check tasks, report issues
-                </Text>
+                <View style={s.cardHeaderRow}>
+                  <Ionicons name="clipboard-outline" size={18} color={C.accent} />
+                  <Text style={s.cardTitle}>My Work</Text>
+                </View>
+                <Text style={s.cardSubtitle}>Clock in, check tasks, report issues</Text>
               </View>
               <ActionButton
                 onPress={handleClockIn}
@@ -614,27 +816,19 @@ function HomePage() {
                     ? setCurrentTaskModal(true)
                     : Alert.alert("Pick a building first")
                 }
-                icon={
-                  <MaterialIcons name="assignment" size={18} color="#FFFFFF" />
-                }
+                icon={<MaterialIcons name="assignment" size={18} color="#FFFFFF" />}
                 label="View Current Tasks"
                 size="lg"
                 fullWidth
                 disabled={!buildingId}
               />
-              <ActionButton
+              <SurfaceButton
                 onPress={() =>
                   buildingId
                     ? setReportModal(true)
                     : Alert.alert("Pick a building first")
                 }
-                icon={
-                  <MaterialIcons
-                    name="report-problem"
-                    size={18}
-                    color="#FFFFFF"
-                  />
-                }
+                icon={<MaterialIcons name="report-problem" size={18} color={neutralIcon} />}
                 label="Report Issue"
                 size="lg"
                 fullWidth
@@ -643,17 +837,16 @@ function HomePage() {
             </View>
           )}
 
-          {/* ⬇️ NEW: Security area (only for role === "security") */}
+        {/* SECURITY */}
           {role === "security" && (
             <View style={s.card}>
               <View style={s.cardHeader}>
-                <Text style={s.cardTitle}>Security</Text>
-                <Text style={s.cardSubtitle}>
-                  Clock in, open checklist, report issues
-                </Text>
+                <View style={s.cardHeaderRow}>
+                  <Ionicons name="shield-outline" size={18} color={C.accent} />
+                  <Text style={s.cardTitle}>Security</Text>
+                </View>
+                <Text style={s.cardSubtitle}>Clock in, open checklist, report issues</Text>
               </View>
-
-              {/* Clock In/Out (same behavior as employees) */}
               <ActionButton
                 onPress={handleClockIn}
                 icon={
@@ -667,8 +860,6 @@ function HomePage() {
                 size="lg"
                 fullWidth
               />
-
-              {/* Unique #1: Open Checklist */}
               <ActionButton
                 onPress={() =>
                   buildingId
@@ -681,21 +872,13 @@ function HomePage() {
                 fullWidth
                 disabled={!buildingId}
               />
-
-              {/* Report Issue (same as employees) */}
-              <ActionButton
+              <SurfaceButton
                 onPress={() =>
                   buildingId
                     ? setReportModal(true)
                     : Alert.alert("Pick a building first")
                 }
-                icon={
-                  <MaterialIcons
-                    name="report-problem"
-                    size={18}
-                    color="#FFFFFF"
-                  />
-                }
+                icon={<MaterialIcons name="report-problem" size={18} color={neutralIcon} />}
                 label="Report Issue"
                 size="lg"
                 fullWidth
@@ -706,7 +889,7 @@ function HomePage() {
         </ScrollView>
       </SafeAreaView>
 
-      {/* Modals (open only when buildingId exists) */}
+      {/* Modals */}
       {taskModal && buildingId && (
         <ProjectModal visible={taskModal} onClose={() => setTaskModal(false)} />
       )}
@@ -717,10 +900,7 @@ function HomePage() {
         />
       )}
       {reportModal && buildingId && (
-        <ReportModal
-          visible={reportModal}
-          onClose={() => setReportModal(false)}
-        />
+        <ReportModal visible={reportModal} onClose={() => setReportModal(false)} />
       )}
       {managerViewReportModal && buildingId && (
         <ManagerViewReportsModal
@@ -735,7 +915,7 @@ function HomePage() {
         />
       )}
 
-      {/* Building Picker Modal */}
+      {/* Building Picker */}
       <Modal
         visible={buildingPickerOpen}
         animationType="slide"
@@ -743,38 +923,24 @@ function HomePage() {
         onRequestClose={() => setBuildingPickerOpen(false)}
       >
         <View style={s.modalBackdrop}>
-          <View
-            style={[
-              s.modalCard,
-              { backgroundColor: isDark ? "#111827" : "#FFFFFF" },
-            ]}
-          >
+          <View style={s.modalCard}>
             <View style={s.modalHeader}>
               <Text style={s.modalTitle}>Select Building</Text>
-              <TouchableOpacity
-                onPress={() => setBuildingPickerOpen(false)}
-                style={s.closeBtn}
-              >
-                <Ionicons
-                  name="close"
-                  size={20}
-                  color={isDark ? "#E5E7EB" : "#111827"}
-                />
+              <TouchableOpacity onPress={() => setBuildingPickerOpen(false)} style={s.closeBtn}>
+                <Ionicons name="close" size={20} color={C.text} />
               </TouchableOpacity>
             </View>
 
             {buildingsLoading ? (
               <View style={[s.center, { paddingVertical: 16 }]}>
                 <ActivityIndicator />
-                <Text style={[s.cardSubtitle, { marginTop: 8 }]}>
-                  Loading buildings…
-                </Text>
+                <Text style={[s.cardSubtitle, { marginTop: 8 }]}>Loading buildings…</Text>
               </View>
             ) : (
               <FlatList
                 data={buildings}
                 keyExtractor={(b) => b.id}
-                ItemSeparatorComponent={() => <View style={{ height: 6 }} />}
+                ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
                 renderItem={({ item }) => {
                   const selected = item.id === buildingId;
                   return (
@@ -783,67 +949,28 @@ function HomePage() {
                         setBuildingId(item.id);
                         setBuildingPickerOpen(false);
                       }}
-                      style={[
-                        s.buildingItem,
-                        {
-                          backgroundColor: selected
-                            ? isDark
-                              ? "#0B3B2F"
-                              : "#ECFDF5"
-                            : isDark
-                            ? "#1F2937"
-                            : "#F3F4F6",
-                          borderColor: selected
-                            ? isDark
-                              ? "#10B981"
-                              : "#34D399"
-                            : isDark
-                            ? "#111827"
-                            : "#E5E7EB",
-                        },
-                      ]}
-                      activeOpacity={0.9}
+                      style={[s.buildingItem, selected && s.buildingItemSelected]}
+                      activeOpacity={0.92}
                     >
-                      <View style={{ flex: 1 }}>
-                        <Text
-                          style={[
-                            s.buildingName,
-                            { color: isDark ? "#F3F4F6" : "#0F172A" },
-                          ]}
-                          numberOfLines={1}
-                        >
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={s.buildingName} numberOfLines={1}>
                           {item.name || "Unnamed Building"}
                         </Text>
                         {!!item.address && (
-                          <Text
-                            style={[
-                              s.buildingAddress,
-                              { color: isDark ? "#93A4B3" : "#4B5563" },
-                            ]}
-                            numberOfLines={1}
-                          >
+                          <Text style={s.buildingAddress} numberOfLines={1}>
                             {item.address}
                           </Text>
                         )}
                       </View>
                       {selected && (
-                        <Ionicons
-                          name="checkmark-circle"
-                          size={20}
-                          color="#10B981"
-                        />
+                        <Ionicons name="checkmark-circle" size={20} color={C.success} />
                       )}
                     </TouchableOpacity>
                   );
                 }}
                 ListEmptyComponent={
                   <View style={s.center}>
-                    <Text
-                      style={[
-                        s.cardSubtitle,
-                        { alignSelf: "center", paddingVertical: 12 },
-                      ]}
-                    >
+                    <Text style={[s.cardSubtitle, { alignSelf: "center", paddingVertical: 12 }]}>
                       No buildings found.
                     </Text>
                     <TouchableOpacity
@@ -851,14 +978,7 @@ function HomePage() {
                         setBuildingPickerOpen(false);
                         router.push("/addNewBuilding");
                       }}
-                      style={[
-                        s.btnBase,
-                        {
-                          backgroundColor: isDark ? "#2563EB" : "#3B82F6",
-                          alignSelf: "center",
-                          paddingHorizontal: 20,
-                        },
-                      ]}
+                      style={[s.btnBase, { alignSelf: "center", paddingHorizontal: 20 }]}
                       activeOpacity={0.9}
                     >
                       <Text style={s.btnText}>Add New Building</Text>
@@ -877,14 +997,25 @@ function HomePage() {
 export default HomePage;
 
 /* ---------------- Styles ---------------- */
-const getStyles = (isDark: boolean) =>
-  StyleSheet.create({
+const getStyles = (isDark: boolean) => {
+  const C = isDark ? Pal.dark : Pal.light;
+  const shadowBase =
+    Platform.OS === "ios"
+      ? {
+          shadowColor: "#000",
+          shadowOpacity: isDark ? 0.18 : 0.08,
+          shadowRadius: 10,
+          shadowOffset: { width: 0, height: 8 },
+        }
+      : { elevation: 5 };
+
+  return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: isDark ? "#0F172A" : "#F8FAFC",
+      backgroundColor: C.bg,
     },
     center: { justifyContent: "center", alignItems: "center" },
-    loadingText: { marginTop: 8, color: isDark ? "#E5E7EB" : "#111827" },
+    loadingText: { marginTop: 8, color: C.textMuted, fontWeight: "700" },
 
     headerRow: {
       flexDirection: "row",
@@ -892,18 +1023,18 @@ const getStyles = (isDark: boolean) =>
       justifyContent: "space-between",
       paddingHorizontal: 16,
       paddingTop: 8,
-      paddingBottom: 4,
+      paddingBottom: 8,
     },
     headerTitle: {
-      fontSize: 22,
-      fontWeight: "800",
-      color: isDark ? "#F3F4F6" : "#111827",
+      fontSize: 24,
+      fontWeight: "900",
+      color: C.text,
       letterSpacing: 0.2,
     },
     headerRole: {
-      fontSize: 16,
-      fontWeight: "700",
-      color: isDark ? "#93A4B3" : "#4B5563",
+      fontSize: 11,
+      fontWeight: "800",
+      color: C.textMuted,
       marginLeft: 8,
       textTransform: "capitalize",
     },
@@ -913,18 +1044,18 @@ const getStyles = (isDark: boolean) =>
       flexDirection: "row",
       alignItems: "center",
       gap: 6,
-      paddingHorizontal: 10,
+      paddingHorizontal: 12,
       paddingVertical: 6,
       borderRadius: 999,
-      backgroundColor: isDark ? "#111827" : "#E5E7EB",
-      borderWidth: isDark ? 1 : 0,
-      borderColor: isDark ? "#1F2937" : "transparent",
-      maxWidth: 200,
+      backgroundColor: C.subtle,
+      borderWidth: 1,
+      borderColor: C.outline,
+      maxWidth: 260,
     },
     buildingPillText: {
       fontSize: 12,
-      fontWeight: "800",
-      color: isDark ? "#E5E7EB" : "#111827",
+      fontWeight: "900",
+      color: C.text,
     },
 
     headerIconBtn: {
@@ -934,68 +1065,86 @@ const getStyles = (isDark: boolean) =>
       width: 36,
       height: 36,
       borderRadius: 10,
-      backgroundColor: isDark ? "#111827" : "#E5E7EB",
-      borderWidth: isDark ? 1 : 0,
-      borderColor: isDark ? "#1F2937" : "transparent",
+      backgroundColor: C.subtle,
+      borderWidth: 1,
+      borderColor: C.outline,
+      ...(Platform.OS === "ios"
+        ? { shadowColor: "#000", shadowOpacity: 0.04, shadowOffset: { width: 0, height: 2 }, shadowRadius: 3 }
+        : { elevation: 2 }),
     },
 
-    statusRow: { paddingHorizontal: 16, paddingBottom: 6 },
-    statusChip: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingVertical: 6,
-      paddingHorizontal: 10,
-      borderRadius: 999,
+    // SecurityHourlyNudge wrapper
+    securityNudgeCard: {
+      borderRadius: 12,
+      backgroundColor: isDark ? "#0F172A" : "#F0F7FF",
       borderWidth: 1,
-      backgroundColor: isDark ? "#111827" : "#E5E7EB",
-      borderColor: isDark ? "#1F2937" : "#D1D5DB",
+      borderColor: isDark ? C.outlineBold : "#C7DBFF",
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      ...(Platform.OS === "ios"
+        ? { shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 3 } }
+        : { elevation: 2 }),
     },
-    statusOn: {
-      backgroundColor: isDark ? "#0B3B2F" : "#ECFDF5",
-      borderColor: isDark ? "#0B3B2F" : "#A7F3D0",
+
+    inlineBanner: {
+      padding: 12,
+      borderRadius: 12,
+      backgroundColor: isDark ? "#132235" : "#FDF5E6",
+      borderWidth: 1,
+      borderColor: isDark ? C.outlineBold : "#F2D9A6",
     },
-    statusOff: {},
-    dot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
-    statusText: {
-      fontWeight: "800",
-      fontSize: 12,
-      color: isDark ? "#E5E7EB" : "#111827",
-      letterSpacing: 0.2,
+    inlineBannerTitle: {
+      fontWeight: "900",
+      color: isDark ? C.text : "#7C2D12",
+    },
+    inlineBannerText: {
+      marginTop: 4,
+      color: isDark ? C.textMuted : "#7C2D12",
+      fontWeight: "700",
     },
 
     scrollContainer: {
-      paddingHorizontal: 12,
-      paddingBottom: 24,
-      paddingTop: 8,
-      gap: 12,
+      paddingHorizontal: 16,
+      paddingBottom: 28,
+      paddingTop: 10,
+      gap: 14,
     },
 
     card: {
-      backgroundColor: isDark ? "#1F2937" : "#FFFFFF",
-      borderRadius: 16,
+      backgroundColor: C.surface,
+      borderRadius: 14,
       padding: 14,
-      shadowColor: "#000",
-      shadowOpacity: 0.1,
-      shadowRadius: 6,
-      shadowOffset: { width: 0, height: 3 },
-      elevation: 6,
-      borderWidth: isDark ? 1 : 0,
-      borderColor: isDark ? "#111827" : "transparent",
+      borderWidth: 1,
+      borderColor: C.outline,
+      ...shadowBase,
     },
     cardHeader: {
-      marginBottom: 6,
+      marginBottom: 8,
+    },
+    cardHeaderRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 2,
     },
     cardTitle: {
       fontSize: 18,
       fontWeight: "900",
-      color: isDark ? "#F3F4F6" : "#0F172A",
+      color: C.text,
       letterSpacing: 0.2,
     },
     cardSubtitle: {
       marginTop: 2,
       fontSize: 12,
       fontWeight: "700",
-      color: isDark ? "#94A3B8" : "#64748B",
+      color: C.textMuted,
+    },
+
+    hairline: {
+      backgroundColor: C.outline,
+      marginVertical: 10,
+      opacity: 0.9,
+      height: StyleSheet.hairlineWidth,
     },
 
     row: {
@@ -1010,26 +1159,30 @@ const getStyles = (isDark: boolean) =>
       justifyContent: "center",
     },
 
-    twoThirdsSpacer: {
-      height: Math.max(16, Math.floor(SCREEN_H * 0.1)),
-    },
-
+    // Primary button
     btnBase: {
       flexDirection: "row",
       alignItems: "center",
       gap: 12,
-      borderRadius: 14,
+      borderRadius: 12,
       paddingHorizontal: 14,
       marginVertical: 6,
-      backgroundColor: isDark ? "#2563EB" : "#1D4ED8",
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.12,
-      shadowRadius: 4,
-      elevation: 4,
-      borderWidth: isDark ? 1 : 0,
-      borderColor: isDark ? "#1E3A8A" : "transparent",
+      backgroundColor: isDark ? Pal.dark.primary : Pal.light.primary,
+      borderWidth: 1,
+      borderColor: isDark ? Pal.dark.primaryAlt : Pal.light.primaryAlt,
       minHeight: 56,
+      ...(Platform.OS === "ios"
+        ? {
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: isDark ? 0.22 : 0.1,
+            shadowRadius: 8,
+          }
+        : { elevation: 4 }),
+    },
+    btnDisabled: {
+      backgroundColor: isDark ? "#0F2138" : "#CBD5E1",
+      borderColor: isDark ? "#1E3A8A" : "#94A3B8",
     },
     iconPill: {
       width: 34,
@@ -1037,7 +1190,9 @@ const getStyles = (isDark: boolean) =>
       borderRadius: 10,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: "rgba(255,255,255,0.16)",
+      backgroundColor: "rgba(255,255,255,0.18)",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.24)",
     },
     btnMD: { paddingVertical: 12 },
     btnLG: { paddingVertical: 14 },
@@ -1056,30 +1211,110 @@ const getStyles = (isDark: boolean) =>
       letterSpacing: 0.2,
     },
 
+    // Neutral button (secondary)
+    surfaceBtnBase: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      marginVertical: 6,
+      backgroundColor: C.surface,
+      borderWidth: 1,
+      borderColor: C.outline,
+      minHeight: 56,
+      ...(Platform.OS === "ios"
+        ? {
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.05,
+            shadowRadius: 4,
+          }
+        : { elevation: 2 }),
+    },
+    surfaceBtnDisabled: {
+      opacity: 0.6,
+    },
+    surfaceIconPill: {
+      width: 32,
+      height: 32,
+      borderRadius: 8,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: isDark ? "#0F172A" : "#F3F4F6",
+      borderWidth: 1,
+      borderColor: isDark ? "#1F2937" : "#E5E7EB",
+    },
+    surfaceBtnText: {
+      color: C.text,
+      fontSize: 15,
+      fontWeight: "800",
+      letterSpacing: 0.2,
+    },
+    surfaceBtnSubText: {
+      color: C.textMuted,
+      fontSize: 12,
+      marginTop: 2,
+      fontWeight: "700",
+      letterSpacing: 0.2,
+    },
+
     verifyCard: {
-      borderRadius: 16,
-      padding: 16,
+      borderRadius: 14,
+      padding: 14,
       marginTop: 12,
-      shadowColor: "#000",
-      shadowOpacity: 0.08,
-      shadowRadius: 6,
-      shadowOffset: { width: 0, height: 3 },
-      elevation: 4,
+      backgroundColor: C.surface,
+      borderWidth: 1,
+      borderColor: C.outline,
+      ...shadowBase,
     },
     verifyBtn: {
-      backgroundColor: "#10B981",
+      backgroundColor: isDark ? Pal.dark.success : Pal.light.success,
       paddingVertical: 14,
       borderRadius: 12,
       alignItems: "center",
       justifyContent: "center",
+      borderWidth: 1,
+      borderColor: isDark ? "rgba(16,185,129,0.5)" : "#A7F3D0",
+      ...(Platform.OS === "ios"
+        ? { shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 6, shadowOffset: { width: 0, height: 3 } }
+        : { elevation: 3 }),
     },
     verifyBtnText: {
       color: "#fff",
-      fontWeight: "800",
+      fontWeight: "900",
       fontSize: 16,
+      letterSpacing: 0.2,
     },
 
-    // Modal styles
+    // Shift status
+    shiftThinWrap: {
+      paddingHorizontal: 16,
+      marginTop: 6,
+      marginBottom: 6,
+    },
+    shiftThinBar: {
+      height: 30,
+      borderRadius: 999,
+      backgroundColor: isDark ? Pal.dark.success : Pal.light.success,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 12,
+      borderWidth: 1,
+      borderColor: isDark ? "rgba(6,78,59,0.5)" : "rgba(16,185,129,0.45)",
+      ...(Platform.OS === "ios"
+        ? { shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 6, shadowOffset: { width: 0, height: 4 } }
+        : { elevation: 3 }),
+    },
+    shiftThinText: {
+      color: "#FFFFFF",
+      fontWeight: "900",
+      fontSize: 12,
+      letterSpacing: 0.2,
+    },
+
+    // Modal
     modalBackdrop: {
       flex: 1,
       backgroundColor: "rgba(0,0,0,0.35)",
@@ -1089,7 +1324,11 @@ const getStyles = (isDark: boolean) =>
       padding: 14,
       borderTopLeftRadius: 16,
       borderTopRightRadius: 16,
-      maxHeight: SCREEN_H * 0.55,
+      maxHeight: SCREEN_H * 0.6,
+      backgroundColor: C.surface,
+      borderWidth: 1,
+      borderColor: C.outline,
+      ...shadowBase,
     },
     modalHeader: {
       flexDirection: "row",
@@ -1100,7 +1339,7 @@ const getStyles = (isDark: boolean) =>
     modalTitle: {
       fontSize: 16,
       fontWeight: "900",
-      color: isDark ? "#F3F4F6" : "#0F172A",
+      color: C.text,
     },
     closeBtn: {
       width: 34,
@@ -1108,64 +1347,49 @@ const getStyles = (isDark: boolean) =>
       borderRadius: 10,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: isDark ? "#1F2937" : "#E5E7EB",
+      backgroundColor: C.subtle,
+      borderWidth: 1,
+      borderColor: C.outline,
     },
     buildingItem: {
       borderRadius: 12,
       paddingVertical: 12,
       paddingHorizontal: 12,
       borderWidth: 1,
+      borderColor: C.outline,
+      backgroundColor: C.surface,
       flexDirection: "row",
       alignItems: "center",
       gap: 10,
+      ...(Platform.OS === "ios"
+        ? { shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 3 } }
+        : { elevation: 2 }),
+    },
+    buildingItemSelected: {
+      borderColor: isDark ? Pal.dark.success : Pal.light.success,
+      backgroundColor: isDark ? "#0B3B2F" : "#ECFDF5",
     },
     buildingName: {
       fontSize: 15,
       fontWeight: "900",
+      color: C.text,
     },
     buildingAddress: {
       fontSize: 12,
       fontWeight: "700",
       opacity: 0.9,
       marginTop: 2,
+      color: C.textMuted,
     },
-    shiftThinWrap: {
-      paddingHorizontal: 16,
-      marginTop: 6,
-      marginBottom: 6,
-    },
-    shiftThinBar: {
-      height: 30,
-      borderRadius: 999,
-      backgroundColor: "#10B981",
+
+    // NEW: grid helpers for Manager section
+    gridRow: {
       flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      paddingHorizontal: 12,
-      shadowColor: "#000",
-      shadowOpacity: 0.08,
-      shadowRadius: 4,
-      shadowOffset: { width: 0, height: 2 },
-      borderWidth: 1,
-      borderColor: "rgba(6,78,59,0.35)",
+      gap: 10,
+      marginTop: 6,
     },
-    shiftThinText: {
-      color: "#FFFFFF",
-      fontWeight: "800",
-      fontSize: 12,
-      letterSpacing: 0.2,
-    },
-    shiftThinBtn: {
-      paddingHorizontal: 10,
-      paddingVertical: 5,
-      borderRadius: 999,
-      backgroundColor: "rgba(255,255,255,0.16)",
-      borderWidth: 1,
-      borderColor: "rgba(255,255,255,0.28)",
-    },
-    shiftThinBtnText: {
-      color: "#FFFFFF",
-      fontWeight: "800",
-      fontSize: 12,
+    gridCol: {
+      flex: 1,
     },
   });
+};

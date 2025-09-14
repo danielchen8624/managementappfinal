@@ -79,6 +79,7 @@ export default function ReportModal({ visible, onClose }: ReportModalProps) {
     );
   };
 
+  // Make the switches mutually exclusive
   const onToggleFixed = () => {
     setIsFixed((prev) => {
       const next = !prev;
@@ -113,17 +114,24 @@ export default function ReportModal({ visible, onClose }: ReportModalProps) {
       Alert.alert("Please add a title and description.");
       return;
     }
+
+    // Enforce exactly one of the two states
     if (isFixed && needsHelp) {
       Alert.alert('Choose either "Fixed" or "Need assistance", not both.');
       return;
     }
+    if (!isFixed && !needsHelp) {
+      Alert.alert('Please select "Fixed" or "Need assistance" before submitting.');
+      return;
+    }
 
-    const status = isFixed ? "fixed" : needsHelp ? "need_assistance" : "open";
+    // No "open" state anymore
+    const status = isFixed ? "fixed" : "need assistance";
 
     try {
       setSubmitting(true);
 
-      // 🔑 fetch reporter_name from users/{uid}
+      //  fetch reporter_name from users/{uid}
       let reporter_name: string | null = null;
       try {
         const userRef = doc(db, "users", user.uid);
@@ -140,13 +148,13 @@ export default function ReportModal({ visible, onClose }: ReportModalProps) {
         title: title.trim(),
         description: description.trim(),
         aptNumber: aptNumber.trim() || null,
-        status,
+        status, // "fixed" or "need assistance"
         createdBy: user.uid,
         createdAt: serverTimestamp(),
         visibility: "manager_supervisor",
         managerHasReviewed: false,
         buildingId,
-        reporter_name, // 👈 add reporter_name here
+        reporter_name,
       });
 
       Alert.alert("Report submitted");
@@ -256,7 +264,7 @@ export default function ReportModal({ visible, onClose }: ReportModalProps) {
               ]}
             />
 
-            {/* Toggles */}
+            {/* Toggles (mutually exclusive) */}
             <View style={{ marginTop: 4 }}>
               <ToggleSwitch label="Fixed" value={isFixed} onToggle={onToggleFixed} />
               <ToggleSwitch label="Need assistance" value={needsHelp} onToggle={onToggleNeedsHelp} />

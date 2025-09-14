@@ -151,7 +151,7 @@ function ManagerViewReportsModal({ visible, onClose }: ReportModalProps) {
                     {/* Title row */}
                     <View style={s.cardHeader}>
                       <Text style={s.cardTitle}>
-                        {r.title || "Untitled"} {/* 👈 show title first */}
+                        {r.title || "Untitled"} {/*  show title first */}
                       </Text>
                       <Ionicons
                         name="chevron-forward"
