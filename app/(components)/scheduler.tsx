@@ -548,7 +548,7 @@ export default function Scheduler() {
             onPress={() => setAddOpen(true)}
             disabled={disabledUI}
           >
-            <Ionicons name="add" size={16} color="#fff" />
+            <Ionicons name="add" size={18} color="#fff" />
             <Text style={styles.addBtnText}>Add</Text>
           </TouchableOpacity>
 
@@ -946,7 +946,7 @@ const getStyles = (isDark: boolean) =>
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
-      paddingHorizontal: 12,
+      paddingHorizontal: 6,
       paddingTop: 12,
       paddingBottom: 4,
       gap: 8,
@@ -982,8 +982,8 @@ const getStyles = (isDark: boolean) =>
       alignItems: "center",
       gap: 6,
       backgroundColor: isDark ? "#2563EB" : "#1D4ED8",
-      paddingHorizontal: 14,
-      paddingVertical: 10,
+      paddingHorizontal: 10,
+      paddingVertical: 7,
       borderRadius: 10,
     },
     addBtnText: { color: "#FFF", fontWeight: "800" },

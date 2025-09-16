@@ -1,5 +1,11 @@
 // app/manager_report.tsx
-import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useCallback,
+} from "react";
 import {
   View,
   Text,
@@ -14,7 +20,13 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import { collection, onSnapshot, orderBy, query, where } from "firebase/firestore";
+import {
+  collection,
+  onSnapshot,
+  orderBy,
+  query,
+  where,
+} from "firebase/firestore";
 import { db } from "../../../firebaseConfig";
 import { useBuilding } from "../../BuildingContext";
 import { useTheme } from "../../ThemeContext";
@@ -26,19 +38,20 @@ type ReportItem = {
   id: string;
   title?: string;
   description?: string;
-  status?: string; // "open" | "triage" | "investigating" | "closed" | etc.
+  status?: string;
   resolved?: boolean;
-  createdAt?: any; // Firestore Timestamp
+  createdAt?: any;
   createdByName?: string;
   createdBy?: string;
   roomNumber?: string;
   priority?: number;
   severity?: "low" | "medium" | "high" | string;
-  managerHasReviewed?: boolean; // <-- added
+  managerHasReviewed?: boolean;
+  reporter_name?: string | null; // <-- NEW
 };
 
 /** -------------------------------------------------------
- * Palette (aligned with your app)
+ * Palette
  * ------------------------------------------------------*/
 const Pal = {
   light: {
@@ -79,13 +92,6 @@ function fmt(ts?: any) {
   }
 }
 
-function chipColor(status: string | undefined, C: typeof Pal.light | typeof Pal.dark) {
-  const s = (status || "").toLowerCase();
-  if (s === "closed" || s === "resolved") return C.success;
-  if (s === "investigating" || s === "triage") return C.warning;
-  return C.primary;
-}
-
 function severityPillColor(sev?: string, C?: any) {
   const s = (sev || "").toLowerCase();
   if (s === "high") return C?.danger;
@@ -94,7 +100,6 @@ function severityPillColor(sev?: string, C?: any) {
   return C?.outlineBold;
 }
 
-/** New: color for review state */
 function reviewStateColor(
   reviewed: boolean | undefined,
   C: typeof Pal.light | typeof Pal.dark
@@ -117,7 +122,6 @@ export default function ManagerAllReportsScreen() {
   const [filter, setFilter] = useState<"all" | "open" | "resolved">("all");
   const [qText, setQText] = useState("");
 
-  // header crossfade polish
   const themeAnim = useRef(new Animated.Value(isDark ? 1 : 0)).current;
   useEffect(() => {
     Animated.timing(themeAnim, {
@@ -128,7 +132,6 @@ export default function ManagerAllReportsScreen() {
     }).start();
   }, [isDark, themeAnim]);
 
-  // Live subscription (building-scoped)
   useEffect(() => {
     if (!buildingId) {
       setReports([]);
@@ -147,13 +150,25 @@ export default function ManagerAllReportsScreen() {
           orderBy("createdAt", "desc")
         );
       } catch {
-        qy = query(baseRef, where("resolved", "==", false), orderBy("createdAt", "desc"));
+        qy = query(
+          baseRef,
+          where("resolved", "==", false),
+          orderBy("createdAt", "desc")
+        );
       }
     } else if (filter === "resolved") {
       try {
-        qy = query(baseRef, where("status", "in", ["closed", "resolved"]), orderBy("createdAt", "desc"));
+        qy = query(
+          baseRef,
+          where("status", "in", ["closed", "resolved"]),
+          orderBy("createdAt", "desc")
+        );
       } catch {
-        qy = query(baseRef, where("resolved", "==", true), orderBy("createdAt", "desc"));
+        qy = query(
+          baseRef,
+          where("resolved", "==", true),
+          orderBy("createdAt", "desc")
+        );
       }
     }
 
@@ -175,7 +190,9 @@ export default function ManagerAllReportsScreen() {
     const q = qText.trim().toLowerCase();
     if (!q) return reports;
     return reports.filter((r) => {
-      const hay = `${r.title || ""} ${r.description || ""} ${r.createdByName || ""}`.toLowerCase();
+      const hay = `${r.title || ""} ${r.description || ""} ${
+        r.reporter_name || ""
+      }`.toLowerCase(); // <-- search reporter_name
       return hay.includes(q);
     });
   }, [reports, qText]);
@@ -185,13 +202,17 @@ export default function ManagerAllReportsScreen() {
     const open =
       reports.filter(
         (r) =>
-          (r.status && ["open", "investigating", "triage"].includes((r.status || "").toLowerCase())) ||
+          (r.status &&
+            ["open", "investigating", "triage"].includes(
+              (r.status || "").toLowerCase()
+            )) ||
           r.resolved === false
       ).length || 0;
     const res =
       reports.filter(
         (r) =>
-          (r.status && ["closed", "resolved"].includes((r.status || "").toLowerCase())) ||
+          (r.status &&
+            ["closed", "resolved"].includes((r.status || "").toLowerCase())) ||
           r.resolved === true
       ).length || 0;
     return { all, open, res };
@@ -200,14 +221,13 @@ export default function ManagerAllReportsScreen() {
   const renderItem = useCallback(
     ({ item }: { item: ReportItem }) => {
       const reviewed = !!item.managerHasReviewed;
-      const reviewBg = reviewStateColor(reviewed, C); // rail + chip color
+      const reviewBg = reviewStateColor(reviewed, C);
       const sevBg = severityPillColor(item.severity, C);
       const reviewLabel = reviewed ? "Reviewed" : "In Progress";
 
       return (
         <View style={s.cardWrap}>
           <View style={s.card}>
-            {/* left review-state rail */}
             <View style={s.statusRail}>
               <View style={[s.statusPill, { backgroundColor: reviewBg }]} />
             </View>
@@ -217,8 +237,6 @@ export default function ManagerAllReportsScreen() {
                 <Text numberOfLines={1} style={s.title}>
                   {item.title || "Untitled report"}
                 </Text>
-
-                {/* Review state chip replaces status display */}
                 <View style={[s.chip, { backgroundColor: reviewBg }]}>
                   <Text style={s.chipText}>{reviewLabel}</Text>
                 </View>
@@ -230,8 +248,15 @@ export default function ManagerAllReportsScreen() {
 
               <View style={s.metaRow}>
                 <View style={s.metaItem}>
-                  <Ionicons name="person-circle-outline" size={14} color={C.textMuted} />
-                  <Text style={s.metaText}>{item.createdByName || item.createdBy || "Unknown"}</Text>
+                  <Ionicons
+                    name="person-circle-outline"
+                    size={14}
+                    color={C.textMuted}
+                  />
+                  <Text style={s.metaText}>
+                    {item.reporter_name || "Unknown"}{" "}
+                    {/* <-- show reporter_name */}
+                  </Text>
                 </View>
                 <View style={s.metaItem}>
                   <Ionicons name="time-outline" size={14} color={C.textMuted} />
@@ -239,7 +264,11 @@ export default function ManagerAllReportsScreen() {
                 </View>
                 {!!item.roomNumber && (
                   <View style={s.metaItem}>
-                    <Ionicons name="business-outline" size={14} color={C.textMuted} />
+                    <Ionicons
+                      name="business-outline"
+                      size={14}
+                      color={C.textMuted}
+                    />
                     <Text style={s.metaText}>Room {item.roomNumber}</Text>
                   </View>
                 )}
@@ -248,7 +277,9 @@ export default function ManagerAllReportsScreen() {
 
             {!!item.severity && (
               <View style={[s.sidePill, { borderColor: sevBg }]}>
-                <Text style={[s.sidePillText, { color: sevBg }]}>{(item.severity || "").toUpperCase()}</Text>
+                <Text style={[s.sidePillText, { color: sevBg }]}>
+                  {(item.severity || "").toUpperCase()}
+                </Text>
               </View>
             )}
           </View>
@@ -260,8 +291,9 @@ export default function ManagerAllReportsScreen() {
 
   return (
     <SafeAreaView style={[s.container]}>
-      {/* crossfade layers */}
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: Pal.light.bg }]} />
+      <View
+        style={[StyleSheet.absoluteFill, { backgroundColor: Pal.light.bg }]}
+      />
       <Animated.View
         style={[
           StyleSheet.absoluteFill,
@@ -269,9 +301,12 @@ export default function ManagerAllReportsScreen() {
         ]}
       />
 
-      {/* Header */}
       <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()} style={s.headerBtn} activeOpacity={0.9}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={s.headerBtn}
+          activeOpacity={0.9}
+        >
           <Ionicons name="chevron-back" size={18} color={C.text} />
         </TouchableOpacity>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -281,11 +316,12 @@ export default function ManagerAllReportsScreen() {
         <View style={s.headerBtn} />
       </View>
 
-      {/* Select building nudge */}
       {!buildingId && (
         <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
           <View style={s.inlineBanner}>
-            <Text style={s.inlineBannerTitle}>Select a building to continue</Text>
+            <Text style={s.inlineBannerTitle}>
+              Select a building to continue
+            </Text>
             <Text style={s.inlineBannerText}>
               Reports are scoped to your chosen building.
             </Text>
@@ -293,7 +329,6 @@ export default function ManagerAllReportsScreen() {
         </View>
       )}
 
-      {/* Search & Filters */}
       <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
         <View style={s.searchWrap}>
           <Ionicons name="search-outline" size={16} color={C.textMuted} />
@@ -307,13 +342,27 @@ export default function ManagerAllReportsScreen() {
         </View>
 
         <View style={s.segment}>
-          <SegBtn label={`All ${counts.all}`} active={filter === "all"} onPress={() => setFilter("all")} isDark={isDark} />
-          <SegBtn label={`Open ${counts.open}`} active={filter === "open"} onPress={() => setFilter("open")} isDark={isDark} />
-          <SegBtn label={`Resolved ${counts.res}`} active={filter === "resolved"} onPress={() => setFilter("resolved")} isDark={isDark} />
+          <SegBtn
+            label={`All ${counts.all}`}
+            active={filter === "all"}
+            onPress={() => setFilter("all")}
+            isDark={isDark}
+          />
+          <SegBtn
+            label={`Open ${counts.open}`}
+            active={filter === "open"}
+            onPress={() => setFilter("open")}
+            isDark={isDark}
+          />
+          <SegBtn
+            label={`Resolved ${counts.res}`}
+            active={filter === "resolved"}
+            onPress={() => setFilter("resolved")}
+            isDark={isDark}
+          />
         </View>
       </View>
 
-      {/* List */}
       {loading ? (
         <View style={[s.center, { paddingVertical: 16 }]}>
           <ActivityIndicator />
@@ -324,7 +373,11 @@ export default function ManagerAllReportsScreen() {
           data={filtered}
           keyExtractor={(it) => it.id}
           renderItem={renderItem}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 24 }}
+          contentContainerStyle={{
+            paddingHorizontal: 16,
+            paddingTop: 10,
+            paddingBottom: 24,
+          }}
           ListEmptyComponent={
             <View style={[s.center, { paddingVertical: 24 }]}>
               <Text style={s.muted}>No reports found.</Text>
@@ -360,8 +413,18 @@ function SegBtn({
         paddingVertical: 6,
         borderRadius: 10,
         borderWidth: 1,
-        borderColor: active ? (isDark ? "#3B82F6" : "#1D4ED8") : isDark ? "#1F2937" : "#E5E7EB",
-        backgroundColor: active ? (isDark ? "rgba(37,99,235,0.15)" : "rgba(29,78,216,0.08)") : "transparent",
+        borderColor: active
+          ? isDark
+            ? "#3B82F6"
+            : "#1D4ED8"
+          : isDark
+          ? "#1F2937"
+          : "#E5E7EB",
+        backgroundColor: active
+          ? isDark
+            ? "rgba(37,99,235,0.15)"
+            : "rgba(29,78,216,0.08)"
+          : "transparent",
         marginRight: 8,
       }}
     >
@@ -369,7 +432,13 @@ function SegBtn({
         style={{
           fontSize: 12,
           fontWeight: "800",
-          color: active ? (isDark ? "#93C5FD" : "#1D4ED8") : isDark ? "#E5E7EB" : "#0F172A",
+          color: active
+            ? isDark
+              ? "#93C5FD"
+              : "#1D4ED8"
+            : isDark
+            ? "#E5E7EB"
+            : "#0F172A",
         }}
       >
         {label}
@@ -388,8 +457,6 @@ const getStyles = (isDark: boolean) => {
       flex: 1,
       backgroundColor: C.bg,
     },
-
-    // Header
     header: {
       paddingHorizontal: 16,
       paddingVertical: 10,
@@ -416,8 +483,6 @@ const getStyles = (isDark: boolean) => {
       color: C.text,
       letterSpacing: 0.2,
     },
-
-    // Nudge
     inlineBanner: {
       padding: 12,
       borderRadius: 12,
@@ -435,8 +500,6 @@ const getStyles = (isDark: boolean) => {
       color: isDark ? C.textMuted : "#7C2D12",
       fontWeight: "700",
     },
-
-    // Filters
     searchWrap: {
       flexDirection: "row",
       alignItems: "center",
@@ -455,16 +518,9 @@ const getStyles = (isDark: boolean) => {
       fontWeight: "700",
       paddingVertical: 0,
     },
-    segment: {
-      flexDirection: "row",
-      alignItems: "center",
-      marginBottom: 6,
-    },
-
+    segment: { flexDirection: "row", alignItems: "center", marginBottom: 6 },
     center: { alignItems: "center", justifyContent: "center" },
     muted: { color: C.textMuted, fontWeight: "700" },
-
-    // Cards
     cardWrap: {
       shadowColor: "#000",
       shadowOpacity: isDark ? 0.25 : 0.08,
@@ -493,11 +549,7 @@ const getStyles = (isDark: boolean) => {
       alignItems: "center",
       justifyContent: "center",
     },
-    statusPill: {
-      width: 4,
-      borderRadius: 8,
-      height: "78%",
-    },
+    statusPill: { width: 4, borderRadius: 8, height: "78%" },
     titleRow: {
       flexDirection: "row",
       alignItems: "center",
@@ -512,22 +564,14 @@ const getStyles = (isDark: boolean) => {
       letterSpacing: 0.2,
       flex: 1,
     },
-    chip: {
-      borderRadius: 999,
-      paddingHorizontal: 10,
-      paddingVertical: 3,
-    },
+    chip: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },
     chipText: {
       color: "#fff",
       fontSize: 11,
       fontWeight: "900",
       letterSpacing: 0.3,
     },
-    desc: {
-      color: C.textMuted,
-      fontSize: 13,
-      fontWeight: "700",
-    },
+    desc: { color: C.textMuted, fontSize: 13, fontWeight: "700" },
     metaRow: {
       flexDirection: "row",
       alignItems: "center",
@@ -537,7 +581,6 @@ const getStyles = (isDark: boolean) => {
     },
     metaItem: { flexDirection: "row", alignItems: "center", gap: 6 },
     metaText: { color: C.textMuted, fontSize: 12, fontWeight: "800" },
-
     sidePill: {
       position: "absolute",
       right: 12,
@@ -547,10 +590,6 @@ const getStyles = (isDark: boolean) => {
       borderRadius: 999,
       borderWidth: 1,
     },
-    sidePillText: {
-      fontSize: 10,
-      fontWeight: "900",
-      letterSpacing: 0.4,
-    },
+    sidePillText: { fontSize: 10, fontWeight: "900", letterSpacing: 0.4 },
   });
 };

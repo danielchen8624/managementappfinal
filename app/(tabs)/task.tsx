@@ -296,6 +296,21 @@ function TaskPage() {
 
   const uid = auth.currentUser?.uid || null;
   const { buildingId } = useBuilding();
+  const [buildingName, setBuildingName] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!buildingId) {
+      setBuildingName(null);
+      return;
+    }
+    const ref = doc(db, "buildings", buildingId);
+    // realtime so if name changes, header updates automatically
+    const unsub = onSnapshot(ref, (snap) => {
+      const data = snap.data() as { name?: string } | undefined;
+      setBuildingName(data?.name ?? null);
+    });
+    return () => unsub();
+  }, [buildingId]);
 
   /** theme crossfade */
   const themeAnim = useRef(new Animated.Value(isDark ? 1 : 0)).current;
@@ -805,7 +820,7 @@ function TaskPage() {
       <View style={s.headerBar}>
         <View>
           <Text style={s.headerTitle}>Tasks</Text>
-          <Text style={s.headerSubtitle}>Building: {buildingId}</Text>
+          <Text style={s.headerSubtitle}>Building: {buildingName ?? buildingId}</Text>
         </View>
         <View style={{ flexDirection: "row", gap: 10 }}>
           <TouchableOpacity
@@ -1214,7 +1229,6 @@ const getStyles = (isDark: boolean) =>
     },
     text: { color: isDark ? "#E5E7EB" : "#111" },
 
-    /* ✅ Underlay fills only the row (no absolute fill) */
     underlayLeft: {
       flex: 1,
       backgroundColor: "#EF4444",

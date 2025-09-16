@@ -9,12 +9,26 @@ import {
   Alert,
   Animated,
   Easing,
+  Image, // <-- added
 } from "react-native";
 import { signOut } from "firebase/auth";
-import { auth } from "@/firebaseConfig";
+// If your project exports db from the same module, keep this import.
+// If not, change to your actual path (e.g., "../../firebaseConfig").
+import { auth, db } from "@/firebaseConfig";
 import { router } from "expo-router";
 import { useTheme } from "../ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
+import { doc, onSnapshot } from "firebase/firestore"; // <-- added
+
+type UserDoc = {
+  firstName?: string;
+  lastName?: string;
+  birthday?: string;
+  employeeId?: string;
+  profileImageUri?: string | null;
+  email?: string;
+  displayName?: string | null;
+};
 
 /* ---------- Pretty row for settings ---------- */
 function SettingsRow({
@@ -102,18 +116,39 @@ export default function ProfileScreen() {
   }, [isDark, themeAnim]);
 
   const user = auth.currentUser;
-  const displayName = user?.displayName || user?.email?.split("@")[0] || "User";
+
+  // ---- NEW: live user doc (for profileImageUri + displayName) ----
+  const [userDoc, setUserDoc] = useState<UserDoc | null>(null);
+  useEffect(() => {
+    if (!user?.uid || !db) return;
+    const ref = doc(db, "users", user.uid);
+    const unsub = onSnapshot(ref, (snap) => {
+      setUserDoc((snap.data() as UserDoc) || null);
+    });
+    return unsub;
+  }, [user?.uid]);
+
+  // Prefer Firestore displayName, then auth.displayName, then email prefix
+  const displayName =
+    userDoc?.displayName ||
+    user?.displayName ||
+    user?.email?.split("@")[0] ||
+    "User";
+
   const email = user?.email || "—";
 
   const initials = useMemo(() => {
-    const base = user?.displayName || user?.email || "U";
+    const base = displayName || user?.email || "U";
     return base
       .split(/\s+|@/g)
       .filter(Boolean)
       .slice(0, 2)
       .map((s) => s[0]?.toUpperCase() || "")
       .join("");
-  }, [user?.displayName, user?.email]);
+  }, [displayName, user?.email]);
+
+  // Prefer Firestore image; fall back to auth.photoURL if you use it
+  const profileImageUri = userDoc?.profileImageUri || user?.photoURL || null;
 
   const handleLogout = async () => {
     Alert.alert("Sign out", "Are you sure you want to sign out?", [
@@ -124,7 +159,6 @@ export default function ProfileScreen() {
         onPress: async () => {
           try {
             await signOut(auth);
-            Alert.alert("Success!", "Logged Out.");
           } catch {
             Alert.alert("Error", "Please try again.");
           }
@@ -186,10 +220,16 @@ export default function ProfileScreen() {
         <View style={s.contentWrap}>
           {/* Profile card */}
           <View style={s.profileCard}>
-            <View style={s.avatar}>
-              <Text style={s.avatarText}>{initials || "U"}</Text>
-            </View>
+            {profileImageUri ? (
+              <Image source={{ uri: profileImageUri }} style={s.avatarImg} />
+            ) : (
+              <View style={s.avatar}>
+                <Text style={s.avatarText}>{initials || "U"}</Text>
+              </View>
+            )}
+
             <View style={{ flex: 1 }}>
+              {/* displayName above email */}
               <Text style={s.nameText} numberOfLines={1}>
                 {displayName}
               </Text>
@@ -218,9 +258,9 @@ export default function ProfileScreen() {
             <Text style={s.primaryBtnText}>Sign Out</Text>
           </TouchableOpacity>
 
-           <TouchableOpacity
+          <TouchableOpacity
             style={s.primaryBtn}
-            onPress={()=>router.push("/deleteAccount")}
+            onPress={() => router.push("/deleteAccount")}
             activeOpacity={0.9}
           >
             <Ionicons name="person-circle-outline" size={18} color="#fff" />
@@ -313,8 +353,7 @@ export default function ProfileScreen() {
                 />
               }
             />
-
-              <SettingsRow
+            <SettingsRow
               label="Add New Building"
               onPress={() => router.push("/addNewBuilding")}
               isDark={isDark}
@@ -395,6 +434,7 @@ const getStyles = (isDark: boolean) =>
       borderWidth: isDark ? 1 : 0,
       borderColor: isDark ? "#111827" : "transparent",
     },
+    // Existing fallback avatar
     avatar: {
       width: 56,
       height: 56,
@@ -402,6 +442,14 @@ const getStyles = (isDark: boolean) =>
       alignItems: "center",
       justifyContent: "center",
       backgroundColor: isDark ? "#0B1220" : "#E5E7EB",
+      borderWidth: isDark ? 1 : 0,
+      borderColor: isDark ? "#1F2937" : "transparent",
+    },
+    // NEW: image style (same sizing as avatar)
+    avatarImg: {
+      width: 56,
+      height: 56,
+      borderRadius: 12,
       borderWidth: isDark ? 1 : 0,
       borderColor: isDark ? "#1F2937" : "transparent",
     },

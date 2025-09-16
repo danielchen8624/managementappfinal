@@ -160,8 +160,6 @@ export default function LoginScreen() {
       }
 
       // success; proceed into app
-      Alert.alert("Success!", "Logged in.");
-      // e.g., router.replace("/(tabs)");
     } catch (err: any) {
       Alert.alert("Login Failed", err?.code || err?.message || "Try again.");
     } finally {
