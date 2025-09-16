@@ -14,6 +14,7 @@ import {
   createUserWithEmailAndPassword,
   sendEmailVerification,
   fetchSignInMethodsForEmail,
+  signOut,
 } from "firebase/auth";
 import { auth, db } from "../../firebaseConfig";
 import { Ionicons } from "@expo/vector-icons";
@@ -125,6 +126,15 @@ export default function SignUp() {
     }
   };
 
+  const handleExit = async () => {
+    try {
+      await signOut(auth); // unauth the user
+      router.replace("/(auth)/selectLogin");
+    } catch (e: any) {
+      Alert.alert("Couldn’t exit", e?.message || "Try again.");
+    }
+  };
+
   if (!role) {
     return (
       <View style={styles.container}>
@@ -145,11 +155,8 @@ export default function SignUp() {
   return (
     <View style={styles.container}>
       {/* Back button */}
-      <TouchableOpacity
-        style={styles.backBtn}
-        onPress={() => router.replace("/(auth)/login")}
-      >
-        <Ionicons name="arrow-back" size={24} color="#fff" />
+      <TouchableOpacity style={styles.backBtn} onPress={handleExit}>
+        <Ionicons name="close-outline" size={28} color="#fff" />
       </TouchableOpacity>
 
       <Text style={styles.title}>Create your account</Text>
@@ -226,7 +233,14 @@ const styles = StyleSheet.create({
     padding: 6,
     zIndex: 10,
   },
-  title: { fontSize: 22, fontWeight: "800", color: "#fff", marginBottom: 16, marginTop: 20 },
+  title: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#fff",
+    marginBottom: 16,
+    marginTop: 20,
+    textAlign: "center",
+  },
   label: {
     color: "#C7D2FE",
     fontWeight: "800",

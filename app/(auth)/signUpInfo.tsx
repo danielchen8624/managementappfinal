@@ -18,6 +18,7 @@ import { doc, setDoc, updateDoc } from "firebase/firestore";
 import { router } from "expo-router";
 import { useTheme } from "../ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
+import { signOut } from "firebase/auth";
 
 export default function SignUpInfo() {
   const uid = auth.currentUser?.uid || null;
@@ -47,6 +48,15 @@ export default function SignUpInfo() {
     () => !!uid && firstName.trim().length > 0 && lastName.trim().length > 0,
     [uid, firstName, lastName]
   );
+
+  const handleExit = async () => {
+    try {
+      await signOut(auth);
+      router.replace("/(auth)/selectLogin");
+    } catch (e: any) {
+      Alert.alert("Couldn’t exit", e?.message || "Please try again.");
+    }
+  };
 
   const submit = async () => {
     if (!canContinue || saving) return;
@@ -100,8 +110,18 @@ export default function SignUpInfo() {
         ]}
       />
 
+      {/* Header */}
       <View style={s.headerBar}>
+        <TouchableOpacity
+          onPress={handleExit}
+          style={s.smallGreyBtn}
+          accessibilityLabel="Exit onboarding"
+        >
+          <Ionicons name="close-outline" size={20} color={isDark ? "#F3F4F6" : "#111827"} />
+        </TouchableOpacity>
+
         <Text style={s.headerTitle}>Your Details</Text>
+
         <TouchableOpacity
           onPress={toggleTheme}
           style={s.smallGreyBtn}
@@ -255,6 +275,8 @@ const getStyles = (isDark: boolean) =>
       paddingBottom: 8,
     },
     headerTitle: {
+      flex: 1,
+      textAlign: "center",
       fontSize: 18,
       fontWeight: "800",
       color: isDark ? "#F3F4F6" : "#111827",

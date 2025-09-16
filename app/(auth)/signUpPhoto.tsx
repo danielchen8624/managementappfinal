@@ -19,6 +19,7 @@ import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { router } from "expo-router";
 import { useTheme } from "../ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
+import { signOut } from "firebase/auth";
 
 export default function SignUpPhoto() {
   const uid = auth.currentUser?.uid || null;
@@ -73,6 +74,15 @@ export default function SignUpPhoto() {
       quality: 0.9,
     });
     if (!res.canceled) setImageUri(res.assets[0].uri);
+  };
+
+  const handleExit = async () => {
+    try {
+      await signOut(auth);
+      router.replace("/(auth)/selectLogin");
+    } catch (e: any) {
+      Alert.alert("Couldn’t exit", e?.message || "Try again.");
+    }
   };
 
   const save = async () => {
@@ -133,18 +143,21 @@ export default function SignUpPhoto() {
       />
 
       <View style={s.headerBar}>
+        {/* Exit (sign out) */}
         <TouchableOpacity
-          onPress={() => router.replace("/(auth)/signUpInfo")}
+          onPress={handleExit}
           style={s.smallGreyBtn}
-          accessibilityLabel="Back"
+          accessibilityLabel="Exit onboarding"
         >
           <Ionicons
-            name="chevron-back"
+            name="close-outline"
             size={20}
             color={isDark ? "#E5E7EB" : "#111827"}
           />
         </TouchableOpacity>
+
         <Text style={s.headerTitle}>Add Profile Photo</Text>
+
         <TouchableOpacity
           onPress={toggleTheme}
           style={s.smallGreyBtn}
