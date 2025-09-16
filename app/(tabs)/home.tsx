@@ -691,7 +691,7 @@ function HomePage() {
               <ActionButton
                 onPress={() =>
                   buildingId
-                    ? console.log("hi: manager -> Activity Log (All Events)")
+                    ? router.push("/manager_activityLog")
                     : Alert.alert("Pick a building first")
                 }
                 icon={<MaterialIcons name="receipt-long" size={18} color="#FFFFFF" />}

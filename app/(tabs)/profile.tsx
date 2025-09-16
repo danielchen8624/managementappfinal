@@ -218,6 +218,15 @@ export default function ProfileScreen() {
             <Text style={s.primaryBtnText}>Sign Out</Text>
           </TouchableOpacity>
 
+           <TouchableOpacity
+            style={s.primaryBtn}
+            onPress={()=>router.push("/deleteAccount")}
+            activeOpacity={0.9}
+          >
+            <Ionicons name="person-circle-outline" size={18} color="#fff" />
+            <Text style={s.primaryBtnText}>Delete Account</Text>
+          </TouchableOpacity>
+
           {/* Secondary action */}
           <TouchableOpacity
             style={s.secondaryBtn}

@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useRef } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -20,7 +20,6 @@ import { Ionicons } from "@expo/vector-icons";
 import {
   doc,
   setDoc,
-  updateDoc,
   serverTimestamp,
   getDoc,
 } from "firebase/firestore";
@@ -37,16 +36,12 @@ function parseRole(raw: unknown): Role | null {
 
 export default function SignUp() {
   const params = useLocalSearchParams<{ role?: string }>();
-
-  // role can come from param OR from Firestore (if RootLayout redirected without param)
   const [role, setRole] = useState<Role | null>(parseRole(params.role));
 
-  // keep state in sync with route changes
   useEffect(() => {
     setRole(parseRole(params.role));
   }, [params.role]);
 
-  // If role missing but user is logged in, try to hydrate from user doc
   useEffect(() => {
     (async () => {
       if (!role && auth.currentUser?.uid) {
@@ -62,21 +57,9 @@ export default function SignUp() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
+  const [working, setWorking] = useState<null | "send">(null);
 
-  const [working, setWorking] = useState<null | "send" | "resend" | "check">(
-    null
-  );
-  const [verificationSent, setVerificationSent] = useState(false);
-
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  useEffect(
-    () => () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    },
-    []
-  );
-
-  // hydrate saved email if we have it (handy if user navigates back)
+  // hydrate saved email (useful if user navigates back)
   useEffect(() => {
     (async () => {
       const stored = await AsyncStorage.getItem(STORAGE_EMAIL_KEY);
@@ -88,42 +71,6 @@ export default function SignUp() {
   const trimmedPass = useMemo(() => password.trim(), [password]);
   const canSubmit =
     !!role && trimmedEmail.length > 3 && trimmedPass.length >= 6 && !working;
-
-  const startVerificationPoll = () => {
-    if (pollRef.current) clearInterval(pollRef.current);
-    pollRef.current = setInterval(async () => {
-      const user = auth.currentUser;
-      if (!user) return;
-      await user.reload();
-      if (user.emailVerified) {
-        try {
-          await updateDoc(doc(db, "users", user.uid), {
-            emailVerified: true,
-            verifiedAt: serverTimestamp(),
-            signup_complete: false,
-          });
-        } catch {
-          // ensure doc exists minimally
-          await setDoc(
-            doc(db, "users", user.uid),
-            {
-              userID: user.uid,
-              email: user.email,
-              emailVerified: true,
-              verifiedAt: serverTimestamp(),
-              signup_complete: false,
-              signup_stage: "awaiting_email_verification",
-            },
-            { merge: true }
-          );
-        } finally {
-          if (pollRef.current) clearInterval(pollRef.current);
-        }
-
-        router.replace("/(auth)/signUpInfo");
-      }
-    }, 3000);
-  };
 
   const handleSendVerification = async () => {
     if (!canSubmit || !role) return;
@@ -163,14 +110,9 @@ export default function SignUp() {
 
       await sendEmailVerification(user);
       await AsyncStorage.setItem(STORAGE_EMAIL_KEY, trimmedEmail);
-      setVerificationSent(true);
 
-      startVerificationPoll();
-
-      Alert.alert(
-        "Verify your email",
-        "We sent a verification link to your inbox."
-      );
+      // Hand off to the awaiting screen; it will poll and redirect when verified
+      router.replace("/(auth)/awaitingEmailVerification");
     } catch (e: any) {
       let msg = e?.message || "Something went wrong.";
       if (e?.code === "auth/email-already-in-use") {
@@ -183,75 +125,6 @@ export default function SignUp() {
     }
   };
 
-  const handleResend = async () => {
-    if (working) return;
-    setWorking("resend");
-    try {
-      const user = auth.currentUser;
-      if (!user) {
-        Alert.alert(
-          "Not signed in",
-          "Please enter your email and password again."
-        );
-        setWorking(null);
-        return;
-      }
-      await sendEmailVerification(user);
-      Alert.alert("Sent", "Verification email resent. Check your inbox.");
-    } catch (e: any) {
-      Alert.alert("Couldn’t resend", e?.message || "Try again.");
-    } finally {
-      setWorking(null);
-    }
-  };
-
-  const handleIveVerified = async () => {
-    if (working) return;
-    setWorking("check");
-    try {
-      const user = auth.currentUser;
-      if (!user) {
-        Alert.alert("Not signed in", "Please sign up again.");
-        setWorking(null);
-        return;
-      }
-      await user.reload();
-      if (user.emailVerified) {
-        try {
-          await updateDoc(doc(db, "users", user.uid), {
-            emailVerified: true,
-            verifiedAt: serverTimestamp(),
-            signup_complete: false,
-          });
-        } catch {
-          await setDoc(
-            doc(db, "users", user.uid),
-            {
-              userID: user.uid,
-              email: user.email,
-              emailVerified: true,
-              verifiedAt: serverTimestamp(),
-              signup_complete: false,
-              signup_stage: "awaiting_email_verification",
-            },
-            { merge: true }
-          );
-        }
-        router.replace("/(auth)/signUpInfo");
-      } else {
-        Alert.alert(
-          "Still not verified",
-          "Please open the link we emailed you."
-        );
-      }
-    } catch (e: any) {
-      Alert.alert("Check failed", e?.message || "Try again.");
-    } finally {
-      setWorking(null);
-    }
-  };
-
-  // If there's truly no role (param + Firestore both missing), show a friendly gate
   if (!role) {
     return (
       <View style={styles.container}>
@@ -271,6 +144,14 @@ export default function SignUp() {
 
   return (
     <View style={styles.container}>
+      {/* Back button */}
+      <TouchableOpacity
+        style={styles.backBtn}
+        onPress={() => router.replace("/(auth)/login")}
+      >
+        <Ionicons name="arrow-back" size={24} color="#fff" />
+      </TouchableOpacity>
+
       <Text style={styles.title}>Create your account</Text>
 
       <Text style={styles.label}>Email</Text>
@@ -318,52 +199,10 @@ export default function SignUp() {
         ) : (
           <>
             <Ionicons name="paper-plane-outline" size={18} color="#fff" />
-            <Text style={styles.primaryBtnText}>
-              {verificationSent ? "Send again" : "Send verification email"}
-            </Text>
+            <Text style={styles.primaryBtnText}>Send verification email</Text>
           </>
         )}
       </TouchableOpacity>
-
-      {verificationSent && (
-        <View style={{ marginTop: 14 }}>
-          <TouchableOpacity
-            style={[styles.secondaryBtn, { marginBottom: 10 }]}
-            onPress={handleResend}
-            activeOpacity={0.9}
-            disabled={working === "resend"}
-          >
-            {working === "resend" ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <Ionicons name="refresh-outline" size={18} color="#fff" />
-                <Text style={styles.secondaryBtnText}>Resend email</Text>
-              </>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.successBtn}
-            onPress={handleIveVerified}
-            activeOpacity={0.9}
-            disabled={working === "check"}
-          >
-            {working === "check" ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <Ionicons
-                  name="checkmark-done-outline"
-                  size={18}
-                  color="#fff"
-                />
-                <Text style={styles.successBtnText}>I’ve verified</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </View>
-      )}
 
       <Text style={styles.note}>
         We’ll ask for your details and a profile photo after you verify your
@@ -380,7 +219,14 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     backgroundColor: "#0B1220",
   },
-  title: { fontSize: 22, fontWeight: "800", color: "#fff", marginBottom: 16 },
+  backBtn: {
+    position: "absolute",
+    top: 50,
+    left: 20,
+    padding: 6,
+    zIndex: 10,
+  },
+  title: { fontSize: 22, fontWeight: "800", color: "#fff", marginBottom: 16, marginTop: 20 },
   label: {
     color: "#C7D2FE",
     fontWeight: "800",
@@ -421,25 +267,5 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     letterSpacing: 0.3,
   },
-  secondaryBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 12,
-    borderRadius: 10,
-    backgroundColor: "#475569",
-  },
-  secondaryBtnText: { color: "#fff", fontWeight: "800" },
-  successBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 12,
-    borderRadius: 10,
-    backgroundColor: "#10B981",
-  },
-  successBtnText: { color: "#fff", fontWeight: "800" },
   note: { marginTop: 16, color: "#94A3B8" },
 });

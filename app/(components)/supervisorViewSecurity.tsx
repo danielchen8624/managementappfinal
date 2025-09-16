@@ -16,6 +16,8 @@ import { Ionicons } from "@expo/vector-icons";
 import {
   collection,
   getDocs,
+  getDoc,       // ⬅️ NEW
+  doc,          // ⬅️ NEW
   limit,
   orderBy,
   query,
@@ -50,6 +52,10 @@ export default function SupervisorViewSecurity() {
   const [refreshing, setRefreshing] = useState(false);
   const anim = useRef(new Animated.Value(0)).current;
 
+  // NEW: building name state
+  const [buildingName, setBuildingName] = useState<string | null>(null);
+  const [buildingNameLoading, setBuildingNameLoading] = useState(false);
+
   useEffect(() => {
     Animated.timing(anim, {
       toValue: 1,
@@ -58,6 +64,28 @@ export default function SupervisorViewSecurity() {
       useNativeDriver: true,
     }).start();
   }, [anim]);
+
+  // ⬅️ NEW: fetch the building's name from /buildings/{buildingId}
+  useEffect(() => {
+    setBuildingName(null);
+    if (!buildingId) return;
+
+    (async () => {
+      try {
+        setBuildingNameLoading(true);
+        const ref = doc(db, "buildings", buildingId);
+        const snap = await getDoc(ref);
+        const data = snap.data() as any | undefined;
+        const name = (data?.name as string) || "Unnamed Building";
+        setBuildingName(name);
+      } catch (e) {
+        console.error("Failed to get building name:", e);
+        setBuildingName("Unnamed Building");
+      } finally {
+        setBuildingNameLoading(false);
+      }
+    })();
+  }, [buildingId]);
 
   const fetchRuns = async () => {
     if (!buildingId) {
@@ -162,6 +190,11 @@ export default function SupervisorViewSecurity() {
     );
   };
 
+  const buildingLabel =
+    !buildingId
+      ? "Select a building"
+      : `Building: ${buildingNameLoading ? "Loading…" : buildingName ?? "Unnamed Building"}`;
+
   return (
     <View style={s.container}>
       <SafeAreaView style={{ flex: 1 }}>
@@ -182,11 +215,7 @@ export default function SupervisorViewSecurity() {
           ]}
         >
           <Text style={s.headerTitle}>Security Runs</Text>
-          <Text style={s.headerSub}>
-            {buildingId
-              ? `Building: ${buildingId.slice(0, 8)}…`
-              : "Select a building"}
-          </Text>
+          <Text style={s.headerSub}>{buildingLabel}</Text>
         </Animated.View>
 
         {!buildingId ? (

@@ -289,7 +289,7 @@ export default function LoginScreen() {
               ]}
               onPress={() =>
                 // Only pass a valid role through to signUp
-                router.push({ pathname: "/signUp", params: { role: selectedRole } })
+                router.replace({ pathname: "/signUp", params: { role: selectedRole } })
               }
               disabled={false}
               activeOpacity={0.9}
