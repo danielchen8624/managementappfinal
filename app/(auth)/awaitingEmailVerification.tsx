@@ -11,14 +11,14 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import { auth, db } from "../../firebaseConfig";
-import { sendEmailVerification, signOut } from "firebase/auth";
-import { doc, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
+import { sendEmailVerification, signOut, deleteUser } from "firebase/auth";
+import { doc, serverTimestamp, setDoc, updateDoc, deleteDoc } from "firebase/firestore";
 
 const STORAGE_EMAIL_KEY = "signup.email";
 
 export default function AwaitingEmailVerification() {
   const [email, setEmail] = useState<string | null>(null);
-  const [working, setWorking] = useState<null | "resend" | "check">(null);
+  const [working, setWorking] = useState<null | "resend" | "check" | "delete">(null);
 
   // Show which inbox to check
   useEffect(() => {
@@ -137,6 +137,67 @@ export default function AwaitingEmailVerification() {
     }
   };
 
+  // NEW: Delete unverified account and go back
+  const handleWrongEmail = async () => {
+    if (working) return;
+    setWorking("delete");
+    try {
+      if (pollRef.current) clearInterval(pollRef.current); // stop polling
+
+      const user = auth.currentUser;
+
+      // If somehow not signed in, just go back
+      if (!user) {
+        await AsyncStorage.removeItem(STORAGE_EMAIL_KEY);
+        router.replace("/(auth)/selectLogin");
+        return;
+      }
+
+      await user.reload();
+
+      // If verified already, don't delete here—just sign out and go back
+      if (user.emailVerified) {
+        Alert.alert(
+          "Already verified",
+          "This account is already verified. We’ll take you back to login."
+        );
+        try { await signOut(auth); } catch {}
+        await AsyncStorage.removeItem(STORAGE_EMAIL_KEY);
+        router.replace("/(auth)/selectLogin");
+        return;
+      }
+
+      // Try to delete Firestore profile (best-effort)
+      try {
+        await deleteDoc(doc(db, "users", user.uid));
+      } catch { /* ignore if it doesn't exist */ }
+
+      // Delete the Auth user
+      try {
+        await deleteUser(user);
+      } catch (e: any) {
+        // Common case: requires recent login (shouldn’t usually happen right after sign-up)
+        if (e?.code === "auth/requires-recent-login") {
+          Alert.alert(
+            "Sign in again to remove",
+            "For security reasons, please sign in and try removing this unverified account again."
+          );
+        } else {
+          throw e;
+        }
+      }
+
+      // Cleanup and navigate
+      try { await signOut(auth); } catch {}
+      await AsyncStorage.removeItem(STORAGE_EMAIL_KEY);
+      router.replace("/(auth)/selectLogin");
+    } catch (e: any) {
+      Alert.alert("Couldn’t remove account", e?.message || "Try again.");
+    } finally {
+      setWorking(null);
+    }
+  };
+
   const handleExit = async () => {
     try {
       if (pollRef.current) clearInterval(pollRef.current); // stop polling
@@ -212,11 +273,16 @@ export default function AwaitingEmailVerification() {
       <View style={{ height: 16 }} />
 
       <TouchableOpacity
-        onPress={() => router.replace("/(auth)/signUp")}
+        onPress={handleWrongEmail}
         style={styles.linkBtn}
         activeOpacity={0.8}
+        disabled={working === "delete"}
       >
-        <Text style={styles.linkText}>Wrong email? Go back to sign up</Text>
+        {working === "delete" ? (
+          <ActivityIndicator color="#93C5FD" />
+        ) : (
+          <Text style={styles.linkText}>Wrong email? Go back</Text>
+        )}
       </TouchableOpacity>
     </View>
   );
