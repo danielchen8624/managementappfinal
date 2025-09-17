@@ -1,6 +1,6 @@
 {
   "cli": {
-    "version": ">= 16.19.2",
+    "version": ">= 3.0.0",
     "appVersionSource": "remote"
   },
   "build": {
@@ -9,21 +9,30 @@
       "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "channel": "preview"
     },
     "testflight": {
-      "distribution": "store",        
+      "distribution": "store",
       "autoIncrement": true,
-      "channel": "preview"           
+      "channel": "preview"
     },
     "production": {
-      "distribution": "store",       
+      "distribution": "store",
       "autoIncrement": true,
       "channel": "production"
     }
   },
   "submit": {
-    "testflight": {},
-    "production": {}
+    "testflight": {
+      "ios": {
+        "ascAppId": "6752588044"
+      }
+    },
+    "production": {
+      "ios": {
+        "ascAppId": "6752588044"
+      }
+    }
   }
 }

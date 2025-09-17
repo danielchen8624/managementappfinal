@@ -40,8 +40,8 @@ function EditProfile() {
   const userId = auth.currentUser?.uid || null;
 
   const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName]   = useState("");
-  const [birthday, setBirthday]   = useState("");
+  const [lastName, setLastName] = useState("");
+  const [birthday, setBirthday] = useState("");
   const [employeeId, setEmployeeId] = useState("");
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [loadingDoc, setLoadingDoc] = useState(true);
@@ -107,22 +107,64 @@ function EditProfile() {
       .join("");
   }, [currentDisplayName, firstName, lastName]);
 
+  // ✅ Ask permission BEFORE opening the picker + try/catch guard
   const pickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-    if (!result.canceled) {
-      setProfileImage(result.assets[0].uri);
+    try {
+      const { status } =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Permission required",
+          "We need access to your photo library."
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled) {
+        setProfileImage(result.assets[0].uri);
+      }
+    } catch (err: any) {
+      console.error("Image picker error:", err);
+      Alert.alert("Error", err?.message || "Could not open photo library.");
+    }
+  };
+
+  // ✅ New: Take photo with camera permission flow
+  const takePhoto = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Permission required",
+          "We need camera access to take a photo."
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.9,
+      });
+
+      if (!result.canceled) {
+        setProfileImage(result.assets[0].uri);
+      }
+    } catch (err: any) {
+      console.error("Camera error:", err);
+      Alert.alert("Error", err?.message || "Could not open camera.");
     }
   };
 
   const hasChanges = useMemo(() => {
-    // If loading, avoid enabling button
     if (loadingDoc) return false;
-    // naive: enable if any field non-empty or changed — good enough for UI
     return true;
   }, [loadingDoc, firstName, lastName, birthday, employeeId, profileImage]);
 
@@ -141,11 +183,10 @@ function EditProfile() {
           birthday: birthday.trim(),
           employeeId: employeeId.trim().toUpperCase(),
           profileImageUri: profileImage || null,
-          // helpful mirrors (optional)
           displayName:
-            (firstName.trim() || lastName.trim()) ?
-            `${firstName.trim()} ${lastName.trim()}`.trim() :
-            auth.currentUser?.displayName || null,
+            firstName.trim() || lastName.trim()
+              ? `${firstName.trim()} ${lastName.trim()}`.trim()
+              : auth.currentUser?.displayName || null,
           email: auth.currentUser?.email || null,
         } as UserDoc,
         { merge: true }
@@ -224,20 +265,42 @@ function EditProfile() {
             <View style={styles.card}>
               <View style={styles.avatarWrap}>
                 {profileImage ? (
-                  <Image source={{ uri: profileImage }} style={styles.avatarImg} />
+                  <Image
+                    source={{ uri: profileImage }}
+                    style={styles.avatarImg}
+                  />
                 ) : (
                   <View style={styles.avatarFallback}>
                     <Text style={styles.avatarText}>{initials || "U"}</Text>
                   </View>
                 )}
-                <TouchableOpacity
-                  style={styles.changePhotoBtn}
-                  onPress={pickImage}
-                  activeOpacity={0.9}
-                >
-                  <Ionicons name="image-outline" size={14} color="#fff" />
-                  <Text style={styles.changePhotoText}>Change photo</Text>
-                </TouchableOpacity>
+
+                {/* Actions: choose or take */}
+                <View style={styles.photoActionsRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.photoBtn,
+                      { backgroundColor: isDark ? "#2563EB" : "#1D4ED8" },
+                    ]}
+                    onPress={pickImage}
+                    activeOpacity={0.9}
+                  >
+                    <Ionicons name="image-outline" size={14} color="#fff" />
+                    <Text style={styles.photoBtnText}>Choose photo</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.photoBtn,
+                      { backgroundColor: isDark ? "#0EA5E9" : "#0284C7" },
+                    ]}
+                    onPress={takePhoto}
+                    activeOpacity={0.9}
+                  >
+                    <Ionicons name="camera-outline" size={14} color="#fff" />
+                    <Text style={styles.photoBtnText}>Take photo</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
               {/* Inputs */}
@@ -329,8 +392,12 @@ function EditProfile() {
                   {
                     backgroundColor:
                       !hasChanges || saving
-                        ? isDark ? "#1E3A8A" : "#93C5FD"
-                        : isDark ? "#2563EB" : "#1D4ED8",
+                        ? isDark
+                          ? "#1E3A8A"
+                          : "#93C5FD"
+                        : isDark
+                        ? "#2563EB"
+                        : "#1D4ED8",
                     opacity: !hasChanges || saving ? 0.9 : 1,
                   },
                 ]}
@@ -426,6 +493,7 @@ const getStyles = (isDark: boolean) =>
       alignItems: "center",
       marginTop: 6,
       marginBottom: 12,
+      width: "100%",
     },
     avatarImg: {
       width: 96,
@@ -450,17 +518,24 @@ const getStyles = (isDark: boolean) =>
       color: isDark ? "#E5E7EB" : "#111827",
       letterSpacing: 0.4,
     },
-    changePhotoBtn: {
+
+    photoActionsRow: {
       marginTop: 10,
+      flexDirection: "row",
+      gap: 8,
+      justifyContent: "center",
+      alignItems: "center",
+      width: "100%",
+    },
+    photoBtn: {
       flexDirection: "row",
       alignItems: "center",
       gap: 6,
       paddingHorizontal: 12,
       paddingVertical: 8,
       borderRadius: 999,
-      backgroundColor: isDark ? "#2563EB" : "#1D4ED8",
     },
-    changePhotoText: {
+    photoBtnText: {
       color: "#fff",
       fontWeight: "800",
       fontSize: 12,

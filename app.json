@@ -16,39 +16,27 @@
     },
     "ios": {
       "supportsTablet": true,
+      "newArchEnabled": true,
       "bundleIdentifier": "com.daniel.chen0113.dcoasis",
-      "buildNumber": "1",
+      "buildNumber": "7",
       "infoPlist": {
         "NSCameraUsageDescription": "DCOasis needs camera access so workers can take a photo when clocking in.",
-        "NSLocationWhenInUseUsageDescription": "DCOasis uses your location to attach site context to clock-ins.",
+        "NSPhotoLibraryUsageDescription": "Allow DCOasis to select photos for clock-ins.",
+        "NSPhotoLibraryAddUsageDescription": "Allow DCOasis to save clock-in photos to your library.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
+      "edgeToEdgeEnabled": true,
+      "package": "com.daniel.chen0113.dcoasis",
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true,
-      "package": "com.daniel.chen0113.dcoasis",
-      "versionCode": 1,
       "permissions": [
-        "CAMERA",
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION",
-        "POST_NOTIFICATIONS",
         "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO",
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION",
-        "CAMERA",
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION",
-        "POST_NOTIFICATIONS",
-        "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO",
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "android.permission.READ_MEDIA_IMAGES"
       ]
     },
     "androidStatusBar": {
@@ -64,8 +52,7 @@
     "plugins": [
       "expo-router",
       "expo-camera",
-      "expo-location",
-      "expo-system-ui",
+      "expo-image-picker",
       [
         "expo-splash-screen",
         {
@@ -74,20 +61,14 @@
           "backgroundColor": "#0B1220"
         }
       ],
-      "expo-notifications"
+      "expo-web-browser"
     ],
-    "experiments": {
-      "typedRoutes": true
-    },
+    "experiments": { "typedRoutes": true },
     "extra": {
       "router": {},
-      "eas": {
-        "projectId": "3f52eecb-c1d1-4c05-89fc-ff257e76152f"
-      }
+      "eas": { "projectId": "3f52eecb-c1d1-4c05-89fc-ff257e76152f" }
     },
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
+    "runtimeVersion": "1.0.0",
     "updates": {
       "url": "https://u.expo.dev/3f52eecb-c1d1-4c05-89fc-ff257e76152f"
     }
