@@ -7,11 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		08ED08640D01AF1477F3E125 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58DA0378ED9266276C833786 /* ExpoModulesProvider.swift */; };
+		0DD9C842C5C21E5BF1B58E61 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = DE801C4898A6A42A700AA44C /* PrivacyInfo.xcprivacy */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
-		69D4457191EA58BA94920293 /* libPods-DCOasis.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 18509A1FA34237B6914D7D05 /* libPods-DCOasis.a */; };
-		88155F1087BDE83AF5A8C5FB /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A125DCB6E05155A5E119F1DC /* PrivacyInfo.xcprivacy */; };
+		6A088CB4BF029FA452FE93D3 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1AB95BC9E787B057A3F1909 /* ExpoModulesProvider.swift */; };
+		6A869DEA9E2E593F8F629E4B /* libPods-DCOasis.a in Frameworks */ = {isa = PBXBuildFile; fileRef = F3CAD58A37CB61DB06069842 /* libPods-DCOasis.a */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 /* End PBXBuildFile section */
@@ -20,16 +20,16 @@
 		13B07F961A680F5B00A75B9A /* DCOasis.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DCOasis.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = DCOasis/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = DCOasis/Info.plist; sourceTree = "<group>"; };
-		18509A1FA34237B6914D7D05 /* libPods-DCOasis.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-DCOasis.a"; sourceTree = BUILT_PRODUCTS_DIR; };
-		29E83EFE89AC1B51427047C3 /* Pods-DCOasis.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DCOasis.debug.xcconfig"; path = "Target Support Files/Pods-DCOasis/Pods-DCOasis.debug.xcconfig"; sourceTree = "<group>"; };
-		550EA21DC154FAF82BC9D433 /* Pods-DCOasis.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DCOasis.release.xcconfig"; path = "Target Support Files/Pods-DCOasis/Pods-DCOasis.release.xcconfig"; sourceTree = "<group>"; };
-		58DA0378ED9266276C833786 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-DCOasis/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
-		A125DCB6E05155A5E119F1DC /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = DCOasis/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		376194849B8B708D212A7C68 /* Pods-DCOasis.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DCOasis.release.xcconfig"; path = "Target Support Files/Pods-DCOasis/Pods-DCOasis.release.xcconfig"; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = DCOasis/SplashScreen.storyboard; sourceTree = "<group>"; };
+		B830C6573867568E7E8D4F00 /* Pods-DCOasis.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DCOasis.debug.xcconfig"; path = "Target Support Files/Pods-DCOasis/Pods-DCOasis.debug.xcconfig"; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
+		D1AB95BC9E787B057A3F1909 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-DCOasis/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
+		DE801C4898A6A42A700AA44C /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = DCOasis/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = DCOasis/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* DCOasis-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "DCOasis-Bridging-Header.h"; path = "DCOasis/DCOasis-Bridging-Header.h"; sourceTree = "<group>"; };
+		F3CAD58A37CB61DB06069842 /* libPods-DCOasis.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-DCOasis.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -37,21 +37,13 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				69D4457191EA58BA94920293 /* libPods-DCOasis.a in Frameworks */,
+				6A869DEA9E2E593F8F629E4B /* libPods-DCOasis.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		097A23ACBBC9D822BE75A287 /* DCOasis */ = {
-			isa = PBXGroup;
-			children = (
-				58DA0378ED9266276C833786 /* ExpoModulesProvider.swift */,
-			);
-			name = DCOasis;
-			sourceTree = "<group>";
-		};
 		13B07FAE1A68108700A75B9A /* DCOasis */ = {
 			isa = PBXGroup;
 			children = (
@@ -61,7 +53,7 @@
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
-				A125DCB6E05155A5E119F1DC /* PrivacyInfo.xcprivacy */,
+				DE801C4898A6A42A700AA44C /* PrivacyInfo.xcprivacy */,
 			);
 			name = DCOasis;
 			sourceTree = "<group>";
@@ -70,9 +62,27 @@
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				18509A1FA34237B6914D7D05 /* libPods-DCOasis.a */,
+				F3CAD58A37CB61DB06069842 /* libPods-DCOasis.a */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		5A60F5F233329FA35BEEE77B /* DCOasis */ = {
+			isa = PBXGroup;
+			children = (
+				D1AB95BC9E787B057A3F1909 /* ExpoModulesProvider.swift */,
+			);
+			name = DCOasis;
+			sourceTree = "<group>";
+		};
+		723514B8DB62F9542D3E3996 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				B830C6573867568E7E8D4F00 /* Pods-DCOasis.debug.xcconfig */,
+				376194849B8B708D212A7C68 /* Pods-DCOasis.release.xcconfig */,
+			);
+			name = Pods;
+			path = Pods;
 			sourceTree = "<group>";
 		};
 		832341AE1AAA6A7D00B99B32 /* Libraries */ = {
@@ -89,8 +99,8 @@
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
-				A8E1A9F585FAC80BDF2AD708 /* Pods */,
-				D2FFC14F4F35FA5787B91D04 /* ExpoModulesProviders */,
+				723514B8DB62F9542D3E3996 /* Pods */,
+				C811666A4038E8CF41781D59 /* ExpoModulesProviders */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -105,16 +115,6 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		A8E1A9F585FAC80BDF2AD708 /* Pods */ = {
-			isa = PBXGroup;
-			children = (
-				29E83EFE89AC1B51427047C3 /* Pods-DCOasis.debug.xcconfig */,
-				550EA21DC154FAF82BC9D433 /* Pods-DCOasis.release.xcconfig */,
-			);
-			name = Pods;
-			path = Pods;
-			sourceTree = "<group>";
-		};
 		BB2F792B24A3F905000567C9 /* Supporting */ = {
 			isa = PBXGroup;
 			children = (
@@ -124,10 +124,10 @@
 			path = DCOasis/Supporting;
 			sourceTree = "<group>";
 		};
-		D2FFC14F4F35FA5787B91D04 /* ExpoModulesProviders */ = {
+		C811666A4038E8CF41781D59 /* ExpoModulesProviders */ = {
 			isa = PBXGroup;
 			children = (
-				097A23ACBBC9D822BE75A287 /* DCOasis */,
+				5A60F5F233329FA35BEEE77B /* DCOasis */,
 			);
 			name = ExpoModulesProviders;
 			sourceTree = "<group>";
@@ -140,13 +140,13 @@
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "DCOasis" */;
 			buildPhases = (
 				08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */,
-				22B0FC3CC95BF291F78983DB /* [Expo] Configure project */,
+				E52229B0FE49F0C3CA2C053C /* [Expo] Configure project */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */,
-				36293724D7A4A5374E84DA1B /* [CP] Embed Pods Frameworks */,
+				33F00CCE910A2E2E3BFE9AB8 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -196,7 +196,7 @@
 				BB2F792D24A3F905000567C9 /* Expo.plist in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
-				88155F1087BDE83AF5A8C5FB /* PrivacyInfo.xcprivacy in Resources */,
+				0DD9C842C5C21E5BF1B58E61 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -242,31 +242,7 @@
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
-		22B0FC3CC95BF291F78983DB /* [Expo] Configure project */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"$(SRCROOT)/.xcode.env",
-				"$(SRCROOT)/.xcode.env.local",
-				"$(SRCROOT)/DCOasis/DCOasis.entitlements",
-				"$(SRCROOT)/Pods/Target Support Files/Pods-DCOasis/expo-configure-project.sh",
-			);
-			name = "[Expo] Configure project";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"$(SRCROOT)/Pods/Target Support Files/Pods-DCOasis/ExpoModulesProvider.swift",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-DCOasis/expo-configure-project.sh\"\n";
-		};
-		36293724D7A4A5374E84DA1B /* [CP] Embed Pods Frameworks */ = {
+		33F00CCE910A2E2E3BFE9AB8 /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -366,6 +342,30 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-DCOasis/Pods-DCOasis-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
+		E52229B0FE49F0C3CA2C053C /* [Expo] Configure project */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/.xcode.env",
+				"$(SRCROOT)/.xcode.env.local",
+				"$(SRCROOT)/DCOasis/DCOasis.entitlements",
+				"$(SRCROOT)/Pods/Target Support Files/Pods-DCOasis/expo-configure-project.sh",
+			);
+			name = "[Expo] Configure project";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(SRCROOT)/Pods/Target Support Files/Pods-DCOasis/ExpoModulesProvider.swift",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-DCOasis/expo-configure-project.sh\"\n";
+		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -374,7 +374,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
-				08ED08640D01AF1477F3E125 /* ExpoModulesProvider.swift in Sources */,
+				6A088CB4BF029FA452FE93D3 /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -383,7 +383,7 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 29E83EFE89AC1B51427047C3 /* Pods-DCOasis.debug.xcconfig */;
+			baseConfigurationReference = B830C6573867568E7E8D4F00 /* Pods-DCOasis.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -408,7 +408,7 @@
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
 				PRODUCT_BUNDLE_IDENTIFIER = com.daniel.chen0113.dcoasis;
-				PRODUCT_NAME = DCOasis;
+				PRODUCT_NAME = "DCOasis";
 				SWIFT_OBJC_BRIDGING_HEADER = "DCOasis/DCOasis-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -419,7 +419,7 @@
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 550EA21DC154FAF82BC9D433 /* Pods-DCOasis.release.xcconfig */;
+			baseConfigurationReference = 376194849B8B708D212A7C68 /* Pods-DCOasis.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -439,7 +439,7 @@
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
 				PRODUCT_BUNDLE_IDENTIFIER = com.daniel.chen0113.dcoasis;
-				PRODUCT_NAME = DCOasis;
+				PRODUCT_NAME = "DCOasis";
 				SWIFT_OBJC_BRIDGING_HEADER = "DCOasis/DCOasis-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
