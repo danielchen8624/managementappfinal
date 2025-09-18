@@ -25,7 +25,7 @@
 		B830C6573867568E7E8D4F00 /* Pods-DCOasis.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DCOasis.debug.xcconfig"; path = "Target Support Files/Pods-DCOasis/Pods-DCOasis.debug.xcconfig"; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
 		D1AB95BC9E787B057A3F1909 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-DCOasis/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
-		DE801C4898A6A42A700AA44C /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = DCOasis/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		DE801C4898A6A42A700AA44C /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = DCOasis/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = DCOasis/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* DCOasis-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "DCOasis-Bridging-Header.h"; path = "DCOasis/DCOasis-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -81,7 +81,6 @@
 				B830C6573867568E7E8D4F00 /* Pods-DCOasis.debug.xcconfig */,
 				376194849B8B708D212A7C68 /* Pods-DCOasis.release.xcconfig */,
 			);
-			name = Pods;
 			path = Pods;
 			sourceTree = "<group>";
 		};
@@ -389,6 +388,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = DCOasis/DCOasis.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = URFQY2FB25;
 				ENABLE_BITCODE = NO;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"$(inherited)",
@@ -408,7 +408,7 @@
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
 				PRODUCT_BUNDLE_IDENTIFIER = com.daniel.chen0113.dcoasis;
-				PRODUCT_NAME = "DCOasis";
+				PRODUCT_NAME = DCOasis;
 				SWIFT_OBJC_BRIDGING_HEADER = "DCOasis/DCOasis-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -425,6 +425,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = DCOasis/DCOasis.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = URFQY2FB25;
 				INFOPLIST_FILE = DCOasis/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -439,7 +440,7 @@
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
 				PRODUCT_BUNDLE_IDENTIFIER = com.daniel.chen0113.dcoasis;
-				PRODUCT_NAME = "DCOasis";
+				PRODUCT_NAME = DCOasis;
 				SWIFT_OBJC_BRIDGING_HEADER = "DCOasis/DCOasis-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";

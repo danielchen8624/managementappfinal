@@ -110,12 +110,11 @@ function HomePage() {
   const [currentShiftId, setCurrentShiftId] = useState("");
   const [managerReportsOpen, setManagerReportsOpen] = useState(false);
 
-
   const [latestReport, setLatestReport] = useState<LatestReport | null>(null);
   const [latestLoading, setLatestLoading] = useState(true);
 
   const { role, loading } = useUser();
-  const { theme } = useTheme();
+  const { theme, toggleTheme } = useTheme(); // <-- added toggleTheme
   const isDark = theme === "dark";
   const s = getStyles(isDark);
   const C = isDark ? Pal.dark : Pal.light;
@@ -494,16 +493,32 @@ function HomePage() {
             </TouchableOpacity>
           </View>
 
-          {role === "supervisor" && (
+          {/* RIGHT SIDE: theme toggle + (optional) request history */}
+          <View style={{ flexDirection: "row", gap: 10 }}>
             <TouchableOpacity
-              onPress={() => router.push("/requestHistory")}
+              onPress={toggleTheme}
               style={s.headerIconBtn}
               activeOpacity={0.88}
-              accessibilityLabel="Request History"
+              accessibilityLabel="Toggle theme"
             >
-              <MaterialIcons name="history" size={18} color={C.text} />
+              <Ionicons
+                name={isDark ? "sunny-outline" : "moon-outline"}
+                size={18}
+                color={isDark ? "#FDE68A" : C.text}
+              />
             </TouchableOpacity>
-          )}
+
+            {role === "supervisor" && (
+              <TouchableOpacity
+                onPress={() => router.push("/requestHistory")}
+                style={s.headerIconBtn}
+                activeOpacity={0.88}
+                accessibilityLabel="Request History"
+              >
+                <MaterialIcons name="history" size={18} color={C.text} />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
 
         {/* Security top bar — next run / next shift */}
@@ -1382,7 +1397,6 @@ const getStyles = (isDark: boolean) => {
       color: C.textMuted,
     },
 
-    // NEW: grid helpers for Manager section
     gridRow: {
       flexDirection: "row",
       gap: 10,

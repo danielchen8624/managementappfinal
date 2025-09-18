@@ -8,7 +8,7 @@
     "icon": "./assets/images/DCOasis_Icon.png",
     "scheme": "dcoasis",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "backgroundColor": "#0B1220",
@@ -16,7 +16,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "newArchEnabled": true,
+      "newArchEnabled": false,
       "bundleIdentifier": "com.daniel.chen0113.dcoasis",
       "buildNumber": "7",
       "infoPlist": {
@@ -63,14 +63,15 @@
       ],
       "expo-web-browser"
     ],
-    "experiments": { "typedRoutes": true },
+    "experiments": {
+      "typedRoutes": true
+    },
     "extra": {
       "router": {},
-      "eas": { "projectId": "3f52eecb-c1d1-4c05-89fc-ff257e76152f" }
-    },
-    "runtimeVersion": "1.0.0",
-    "updates": {
-      "url": "https://u.expo.dev/3f52eecb-c1d1-4c05-89fc-ff257e76152f"
+      "eas": {
+        "projectId": "3f52eecb-c1d1-4c05-89fc-ff257e76152f"
+      }
     }
+   
   }
 }

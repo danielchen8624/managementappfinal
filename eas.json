@@ -9,18 +9,15 @@
       "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal",
-      "channel": "preview"
+      "distribution": "internal"
     },
     "testflight": {
       "distribution": "store",
-      "autoIncrement": true,
-      "channel": "preview"
+      "autoIncrement": true
     },
     "production": {
       "distribution": "store",
-      "autoIncrement": true,
-      "channel": "production"
+      "autoIncrement": true
     }
   },
   "submit": {
