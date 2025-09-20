@@ -19,7 +19,6 @@ import { db, auth } from "../../firebaseConfig";
 import { collection, addDoc, getDocs, query, where } from "firebase/firestore";
 import { useTheme } from "../ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
-// 👇 NEW: building context
 import { useBuilding } from "../BuildingContext";
 
 /* ---------- Location options ---------- */
@@ -53,7 +52,10 @@ const data = [
   { label: "Mail Boxes", value: "Mail Boxes" },
   { label: "Maintenance of all floors", value: "Maintenance of all floors" },
   { label: "Manager Office", value: "Manager Office" },
-  { label: "Men & Women Washroom & Sauna", value: "Men & Women Washroom & Sauna" },
+  {
+    label: "Men & Women Washroom & Sauna",
+    value: "Men & Women Washroom & Sauna",
+  },
   { label: "Men's & Women's Gym", value: "Men's & Women's Gym" },
   { label: "Moving Room", value: "Moving Room" },
   { label: "Other", value: "Other" },
@@ -66,7 +68,10 @@ const data = [
   { label: "Staircase", value: "Staircase" },
   { label: "Telecom Room", value: "Telecom Room" },
   { label: "Waiting Room", value: "Waiting Room" },
-  { label: "Washroom (Men,Women & Security)", value: "Washroom (Men,Women & Security)" },
+  {
+    label: "Washroom (Men,Women & Security)",
+    value: "Washroom (Men,Women & Security)",
+  },
   { label: "Windows & Mirrors", value: "Windows & Mirrors" },
 ];
 
@@ -80,7 +85,6 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
   const isDark = theme === "dark";
   const s = getStyles(isDark);
 
-  // 👇 building context
   const { buildingId } = useBuilding();
 
   const [taskAddress, setTaskAddress] = useState("");
@@ -89,18 +93,16 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
   const [roomNumber, setRoomNumber] = useState("");
   const [urgent, setUrgent] = useState(false);
   const [important, setImportant] = useState(false);
-  const [employees, setEmployees] = useState<{ label: string; value: string }[]>(
-    []
-  );
+  const [employees, setEmployees] = useState<
+    { label: string; value: string }[]
+  >([]);
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
   const [isDescFocused, setIsDescFocused] = useState(false);
-
-  // 👇 NEW: Project toggle state
   const [isProject, setIsProject] = useState(false);
 
-  // entry animation
+  // animations
   const sheetY = useRef(new Animated.Value(40)).current;
   const sheetOpacity = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -125,11 +127,14 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
     }
   }, [visible, sheetY, sheetOpacity]);
 
-  // employees options (global users; filter to your needs)
+  // employees options
   useEffect(() => {
     (async () => {
       try {
-        const qy = query(collection(db, "users"), where("role", "==", "employee"));
+        const qy = query(
+          collection(db, "users"),
+          where("role", "==", "employee")
+        );
         const snapshot = await getDocs(qy);
         const list = snapshot.docs.map((doc) => {
           const d = doc.data() as any;
@@ -149,11 +154,11 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
     if (urgent && important) return 1;
     if (!urgent && important) return 2;
     if (urgent && !important) return 3;
-    return 4; // none
+    return 4;
   }, [urgent, important]);
 
   const canSubmit =
-    !!buildingId && // 👈 must have a building selected
+    !!buildingId &&
     (taskType || "").trim().length > 0 &&
     (taskDescription || "").trim().length > 0 &&
     (roomNumber || "").trim().length > 0 &&
@@ -188,8 +193,17 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
 
     try {
       setSubmitting(true);
-
       const subcollection = isProject ? "projects" : "tasks";
+
+      // structured actor
+      const actor = {
+        id: currentUser.uid,
+        name:
+          currentUser.displayName ||
+          currentUser.email?.split("@")[0] ||
+          "Unknown",
+        role: null as string | null,
+      };
 
       await addDoc(collection(db, "buildings", buildingId, subcollection), {
         taskAddress,
@@ -198,11 +212,11 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
         roomNumber,
         priority: finalPriority,
         status: selectedAssignees.length > 0 ? "assigned" : "pending",
-        createdBy: currentUser.uid,
+        createdBy: actor, // 👈 structured object
         createdAt: new Date(),
         assignedWorkers: selectedAssignees,
         forToday: true,
-        buildingId, // denormalize for collectionGroup queries later
+        buildingId,
       });
 
       Alert.alert("Request Submitted!");
@@ -232,7 +246,9 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
         onPress={onToggle}
         style={[
           s.toggleTrack,
-          { backgroundColor: value ? "#22C55E" : isDark ? "#374151" : "#D1D5DB" },
+          {
+            backgroundColor: value ? "#22C55E" : isDark ? "#374151" : "#D1D5DB",
+          },
         ]}
       >
         <Animated.View
@@ -265,7 +281,6 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
               contentContainerStyle={s.sheetContent}
               showsVerticalScrollIndicator={false}
             >
-              {/* header */}
               <View style={s.sheetHeader}>
                 <Text style={s.sheetTitle}>Add New Task</Text>
                 <TouchableOpacity
@@ -281,7 +296,6 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
                 </TouchableOpacity>
               </View>
 
-              {/* (Optional) nudge if no building */}
               {!buildingId && (
                 <View
                   style={{
@@ -293,13 +307,17 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
                     marginBottom: 8,
                   }}
                 >
-                  <Text style={{ color: isDark ? "#E5E7EB" : "#0F172A", fontWeight: "700" }}>
+                  <Text
+                    style={{
+                      color: isDark ? "#E5E7EB" : "#0F172A",
+                      fontWeight: "700",
+                    }}
+                  >
                     Select a building to submit tasks
                   </Text>
                 </View>
               )}
 
-              {/* Address (optional) */}
               <Text style={s.label}>Address (optional)</Text>
               <TextInput
                 placeholder="Address"
@@ -311,14 +329,15 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
                 blurOnSubmit
               />
 
-              {/* Location / Task Type */}
               <Text style={s.label}>Location</Text>
               <Dropdown
                 style={s.dropdown}
                 placeholderStyle={{ color: isDark ? "#9CA3AF" : "#9AA1AA" }}
                 selectedTextStyle={{ color: isDark ? "#E5E7EB" : "#111827" }}
                 itemTextStyle={{ color: isDark ? "#E5E7EB" : "#111827" }}
-                containerStyle={{ backgroundColor: isDark ? "#0B1220" : "#FFFFFF" }}
+                containerStyle={{
+                  backgroundColor: isDark ? "#0B1220" : "#FFFFFF",
+                }}
                 data={data}
                 labelField="label"
                 valueField="value"
@@ -327,7 +346,6 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
                 onChange={(item: any) => setTaskType(item.value)}
               />
 
-              {/* Assign to */}
               <Text style={s.label}>
                 Assign to <Text style={s.labelHint}>(optional)</Text>
               </Text>
@@ -336,7 +354,9 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
                 placeholderStyle={{ color: isDark ? "#9CA3AF" : "#9AA1AA" }}
                 selectedTextStyle={{ color: isDark ? "#E5E7EB" : "#111827" }}
                 itemTextStyle={{ color: isDark ? "#E5E7EB" : "#111827" }}
-                containerStyle={{ backgroundColor: isDark ? "#0B1220" : "#FFFFFF" }}
+                containerStyle={{
+                  backgroundColor: isDark ? "#0B1220" : "#FFFFFF",
+                }}
                 data={employees}
                 labelField="label"
                 valueField="value"
@@ -345,7 +365,6 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
                 onChange={(vals: string[]) => setSelectedAssignees(vals)}
               />
 
-              {/* Room */}
               <Text style={s.label}>Room Number</Text>
               <TextInput
                 placeholder="Room #"
@@ -357,7 +376,6 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
                 blurOnSubmit
               />
 
-              {/* Description */}
               <Text style={s.label}>Description</Text>
               <TextInput
                 placeholder="What needs to be done?"
@@ -372,13 +390,22 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
                 onBlur={() => setIsDescFocused(false)}
               />
 
-              {/* Toggles */}
-              <Toggle label="Urgent" value={urgent} onToggle={() => setUrgent((v) => !v)} />
-              <Toggle label="Important" value={important} onToggle={() => setImportant((v) => !v)} />
-              {/* 👇 NEW: Project toggle (when ON, submit goes to buildings/{id}/projects) */}
-              <Toggle label="Project" value={isProject} onToggle={() => setIsProject((v) => !v)} />
+              <Toggle
+                label="Urgent"
+                value={urgent}
+                onToggle={() => setUrgent((v) => !v)}
+              />
+              <Toggle
+                label="Important"
+                value={important}
+                onToggle={() => setImportant((v) => !v)}
+              />
+              <Toggle
+                label="Project"
+                value={isProject}
+                onToggle={() => setIsProject((v) => !v)}
+              />
 
-              {/* Submit */}
               <TouchableOpacity
                 style={[
                   s.submitBtn,
@@ -442,10 +469,7 @@ const getStyles = (isDark: boolean) =>
       borderColor: isDark ? "#111827" : "transparent",
       overflow: "hidden",
     },
-    sheetContent: {
-      padding: 14,
-      paddingBottom: 12,
-    },
+    sheetContent: { padding: 14, paddingBottom: 12 },
     sheetHeader: {
       flexDirection: "row",
       alignItems: "center",
@@ -468,7 +492,6 @@ const getStyles = (isDark: boolean) =>
       borderWidth: isDark ? 1 : 0,
       borderColor: isDark ? "#1F2937" : "transparent",
     },
-
     label: {
       fontSize: 12,
       fontWeight: "800",
@@ -482,7 +505,6 @@ const getStyles = (isDark: boolean) =>
       fontWeight: "700",
       color: isDark ? "#94A3B8" : "#64748B",
     },
-
     input: {
       borderWidth: 1,
       borderRadius: 12,
@@ -494,7 +516,6 @@ const getStyles = (isDark: boolean) =>
       borderColor: isDark ? "#1F2937" : "#E5E7EB",
       color: isDark ? "#E5E7EB" : "#111827",
     },
-
     dropdown: {
       borderWidth: 1,
       borderRadius: 12,
@@ -513,7 +534,6 @@ const getStyles = (isDark: boolean) =>
       borderColor: isDark ? "#1F2937" : "#E5E7EB",
       marginBottom: 8,
     },
-
     toggleRow: {
       flexDirection: "row",
       alignItems: "center",
@@ -540,7 +560,6 @@ const getStyles = (isDark: boolean) =>
       borderRadius: 10,
       backgroundColor: "#fff",
     },
-
     submitBtn: {
       marginTop: 10,
       flexDirection: "row",

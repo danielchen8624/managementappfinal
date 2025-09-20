@@ -167,7 +167,7 @@ function ManagerViewReportsModal({ visible, onClose }: ReportModalProps) {
 
                     {/* Created by (use reporter_name) */}
                     <Text style={s.metaLine}>
-                      By {r.reporter_name || "Unknown"} ·{" "}
+                      By {r.createdBy || r.reporter_name || "Unknown"} ·{" "}
                       {r.createdAt?.toDate().toLocaleString() || "—"}
                     </Text>
 

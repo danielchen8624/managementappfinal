@@ -764,7 +764,6 @@ function TaskPage() {
     ]
   );
 
-  const openHistory = useCallback(() => router.push("/completedTasks"), []);
   const tz = tzNow();
   const end = getActiveWindowEnd(tz);
   const countdown = end
@@ -823,18 +822,7 @@ function TaskPage() {
           <Text style={s.headerSubtitle}>Building: {buildingName ?? buildingId}</Text>
         </View>
         <View style={{ flexDirection: "row", gap: 10 }}>
-          <TouchableOpacity
-            onPress={openHistory}
-            style={s.iconBtn}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons
-              name="time-outline"
-              size={18}
-              color={isDark ? "#E5E7EB" : "#111827"}
-            />
-          </TouchableOpacity>
-          <TouchableOpacity
+                   <TouchableOpacity
             onPress={toggleTheme}
             style={s.iconBtn}
             accessibilityLabel="Toggle theme"

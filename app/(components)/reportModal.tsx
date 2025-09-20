@@ -149,12 +149,12 @@ export default function ReportModal({ visible, onClose }: ReportModalProps) {
         description: description.trim(),
         aptNumber: aptNumber.trim() || null,
         status, // "fixed" or "need assistance"
-        createdBy: user.uid,
+        createdById: user.uid,
+        createdByName: reporter_name,
         createdAt: serverTimestamp(),
         visibility: "manager_supervisor",
         managerHasReviewed: false,
         buildingId,
-        reporter_name,
       });
 
       Alert.alert("Report submitted");

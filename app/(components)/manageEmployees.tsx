@@ -48,7 +48,7 @@ export default function ManageEmployees() {
   useEffect(() => {
     const qy = query(
       collection(db, "users"),
-      where("role", "==", "employee"),
+      where("role", "in", ["employee", "security"]),
       where("onShift", "==", true)
     );
     const unsub = onSnapshot(qy, (snapshot) => {

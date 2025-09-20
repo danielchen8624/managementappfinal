@@ -114,7 +114,7 @@ function HomePage() {
   const [latestLoading, setLatestLoading] = useState(true);
 
   const { role, loading } = useUser();
-  const { theme, toggleTheme } = useTheme(); // <-- added toggleTheme
+  const { theme, toggleTheme } = useTheme();
   const isDark = theme === "dark";
   const s = getStyles(isDark);
   const C = isDark ? Pal.dark : Pal.light;
@@ -464,7 +464,9 @@ function HomePage() {
   return (
     <View style={s.container}>
       {/* crossfade layers */}
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: Pal.light.bg }]} />
+      <View
+        style={[StyleSheet.absoluteFill, { backgroundColor: Pal.light.bg }]}
+      />
       <Animated.View
         style={[
           StyleSheet.absoluteFill,
@@ -493,7 +495,7 @@ function HomePage() {
             </TouchableOpacity>
           </View>
 
-          {/* RIGHT SIDE: theme toggle + (optional) request history */}
+          {/* RIGHT SIDE: theme toggle */}
           <View style={{ flexDirection: "row", gap: 10 }}>
             <TouchableOpacity
               onPress={toggleTheme}
@@ -507,17 +509,6 @@ function HomePage() {
                 color={isDark ? "#FDE68A" : C.text}
               />
             </TouchableOpacity>
-
-            {role === "supervisor" && (
-              <TouchableOpacity
-                onPress={() => router.push("/requestHistory")}
-                style={s.headerIconBtn}
-                activeOpacity={0.88}
-                accessibilityLabel="Request History"
-              >
-                <MaterialIcons name="history" size={18} color={C.text} />
-              </TouchableOpacity>
-            )}
           </View>
         </View>
 
@@ -534,7 +525,9 @@ function HomePage() {
         {isWorker && !!currentShiftId && (
           <View style={s.shiftThinWrap}>
             <View style={s.shiftThinBar}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+              >
                 <Ionicons name="time-outline" size={14} color="#ECFDF5" />
                 <Text style={s.shiftThinText}>On shift • {hhmmss}</Text>
               </View>
@@ -546,7 +539,9 @@ function HomePage() {
         {!buildingId && (
           <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
             <View style={s.inlineBanner}>
-              <Text style={s.inlineBannerTitle}>Select a building to continue</Text>
+              <Text style={s.inlineBannerTitle}>
+                Select a building to continue
+              </Text>
               <Text style={s.inlineBannerText}>
                 All actions and lists are scoped to the chosen building.
               </Text>
@@ -564,10 +559,15 @@ function HomePage() {
           {/* SUPERVISOR */}
           {role === "supervisor" && (
             <>
+              {/* --- TOP CARD (unchanged design) --- */}
               <View style={s.card}>
                 <View style={s.cardHeader}>
                   <View style={s.cardHeaderRow}>
-                    <Ionicons name="briefcase-outline" size={18} color={C.accent} />
+                    <Ionicons
+                      name="briefcase-outline"
+                      size={18}
+                      color={C.accent}
+                    />
                     <Text style={s.cardTitle}>Supervisor</Text>
                   </View>
                   <Text style={s.cardSubtitle}>Run operations efficiently</Text>
@@ -581,7 +581,13 @@ function HomePage() {
                           ? setTaskModal(true)
                           : Alert.alert("Pick a building first")
                       }
-                      icon={<FontAwesome5 name="project-diagram" size={18} color="#FFFFFF" />}
+                      icon={
+                        <FontAwesome5
+                          name="project-diagram"
+                          size={18}
+                          color="#FFFFFF"
+                        />
+                      }
                       label="Add New Task"
                       size="lg"
                       style={s.equalHeight}
@@ -595,7 +601,9 @@ function HomePage() {
                           ? router.push("/scheduler")
                           : Alert.alert("Pick a building first")
                       }
-                      icon={<Ionicons name="calendar" size={20} color="#FFFFFF" />}
+                      icon={
+                        <Ionicons name="calendar" size={20} color="#FFFFFF" />
+                      }
                       label="Scheduler"
                       size="lg"
                       style={s.equalHeight}
@@ -606,15 +614,22 @@ function HomePage() {
 
                 <Hairline style={s.hairline} />
 
+                {/* SWAPPED IN: Security Checklist (moved up from below) */}
                 <ActionButton
                   onPress={() =>
                     buildingId
-                      ? setManagerViewReportModal(true)
+                      ? router.push("/securityChecklistCreator")
                       : Alert.alert("Pick a building first")
                   }
-                  icon={<MaterialIcons name="assessment" size={20} color="#FFFFFF" />}
-                  label="View Reports"
-                  subtitle={reportsSubtitle}
+                  icon={
+                    <Ionicons
+                      name="shield-checkmark"
+                      size={20}
+                      color="#FFFFFF"
+                    />
+                  }
+                  label="Security Checklist"
+                  subtitle="Create or edit building checklists"
                   size="xl"
                   fullWidth
                   disabled={!buildingId}
@@ -627,7 +642,9 @@ function HomePage() {
                       ? router.push("/manageEmployees")
                       : Alert.alert("Pick a building first")
                   }
-                  icon={<Ionicons name="people" size={20} color={neutralIcon} />}
+                  icon={
+                    <Ionicons name="people" size={20} color={neutralIcon} />
+                  }
                   label="Manage Employees"
                   size="xl"
                   fullWidth
@@ -635,46 +652,84 @@ function HomePage() {
                 />
               </View>
 
-              {/* Verify Completed Tasks */}
-              <View style={s.verifyCard}>
-                <TouchableOpacity
+              {/* --- NEW GROUPED CARD: Reports & Verifications --- */}
+              <View style={s.groupCard}>
+                <View style={s.groupHeader}>
+                  <View style={s.cardHeaderRow}>
+                    <Ionicons
+                      name="checkmark-done-outline"
+                      size={18}
+                      color={C.accent}
+                    />
+                    <Text style={s.cardTitle}>Reviews & Audits</Text>
+                  </View>
+                  <Text style={s.cardSubtitle}>
+                    Verify work, review reports, and monitor security checks
+                  </Text>
+                </View>
+
+                {/* View Reports (after swap) */}
+                <SurfaceButton
+                  onPress={() =>
+                    buildingId
+                      ? setManagerViewReportModal(true)
+                      : Alert.alert("Pick a building first")
+                  }
+                  icon={
+                    <MaterialIcons
+                      name="assessment"
+                      size={18}
+                      color={neutralIcon}
+                    />
+                  }
+                  label="View Reports"
+                  subtitle={reportsSubtitle}
+                  size="xl"
+                  fullWidth
+                  disabled={!buildingId}
+                />
+
+                {/* Verify Completed Tasks */}
+                <SurfaceButton
                   onPress={() => {
                     if (!buildingId) return Alert.alert("Pick a building first");
                     openVerifyCompleted();
                     setReviewModal(true);
                   }}
-                  style={s.verifyBtn}
-                  activeOpacity={0.9}
-                >
-                  <Text style={s.verifyBtnText}>Verify Completed Tasks</Text>
-                </TouchableOpacity>
-              </View>
+                  icon={
+                    <MaterialIcons
+                      name="task-alt"
+                      size={18}
+                      color={neutralIcon}
+                    />
+                  }
+                  label="Verify Completed Tasks"
+                  subtitle="Approve or return recent completions"
+                  size="xl"
+                  fullWidth
+                  disabled={!buildingId}
+                />
 
-              {/* Security Checklist Admin */}
-              <View style={s.verifyCard}>
-                <TouchableOpacity
-                  onPress={() => {
-                    if (!buildingId) return Alert.alert("Pick a building first");
-                    router.push("/securityChecklistCreator");
-                  }}
-                  style={s.verifyBtn}
-                  activeOpacity={0.9}
-                >
-                  <Text style={s.verifyBtnText}>Security Checklist</Text>
-                </TouchableOpacity>
-              </View>
-
-              <View style={s.verifyCard}>
-                <TouchableOpacity
-                  onPress={() => {
-                    if (!buildingId) return Alert.alert("Pick a building first");
-                    router.push("/supervisorViewSecurity");
-                  }}
-                  style={s.verifyBtn}
-                  activeOpacity={0.9}
-                >
-                  <Text style={s.verifyBtnText}>View Latest Security Checks</Text>
-                </TouchableOpacity>
+                {/* View Latest Security Checks */}
+                <SurfaceButton
+                  onPress={() =>
+                    buildingId
+                      ? router.push("/supervisorViewSecurity")
+                      : Alert.alert("Pick a building first")
+                  }
+                  icon={
+                    <Ionicons
+                      name="shield-outline"
+                      size={18}
+                      color={neutralIcon}
+                    />
+                  }
+                  label="View Latest Security Checks"
+                  subtitle="Recent runs"
+                  size="xl"
+                  fullWidth
+                  disabled={!buildingId}
+                />
               </View>
             </>
           )}
@@ -684,10 +739,16 @@ function HomePage() {
             <View style={s.card}>
               <View style={s.cardHeader}>
                 <View style={s.cardHeaderRow}>
-                  <Ionicons name="analytics-outline" size={18} color={C.accent} />
+                  <Ionicons
+                    name="analytics-outline"
+                    size={18}
+                    color={C.accent}
+                  />
                   <Text style={s.cardTitle}>Manager Dashboard</Text>
                 </View>
-                <Text style={s.cardSubtitle}>Read-only overview & activity log</Text>
+                <Text style={s.cardSubtitle}>
+                  Read-only overview & activity log
+                </Text>
               </View>
 
               {/* Primary focus */}
@@ -697,7 +758,9 @@ function HomePage() {
                     ? router.push("/manager_report")
                     : Alert.alert("Pick a building first")
                 }
-                icon={<MaterialIcons name="assessment" size={20} color="#FFFFFF" />}
+                icon={
+                  <MaterialIcons name="assessment" size={20} color="#FFFFFF" />
+                }
                 label="All Reports"
                 size="xl"
                 fullWidth
@@ -709,7 +772,13 @@ function HomePage() {
                     ? router.push("/manager_activityLog")
                     : Alert.alert("Pick a building first")
                 }
-                icon={<MaterialIcons name="receipt-long" size={18} color="#FFFFFF" />}
+                icon={
+                  <MaterialIcons
+                    name="receipt-long"
+                    size={18}
+                    color="#FFFFFF"
+                  />
+                }
                 label="Activity Log (All Events)"
                 subtitle="Tasks • Schedules • Reports • Security"
                 size="xl"
@@ -729,7 +798,13 @@ function HomePage() {
                         ? router.push("/scheduledTasks")
                         : Alert.alert("Pick a building first")
                     }
-                    icon={<MaterialIcons name="assignment" size={18} color={neutralIcon} />}
+                    icon={
+                      <MaterialIcons
+                        name="assignment"
+                        size={18}
+                        color={neutralIcon}
+                      />
+                    }
                     label="Scheduled Tasks"
                     size="lg"
                     fullWidth
@@ -743,7 +818,13 @@ function HomePage() {
                         ? router.push("/supervisorViewSecurity")
                         : Alert.alert("Pick a building first")
                     }
-                    icon={<Ionicons name="shield-checkmark" size={18} color={neutralIcon} />}
+                    icon={
+                      <Ionicons
+                        name="shield-checkmark"
+                        size={18}
+                        color={neutralIcon}
+                      />
+                    }
                     label="Security Runs"
                     size="lg"
                     fullWidth
@@ -760,7 +841,9 @@ function HomePage() {
                         ? router.push("/manager_scheduler")
                         : Alert.alert("Pick a building first")
                     }
-                    icon={<Ionicons name="calendar" size={20} color={neutralIcon} />}
+                    icon={
+                      <Ionicons name="calendar" size={20} color={neutralIcon} />
+                    }
                     label="Scheduler"
                     size="lg"
                     fullWidth
@@ -774,7 +857,13 @@ function HomePage() {
                         ? router.push("/manager_securityChecklistCreator")
                         : Alert.alert("Pick a building first")
                     }
-                    icon={<Ionicons name="shield-outline" size={18} color={neutralIcon} />}
+                    icon={
+                      <Ionicons
+                        name="shield-outline"
+                        size={18}
+                        color={neutralIcon}
+                      />
+                    }
                     label="Security Checklist"
                     size="lg"
                     fullWidth
@@ -791,7 +880,9 @@ function HomePage() {
                         ? router.push("/manageEmployees")
                         : Alert.alert("Pick a building first")
                     }
-                    icon={<Ionicons name="people" size={20} color={neutralIcon} />}
+                    icon={
+                      <Ionicons name="people" size={20} color={neutralIcon} />
+                    }
                     label="View Employees"
                     size="lg"
                     fullWidth
@@ -807,10 +898,16 @@ function HomePage() {
             <View style={s.card}>
               <View style={s.cardHeader}>
                 <View style={s.cardHeaderRow}>
-                  <Ionicons name="clipboard-outline" size={18} color={C.accent} />
+                  <Ionicons
+                    name="clipboard-outline"
+                    size={18}
+                    color={C.accent}
+                  />
                   <Text style={s.cardTitle}>My Work</Text>
                 </View>
-                <Text style={s.cardSubtitle}>Clock in, check tasks, report issues</Text>
+                <Text style={s.cardSubtitle}>
+                  Clock in, check tasks, report issues
+                </Text>
               </View>
               <ActionButton
                 onPress={handleClockIn}
@@ -831,7 +928,9 @@ function HomePage() {
                     ? setCurrentTaskModal(true)
                     : Alert.alert("Pick a building first")
                 }
-                icon={<MaterialIcons name="assignment" size={18} color="#FFFFFF" />}
+                icon={
+                  <MaterialIcons name="assignment" size={18} color="#FFFFFF" />
+                }
                 label="View Current Tasks"
                 size="lg"
                 fullWidth
@@ -843,7 +942,13 @@ function HomePage() {
                     ? setReportModal(true)
                     : Alert.alert("Pick a building first")
                 }
-                icon={<MaterialIcons name="report-problem" size={18} color={neutralIcon} />}
+                icon={
+                  <MaterialIcons
+                    name="report-problem"
+                    size={18}
+                    color={neutralIcon}
+                  />
+                }
                 label="Report Issue"
                 size="lg"
                 fullWidth
@@ -852,7 +957,7 @@ function HomePage() {
             </View>
           )}
 
-        {/* SECURITY */}
+          {/* SECURITY */}
           {role === "security" && (
             <View style={s.card}>
               <View style={s.cardHeader}>
@@ -860,7 +965,9 @@ function HomePage() {
                   <Ionicons name="shield-outline" size={18} color={C.accent} />
                   <Text style={s.cardTitle}>Security</Text>
                 </View>
-                <Text style={s.cardSubtitle}>Clock in, open checklist, report issues</Text>
+                <Text style={s.cardSubtitle}>
+                  Clock in, open checklist, report issues
+                </Text>
               </View>
               <ActionButton
                 onPress={handleClockIn}
@@ -881,7 +988,9 @@ function HomePage() {
                     ? router.push("/securityChecklist")
                     : Alert.alert("Pick a building first")
                 }
-                icon={<Ionicons name="shield-checkmark" size={18} color="#FFFFFF" />}
+                icon={
+                  <Ionicons name="shield-checkmark" size={18} color="#FFFFFF" />
+                }
                 label="Open Checklist"
                 size="lg"
                 fullWidth
@@ -893,7 +1002,13 @@ function HomePage() {
                     ? setReportModal(true)
                     : Alert.alert("Pick a building first")
                 }
-                icon={<MaterialIcons name="report-problem" size={18} color={neutralIcon} />}
+                icon={
+                  <MaterialIcons
+                    name="report-problem"
+                    size={18}
+                    color={neutralIcon}
+                  />
+                }
                 label="Report Issue"
                 size="lg"
                 fullWidth
@@ -915,7 +1030,10 @@ function HomePage() {
         />
       )}
       {reportModal && buildingId && (
-        <ReportModal visible={reportModal} onClose={() => setReportModal(false)} />
+        <ReportModal
+          visible={reportModal}
+          onClose={() => setReportModal(false)}
+        />
       )}
       {managerViewReportModal && buildingId && (
         <ManagerViewReportsModal
@@ -941,7 +1059,10 @@ function HomePage() {
           <View style={s.modalCard}>
             <View style={s.modalHeader}>
               <Text style={s.modalTitle}>Select Building</Text>
-              <TouchableOpacity onPress={() => setBuildingPickerOpen(false)} style={s.closeBtn}>
+              <TouchableOpacity
+                onPress={() => setBuildingPickerOpen(false)}
+                style={s.closeBtn}
+              >
                 <Ionicons name="close" size={20} color={C.text} />
               </TouchableOpacity>
             </View>
@@ -949,7 +1070,9 @@ function HomePage() {
             {buildingsLoading ? (
               <View style={[s.center, { paddingVertical: 16 }]}>
                 <ActivityIndicator />
-                <Text style={[s.cardSubtitle, { marginTop: 8 }]}>Loading buildings…</Text>
+                <Text style={[s.cardSubtitle, { marginTop: 8 }]}>
+                  Loading buildings…
+                </Text>
               </View>
             ) : (
               <FlatList
@@ -964,7 +1087,10 @@ function HomePage() {
                         setBuildingId(item.id);
                         setBuildingPickerOpen(false);
                       }}
-                      style={[s.buildingItem, selected && s.buildingItemSelected]}
+                      style={[
+                        s.buildingItem,
+                        selected && s.buildingItemSelected,
+                      ]}
                       activeOpacity={0.92}
                     >
                       <View style={{ flex: 1, minWidth: 0 }}>
@@ -978,14 +1104,23 @@ function HomePage() {
                         )}
                       </View>
                       {selected && (
-                        <Ionicons name="checkmark-circle" size={20} color={C.success} />
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={20}
+                          color={C.success}
+                        />
                       )}
                     </TouchableOpacity>
                   );
                 }}
                 ListEmptyComponent={
                   <View style={s.center}>
-                    <Text style={[s.cardSubtitle, { alignSelf: "center", paddingVertical: 12 }]}>
+                    <Text
+                      style={[
+                        s.cardSubtitle,
+                        { alignSelf: "center", paddingVertical: 12 },
+                      ]}
+                    >
                       No buildings found.
                     </Text>
                     <TouchableOpacity
@@ -993,7 +1128,10 @@ function HomePage() {
                         setBuildingPickerOpen(false);
                         router.push("/addNewBuilding");
                       }}
-                      style={[s.btnBase, { alignSelf: "center", paddingHorizontal: 20 }]}
+                      style={[
+                        s.btnBase,
+                        { alignSelf: "center", paddingHorizontal: 20 },
+                      ]}
                       activeOpacity={0.9}
                     >
                       <Text style={s.btnText}>Add New Building</Text>
@@ -1084,7 +1222,12 @@ const getStyles = (isDark: boolean) => {
       borderWidth: 1,
       borderColor: C.outline,
       ...(Platform.OS === "ios"
-        ? { shadowColor: "#000", shadowOpacity: 0.04, shadowOffset: { width: 0, height: 2 }, shadowRadius: 3 }
+        ? {
+            shadowColor: "#000",
+            shadowOpacity: 0.04,
+            shadowOffset: { width: 0, height: 2 },
+            shadowRadius: 3,
+          }
         : { elevation: 2 }),
     },
 
@@ -1097,7 +1240,12 @@ const getStyles = (isDark: boolean) => {
       paddingVertical: 10,
       paddingHorizontal: 12,
       ...(Platform.OS === "ios"
-        ? { shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 3 } }
+        ? {
+            shadowColor: "#000",
+            shadowOpacity: 0.06,
+            shadowRadius: 6,
+            shadowOffset: { width: 0, height: 3 },
+          }
         : { elevation: 2 }),
     },
 
@@ -1274,32 +1422,17 @@ const getStyles = (isDark: boolean) => {
       letterSpacing: 0.2,
     },
 
-    verifyCard: {
+    // New grouped card styles
+    groupCard: {
+      backgroundColor: C.surface,
       borderRadius: 14,
       padding: 14,
-      marginTop: 12,
-      backgroundColor: C.surface,
       borderWidth: 1,
       borderColor: C.outline,
       ...shadowBase,
     },
-    verifyBtn: {
-      backgroundColor: isDark ? Pal.dark.success : Pal.light.success,
-      paddingVertical: 14,
-      borderRadius: 12,
-      alignItems: "center",
-      justifyContent: "center",
-      borderWidth: 1,
-      borderColor: isDark ? "rgba(16,185,129,0.5)" : "#A7F3D0",
-      ...(Platform.OS === "ios"
-        ? { shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 6, shadowOffset: { width: 0, height: 3 } }
-        : { elevation: 3 }),
-    },
-    verifyBtnText: {
-      color: "#fff",
-      fontWeight: "900",
-      fontSize: 16,
-      letterSpacing: 0.2,
+    groupHeader: {
+      marginBottom: 6,
     },
 
     // Shift status
@@ -1319,7 +1452,12 @@ const getStyles = (isDark: boolean) => {
       borderWidth: 1,
       borderColor: isDark ? "rgba(6,78,59,0.5)" : "rgba(16,185,129,0.45)",
       ...(Platform.OS === "ios"
-        ? { shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 6, shadowOffset: { width: 0, height: 4 } }
+        ? {
+            shadowColor: "#000",
+            shadowOpacity: 0.1,
+            shadowRadius: 6,
+            shadowOffset: { width: 0, height: 4 },
+          }
         : { elevation: 3 }),
     },
     shiftThinText: {
@@ -1377,7 +1515,12 @@ const getStyles = (isDark: boolean) => {
       alignItems: "center",
       gap: 10,
       ...(Platform.OS === "ios"
-        ? { shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 3 } }
+        ? {
+            shadowColor: "#000",
+            shadowOpacity: 0.06,
+            shadowRadius: 6,
+            shadowOffset: { width: 0, height: 3 },
+          }
         : { elevation: 2 }),
     },
     buildingItemSelected: {

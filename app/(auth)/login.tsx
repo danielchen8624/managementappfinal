@@ -110,7 +110,6 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (!selectedRole) {
-      // should already be bounced, but double-guard
       safeBounceToSelector();
       return;
     }
@@ -128,7 +127,6 @@ export default function LoginScreen() {
       const snap = await getDoc(ref);
 
       if (!snap.exists()) {
-        // No user doc → not provisioned; block
         await signOut(auth).catch(() => {});
         Alert.alert(
           "No Access",
@@ -159,7 +157,7 @@ export default function LoginScreen() {
         return;
       }
 
-      // success; proceed into app
+      // success; proceed into app (your nav here)
     } catch (err: any) {
       Alert.alert("Login Failed", err?.code || err?.message || "Try again.");
     } finally {
@@ -183,9 +181,11 @@ export default function LoginScreen() {
         ]}
       />
 
+      {/* Use one thing to handle keyboard space (KAV). "height" avoids padding jumps. */}
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.select({ ios: "padding", android: undefined })}
+        behavior={Platform.OS === "ios" ? "height" : undefined}
+        keyboardVerticalOffset={0} // adjust if you add a fixed header
       >
         {/* header */}
         <View style={s.headerBar}>
@@ -221,7 +221,13 @@ export default function LoginScreen() {
           </TouchableOpacity>
         </View>
 
-        <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          contentContainerStyle={s.scroll}
+          keyboardShouldPersistTaps="always"
+          bounces={false}
+          contentInsetAdjustmentBehavior="never"
+          keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+        >
           <View style={s.card}>
             <Text style={s.title}>Login</Text>
 
@@ -240,6 +246,9 @@ export default function LoginScreen() {
                 onChangeText={setEmail}
                 autoCapitalize="none"
                 keyboardType="email-address"
+                autoCorrect={false}
+                autoComplete="email"
+                textContentType="emailAddress"
                 style={[s.input]}
               />
             </View>
@@ -286,7 +295,6 @@ export default function LoginScreen() {
                 },
               ]}
               onPress={() =>
-                // Only pass a valid role through to signUp
                 router.replace({ pathname: "/signUp", params: { role: selectedRole } })
               }
               disabled={false}
@@ -386,8 +394,9 @@ const getStyles = (isDark: boolean, role: Role) =>
       paddingTop: 20,
       paddingBottom: 24,
       alignItems: "center",
-      justifyContent: "center",
-      flexGrow: 1,
+      // Avoid re-centering during keyboard animations:
+      justifyContent: "flex-start",
+      minHeight: "100%",
     },
 
     card: {
