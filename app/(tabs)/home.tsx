@@ -15,6 +15,7 @@ import {
   Modal,
   FlatList,
   Platform,
+  Linking,
 } from "react-native";
 import {
   addDoc,
@@ -42,13 +43,10 @@ import { useTheme } from "../ThemeContext";
 import { useShiftTimer } from "../(hooks)/secondsCounter";
 import { useBuilding } from "../BuildingContext";
 import SecurityHourlyNudge from "../(components)/securityHourlyNudge";
+import FeedbackModal from "../(components)/feedbackModal"; 
 
 const { height: SCREEN_H } = Dimensions.get("window");
 
-/** -----------------------------------------------------------
- *  Polished, professional color system (enterprise)
- *  -----------------------------------------------------------
- */
 const Pal = {
   light: {
     bg: "#F6F8FB",
@@ -119,6 +117,9 @@ function HomePage() {
   const s = getStyles(isDark);
   const C = isDark ? Pal.dark : Pal.light;
   const neutralIcon = isDark ? "#A3AED0" : "#64748B";
+
+  // NEW: feedback modal open state (Home controls open/close only)
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   // Theme crossfade
   const themeAnim = useRef(new Animated.Value(isDark ? 1 : 0)).current;
@@ -461,6 +462,85 @@ function HomePage() {
 
   const [buildingPickerOpen, setBuildingPickerOpen] = useState(false);
 
+  // --- Rate Us Card (Android disabled) ---
+  const RateUsCard = () => {
+    const [rating, setRating] = useState<number>(0);
+
+    const storeUrl = "https://apps.apple.com/app/id6752588044?action=write-review";
+
+    const canRate = Platform.OS === "ios";
+
+    const submitRating = async (stars: number) => {
+      if (!canRate) return; // Android disabled (no-op)
+      try {
+        setRating(stars);
+        const user = auth.currentUser;
+        await addDoc(collection(db, "reviews"), {
+          type: "rating",
+          stars,
+          uid: user?.uid ?? null,
+          role: role ?? null,
+          createdAt: serverTimestamp(),
+        });
+        Linking.openURL(storeUrl);
+      } catch (e) {
+        Alert.alert("Error", "Could not record rating. Please try again.");
+      }
+    };
+
+    return (
+      <View style={s.rateCard}>
+        <View style={s.cardHeader}>
+          <View style={s.cardHeaderRow}>
+            <Ionicons name="star-outline" size={18} color={C.accent} />
+            <Text style={s.cardTitle}>Rate Us</Text>
+          </View>
+          <Text style={s.cardSubtitle}>Your feedback helps us improve</Text>
+        </View>
+
+        {/* Star strip — visible on Android but non-interactive */}
+        <View
+          style={s.starBox}
+          pointerEvents={canRate ? "auto" : "none"} // disable interaction on Android
+        >
+          <View style={s.starRow}>
+            {[1, 2, 3, 4, 5].map((i) => (
+              <TouchableOpacity
+                key={i}
+                onPress={() => submitRating(i)}
+                style={s.starTap}
+                activeOpacity={0.8}
+                disabled={!canRate}
+              >
+                <Ionicons
+                  name={i <= rating ? "star" : "star-outline"}
+                  size={24}
+                  color={
+                    i <= rating
+                      ? isDark
+                        ? Pal.dark.primary
+                        : Pal.light.primary
+                      : isDark
+                      ? "#A3AED0"
+                      : "#94A3B8"
+                  }
+                />
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Review/Suggestion link — opens modal (Home controls visibility only) */}
+        <TouchableOpacity
+          onPress={() => setFeedbackOpen(true)}
+          activeOpacity={0.85}
+        >
+          <Text style={s.reviewLink}>Leave a review or suggestion</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
   return (
     <View style={s.container}>
       {/* crossfade layers */}
@@ -692,7 +772,8 @@ function HomePage() {
                 {/* Verify Completed Tasks */}
                 <SurfaceButton
                   onPress={() => {
-                    if (!buildingId) return Alert.alert("Pick a building first");
+                    if (!buildingId)
+                      return Alert.alert("Pick a building first");
                     openVerifyCompleted();
                     setReviewModal(true);
                   }}
@@ -1016,6 +1097,9 @@ function HomePage() {
               />
             </View>
           )}
+
+          {/* Always at the very bottom, for all roles */}
+          <RateUsCard />
         </ScrollView>
       </SafeAreaView>
 
@@ -1047,6 +1131,9 @@ function HomePage() {
           onClose={() => setReviewModal(false)}
         />
       )}
+
+      {/* NEW: Feedback modal hosted by Home, only controls visibility */}
+      <FeedbackModal visible={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
 
       {/* Building Picker */}
       <Modal
@@ -1163,10 +1250,7 @@ const getStyles = (isDark: boolean) => {
       : { elevation: 5 };
 
   return StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: C.bg,
-    },
+    container: { flex: 1, backgroundColor: C.bg },
     center: { justifyContent: "center", alignItems: "center" },
     loadingText: { marginTop: 8, color: C.textMuted, fontWeight: "700" },
 
@@ -1205,11 +1289,7 @@ const getStyles = (isDark: boolean) => {
       borderColor: C.outline,
       maxWidth: 260,
     },
-    buildingPillText: {
-      fontSize: 12,
-      fontWeight: "900",
-      color: C.text,
-    },
+    buildingPillText: { fontSize: 12, fontWeight: "900", color: C.text },
 
     headerIconBtn: {
       flexDirection: "row",
@@ -1281,46 +1361,16 @@ const getStyles = (isDark: boolean) => {
       borderColor: C.outline,
       ...shadowBase,
     },
-    cardHeader: {
-      marginBottom: 8,
-    },
-    cardHeaderRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-      marginBottom: 2,
-    },
-    cardTitle: {
-      fontSize: 18,
-      fontWeight: "900",
-      color: C.text,
-      letterSpacing: 0.2,
-    },
-    cardSubtitle: {
-      marginTop: 2,
-      fontSize: 12,
-      fontWeight: "700",
-      color: C.textMuted,
-    },
+    cardHeader: { marginBottom: 8 },
+    cardHeaderRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 2 },
+    cardTitle: { fontSize: 18, fontWeight: "900", color: C.text, letterSpacing: 0.2 },
+    cardSubtitle: { marginTop: 2, fontSize: 12, fontWeight: "700", color: C.textMuted },
 
-    hairline: {
-      backgroundColor: C.outline,
-      marginVertical: 10,
-      opacity: 0.9,
-      height: StyleSheet.hairlineWidth,
-    },
+    hairline: { backgroundColor: C.outline, marginVertical: 10, opacity: 0.9, height: StyleSheet.hairlineWidth },
 
-    row: {
-      flexDirection: "row",
-      gap: 10,
-      marginTop: 6,
-    },
+    row: { flexDirection: "row", gap: 10, marginTop: 6 },
     half: { flex: 1 },
-
-    equalHeight: {
-      height: 56,
-      justifyContent: "center",
-    },
+    equalHeight: { height: 56, justifyContent: "center" },
 
     // Primary button
     btnBase: {
@@ -1343,10 +1393,7 @@ const getStyles = (isDark: boolean) => {
           }
         : { elevation: 4 }),
     },
-    btnDisabled: {
-      backgroundColor: isDark ? "#0F2138" : "#CBD5E1",
-      borderColor: isDark ? "#1E3A8A" : "#94A3B8",
-    },
+    btnDisabled: { backgroundColor: isDark ? "#0F2138" : "#CBD5E1", borderColor: isDark ? "#1E3A8A" : "#94A3B8" },
     iconPill: {
       width: 34,
       height: 34,
@@ -1360,19 +1407,8 @@ const getStyles = (isDark: boolean) => {
     btnMD: { paddingVertical: 12 },
     btnLG: { paddingVertical: 14 },
     btnXL: { paddingVertical: 18 },
-    btnText: {
-      color: "#FFFFFF",
-      fontSize: 16,
-      fontWeight: "900",
-      letterSpacing: 0.2,
-    },
-    btnSubText: {
-      color: "rgba(255,255,255,0.92)",
-      fontSize: 12,
-      marginTop: 1,
-      fontWeight: "700",
-      letterSpacing: 0.2,
-    },
+    btnText: { color: "#FFFFFF", fontSize: 16, fontWeight: "900", letterSpacing: 0.2 },
+    btnSubText: { color: "rgba(255,255,255,0.92)", fontSize: 12, marginTop: 1, fontWeight: "700", letterSpacing: 0.2 },
 
     // Neutral button (secondary)
     surfaceBtnBase: {
@@ -1395,9 +1431,7 @@ const getStyles = (isDark: boolean) => {
           }
         : { elevation: 2 }),
     },
-    surfaceBtnDisabled: {
-      opacity: 0.6,
-    },
+    surfaceBtnDisabled: { opacity: 0.6 },
     surfaceIconPill: {
       width: 32,
       height: 32,
@@ -1408,19 +1442,8 @@ const getStyles = (isDark: boolean) => {
       borderWidth: 1,
       borderColor: isDark ? "#1F2937" : "#E5E7EB",
     },
-    surfaceBtnText: {
-      color: C.text,
-      fontSize: 15,
-      fontWeight: "800",
-      letterSpacing: 0.2,
-    },
-    surfaceBtnSubText: {
-      color: C.textMuted,
-      fontSize: 12,
-      marginTop: 2,
-      fontWeight: "700",
-      letterSpacing: 0.2,
-    },
+    surfaceBtnText: { color: C.text, fontSize: 15, fontWeight: "800", letterSpacing: 0.2 },
+    surfaceBtnSubText: { color: C.textMuted, fontSize: 12, marginTop: 2, fontWeight: "700", letterSpacing: 0.2 },
 
     // New grouped card styles
     groupCard: {
@@ -1431,16 +1454,10 @@ const getStyles = (isDark: boolean) => {
       borderColor: C.outline,
       ...shadowBase,
     },
-    groupHeader: {
-      marginBottom: 6,
-    },
+    groupHeader: { marginBottom: 6 },
 
     // Shift status
-    shiftThinWrap: {
-      paddingHorizontal: 16,
-      marginTop: 6,
-      marginBottom: 6,
-    },
+    shiftThinWrap: { paddingHorizontal: 16, marginTop: 6, marginBottom: 6 },
     shiftThinBar: {
       height: 30,
       borderRadius: 999,
@@ -1460,19 +1477,10 @@ const getStyles = (isDark: boolean) => {
           }
         : { elevation: 3 }),
     },
-    shiftThinText: {
-      color: "#FFFFFF",
-      fontWeight: "900",
-      fontSize: 12,
-      letterSpacing: 0.2,
-    },
+    shiftThinText: { color: "#FFFFFF", fontWeight: "900", fontSize: 12, letterSpacing: 0.2 },
 
     // Modal
-    modalBackdrop: {
-      flex: 1,
-      backgroundColor: "rgba(0,0,0,0.35)",
-      justifyContent: "flex-end",
-    },
+    modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "flex-end" },
     modalCard: {
       padding: 14,
       borderTopLeftRadius: 16,
@@ -1483,17 +1491,8 @@ const getStyles = (isDark: boolean) => {
       borderColor: C.outline,
       ...shadowBase,
     },
-    modalHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      marginBottom: 8,
-    },
-    modalTitle: {
-      fontSize: 16,
-      fontWeight: "900",
-      color: C.text,
-    },
+    modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 },
+    modalTitle: { fontSize: 16, fontWeight: "900", color: C.text },
     closeBtn: {
       width: 34,
       height: 34,
@@ -1527,26 +1526,47 @@ const getStyles = (isDark: boolean) => {
       borderColor: isDark ? Pal.dark.success : Pal.light.success,
       backgroundColor: isDark ? "#0B3B2F" : "#ECFDF5",
     },
-    buildingName: {
-      fontSize: 15,
-      fontWeight: "900",
-      color: C.text,
-    },
-    buildingAddress: {
-      fontSize: 12,
-      fontWeight: "700",
-      opacity: 0.9,
-      marginTop: 2,
-      color: C.textMuted,
-    },
+    buildingName: { fontSize: 15, fontWeight: "900", color: C.text },
+    buildingAddress: { fontSize: 12, fontWeight: "700", opacity: 0.9, marginTop: 2, color: C.textMuted },
 
-    gridRow: {
-      flexDirection: "row",
-      gap: 10,
+    gridRow: { flexDirection: "row", gap: 10, marginTop: 6 },
+    gridCol: { flex: 1 },
+
+    // Rate Us styles
+    rateCard: {
+      backgroundColor: C.surface,
+      borderRadius: 14,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: C.outline,
       marginTop: 6,
+      ...(Platform.OS === "ios"
+        ? {
+            shadowColor: "#000",
+            shadowOpacity: isDark ? 0.18 : 0.08,
+            shadowRadius: 10,
+            shadowOffset: { width: 0, height: 8 },
+          }
+        : { elevation: 5 }),
     },
-    gridCol: {
-      flex: 1,
+    starBox: {
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: C.outline,
+      backgroundColor: isDark ? "#0F172A" : "#F8FAFC",
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      marginTop: 6,
+      marginBottom: 8,
+    },
+    starRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+    starTap: { padding: 2 },
+    reviewLink: {
+      textAlign: "center",
+      textDecorationLine: "underline",
+      color: C.textMuted,
+      fontSize: 12,
+      fontWeight: "800",
     },
   });
 };
