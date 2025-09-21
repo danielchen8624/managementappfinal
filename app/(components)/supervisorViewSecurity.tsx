@@ -1,5 +1,5 @@
 // app/supervisorViewSecurity.tsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -16,8 +16,8 @@ import { Ionicons } from "@expo/vector-icons";
 import {
   collection,
   getDocs,
-  getDoc,       // ⬅️ NEW
-  doc,          // ⬅️ NEW
+  getDoc,
+  doc,
   limit,
   orderBy,
   query,
@@ -29,15 +29,15 @@ import { useBuilding } from "../BuildingContext";
 import { router } from "expo-router";
 
 type RunDoc = {
-  runId?: string; // "YYYY-MM-DD-HH:00"
-  dateYYYYMMDD?: string; // "YYYY-MM-DD"
-  hourHHmm?: string; // "HH:00"
+  runId?: string;
+  dateYYYYMMDD?: string;
+  hourHHmm?: string;
   submittedAt?: Timestamp | null;
   totalItems?: number;
   checkedCount?: number;
   uncheckedCount?: number;
   buildingId?: string;
-  _id: string; // document id
+  _id: string;
 };
 
 export default function SupervisorViewSecurity() {
@@ -50,12 +50,13 @@ export default function SupervisorViewSecurity() {
   const [runs, setRuns] = useState<RunDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const anim = useRef(new Animated.Value(0)).current;
 
-  // NEW: building name state
+  // building name
   const [buildingName, setBuildingName] = useState<string | null>(null);
   const [buildingNameLoading, setBuildingNameLoading] = useState(false);
 
+  // subtle entrance
+  const anim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.timing(anim, {
       toValue: 1,
@@ -65,7 +66,7 @@ export default function SupervisorViewSecurity() {
     }).start();
   }, [anim]);
 
-  // ⬅️ NEW: fetch the building's name from /buildings/{buildingId}
+  // fetch building name
   useEffect(() => {
     setBuildingName(null);
     if (!buildingId) return;
@@ -190,17 +191,19 @@ export default function SupervisorViewSecurity() {
     );
   };
 
-  const buildingLabel =
-    !buildingId
-      ? "Select a building"
-      : `Building: ${buildingNameLoading ? "Loading…" : buildingName ?? "Unnamed Building"}`;
+  const buildingLabel = !buildingId
+    ? "Select a building"
+    : `Building: ${
+        buildingNameLoading ? "Loading…" : buildingName ?? "Unnamed Building"
+      }`;
 
   return (
     <View style={s.container}>
       <SafeAreaView style={{ flex: 1 }}>
+        {/* HEADER BAR */}
         <Animated.View
           style={[
-            s.header,
+            s.headerBar,
             {
               opacity: anim,
               transform: [
@@ -214,9 +217,31 @@ export default function SupervisorViewSecurity() {
             },
           ]}
         >
-          <Text style={s.headerTitle}>Security Runs</Text>
-          <Text style={s.headerSub}>{buildingLabel}</Text>
+          <View style={s.headerLeft}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={s.smallGreyBtn}
+              accessibilityLabel="Back"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons
+                name="chevron-back"
+                size={20}
+                color={isDark ? "#E5E7EB" : "#111827"}
+              />
+            </TouchableOpacity>
+
+            <Text style={s.headerTitle}>Security Runs</Text>
+          </View>
+
+          {/* Right side reserved for future actions; empty for now */}
+          <View style={{ width: 36 }} />
         </Animated.View>
+
+        {/* Subheader / banner */}
+        <View style={s.banner}>
+          <Text style={s.bannerSub}>{buildingLabel}</Text>
+        </View>
 
         {!buildingId ? (
           <View style={[s.center, { paddingTop: 24 }]}>
@@ -265,19 +290,53 @@ const getStyles = (isDark: boolean) =>
       backgroundColor: isDark ? "#0F172A" : "#F8FAFC",
     },
     center: { alignItems: "center", justifyContent: "center" },
-    header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 },
+
+    // Header bar with back chevron next to title
+    headerBar: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 12,
+      paddingTop: 8,
+      paddingBottom: 8,
+    },
+    headerLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      flexShrink: 1,
+    },
+    smallGreyBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: isDark ? "#111827" : "#E5E7EB",
+      borderWidth: isDark ? 1 : 0,
+      borderColor: isDark ? "#1F2937" : "transparent",
+    },
     headerTitle: {
       fontSize: 22,
       fontWeight: "900",
       color: isDark ? "#F3F4F6" : "#0F172A",
       letterSpacing: 0.2,
     },
-    headerSub: {
-      marginTop: 2,
+
+    // Slim banner for building label
+    banner: {
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      backgroundColor: isDark ? "#1E293B" : "#E0ECFF",
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: isDark ? "#334155" : "#BFDBFE",
+    },
+    bannerSub: {
       fontSize: 12,
       fontWeight: "700",
-      color: isDark ? "#94A3B8" : "#64748B",
+      color: isDark ? "#CBD5E1" : "#1E40AF",
     },
+
     muted: {
       marginTop: 8,
       color: isDark ? "#94A3B8" : "#64748B",

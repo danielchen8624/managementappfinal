@@ -16,6 +16,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import {router} from "expo-router";
 import { useTheme } from "../ThemeContext";
 import { useBuilding } from "../BuildingContext";
 import { db } from "../../firebaseConfig";
@@ -389,6 +390,19 @@ const SecurityChecklistCreator: React.FC = () => {
       <SafeAreaView style={{ flex: 1 }}>
         {/* Header */}
         <View style={styles.headerRow}>
+           <TouchableOpacity
+                    onPress={() => router.back()}
+                    style={styles.smallGreyBtn}
+                    accessibilityLabel="Back"
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons
+                      name="chevron-back"
+                      size={20}
+                      color={isDark ? "#E5E7EB" : "#111827"}
+                    />
+                  </TouchableOpacity>
+          
           <View style={{ flex: 1 }}>
             <Text style={styles.headerTitle}>Security Checklist Creator</Text>
             <Text style={styles.headerSub}>
@@ -508,6 +522,7 @@ const getStyles = (isDark: boolean) =>
       flex: 1,
       backgroundColor: isDark ? "#0B1220" : "#F8FAFC",
     },
+    
     headerRow: {
       flexDirection: "row",
       alignItems: "center",
@@ -610,6 +625,16 @@ const getStyles = (isDark: boolean) =>
       paddingHorizontal: 14,
       borderRadius: 10,
       backgroundColor: "#10B981",
+    },
+    smallGreyBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: isDark ? "#111827" : "#E5E7EB",
+      borderWidth: isDark ? 1 : 0,
+      borderColor: isDark ? "#1F2937" : "transparent",
     },
     saveText: { color: "#FFF", fontWeight: "800" },
   });

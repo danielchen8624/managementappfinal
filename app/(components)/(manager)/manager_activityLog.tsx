@@ -1,5 +1,11 @@
 // app/activityLog.tsx
-import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useCallback,
+} from "react";
 import {
   View,
   Text,
@@ -13,6 +19,7 @@ import {
   Animated,
   Easing,
 } from "react-native";
+import {router} from "expo-router";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import {
   collection,
@@ -67,8 +74,15 @@ const Pal = {
 /** ----------------------------
  * Types (flexible + safe)
  * ---------------------------*/
-type Actor = { id?: string; displayName?: string | null; role?: string | null } | null;
-type Target = { kind?: "task" | "report" | "scheduler_item" | "security_run" | "other"; id?: string | null } | null;
+type Actor = {
+  id?: string;
+  displayName?: string | null;
+  role?: string | null;
+} | null;
+type Target = {
+  kind?: "task" | "report" | "scheduler_item" | "security_run" | "other";
+  id?: string | null;
+} | null;
 
 export type ActivityRow = {
   id: string;
@@ -195,17 +209,23 @@ function ActivityLog() {
 
   const iconFor = (row: ActivityRow) => {
     const t = row.type || "";
-    if (t.startsWith("task_")) return <MaterialIcons name="assignment" size={18} color={C.accent} />;
-    if (t.startsWith("report_")) return <MaterialIcons name="assessment" size={18} color={C.accent} />;
-    if (t.startsWith("scheduler_item")) return <Ionicons name="calendar" size={18} color={C.accent} />;
-    if (t === "security_check_submitted") return <Ionicons name="shield-checkmark" size={18} color={C.accent} />;
+    if (t.startsWith("task_"))
+      return <MaterialIcons name="assignment" size={18} color={C.accent} />;
+    if (t.startsWith("report_"))
+      return <MaterialIcons name="assessment" size={18} color={C.accent} />;
+    if (t.startsWith("scheduler_item"))
+      return <Ionicons name="calendar" size={18} color={C.accent} />;
+    if (t === "security_check_submitted")
+      return <Ionicons name="shield-checkmark" size={18} color={C.accent} />;
     return <MaterialIcons name="receipt-long" size={18} color={C.accent} />;
   };
 
   const subtitleFor = (row: ActivityRow) => {
     const who = row.actor?.displayName || row.actor?.role || "Someone";
     const when = formatWhen(row.ts);
-    const tgt = row.target?.id ? ` • #${String(row.target?.id).slice(0, 6)}` : "";
+    const tgt = row.target?.id
+      ? ` • #${String(row.target?.id).slice(0, 6)}`
+      : "";
     return `${who}${tgt} • ${when}`;
   };
 
@@ -218,7 +238,9 @@ function ActivityLog() {
   return (
     <View style={s.container}>
       {/* crossfade layers to match Home */}
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: Pal.light.bg }]} />
+      <View
+        style={[StyleSheet.absoluteFill, { backgroundColor: Pal.light.bg }]}
+      />
       <Animated.View
         style={[
           StyleSheet.absoluteFill,
@@ -229,6 +251,18 @@ function ActivityLog() {
       <SafeAreaView style={{ flex: 1 }}>
         {/* Header */}
         <View style={s.headerRow}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={s.smallGreyBtn}
+            accessibilityLabel="Back"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons
+              name="chevron-back"
+              size={20}
+              color={isDark ? "#E5E7EB" : "#111827"}
+            />
+          </TouchableOpacity>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Ionicons name="time-outline" size={18} color={C.text} />
             <Text style={s.headerTitle}>Activity Log</Text>
@@ -245,8 +279,12 @@ function ActivityLog() {
 
         {!buildingId ? (
           <View style={[s.center, { paddingTop: 24 }]}>
-            <Text style={s.bannerTitle}>Select a building to view activity</Text>
-            <Text style={s.bannerText}>All activity is scoped to the chosen building.</Text>
+            <Text style={s.bannerTitle}>
+              Select a building to view activity
+            </Text>
+            <Text style={s.bannerText}>
+              All activity is scoped to the chosen building.
+            </Text>
           </View>
         ) : loading ? (
           <View style={[s.center, { paddingTop: 32 }]}>
@@ -259,7 +297,11 @@ function ActivityLog() {
             keyExtractor={(it) => it.id}
             contentContainerStyle={{ padding: 16, paddingBottom: 24 }}
             refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.textMuted} />
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={C.textMuted}
+              />
             }
             ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
             renderItem={({ item }) => {
@@ -390,7 +432,12 @@ const getStyles = (isDark: boolean) => {
       borderWidth: 1,
       borderColor: C.outline,
       ...(Platform.OS === "ios"
-        ? { shadowColor: "#000", shadowOpacity: 0.04, shadowOffset: { width: 0, height: 2 }, shadowRadius: 3 }
+        ? {
+            shadowColor: "#000",
+            shadowOpacity: 0.04,
+            shadowOffset: { width: 0, height: 2 },
+            shadowRadius: 3,
+          }
         : { elevation: 2 }),
     },
 
@@ -440,6 +487,16 @@ const getStyles = (isDark: boolean) => {
       fontSize: 12,
       fontWeight: "700",
       marginTop: 1,
+    },
+    smallGreyBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: isDark ? "#111827" : "#E5E7EB",
+      borderWidth: isDark ? 1 : 0,
+      borderColor: isDark ? "#1F2937" : "transparent",
     },
     rowMessage: {
       color: C.text,

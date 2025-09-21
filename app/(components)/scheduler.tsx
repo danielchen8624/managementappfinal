@@ -18,6 +18,7 @@ import {
   Animated,
 } from "react-native";
 import SwipeableItem, { UnderlayParams } from "react-native-swipeable-item";
+import {router} from "expo-router";
 import DraggableFlatList, {
   RenderItemParams,
 } from "react-native-draggable-flatlist";
@@ -71,7 +72,10 @@ const locationOptions = [
   { label: "Mail Boxes", value: "Mail Boxes" },
   { label: "Maintenance of all floors", value: "Maintenance of all floors" },
   { label: "Manager Office", value: "Manager Office" },
-  { label: "Men & Women Washroom & Sauna", value: "Men & Women Washroom & Sauna" },
+  {
+    label: "Men & Women Washroom & Sauna",
+    value: "Men & Women Washroom & Sauna",
+  },
   { label: "Men's & Women's Gym", value: "Men's & Women's Gym" },
   { label: "Moving Room", value: "Moving Room" },
   { label: "Other", value: "Other" },
@@ -84,7 +88,10 @@ const locationOptions = [
   { label: "Staircase", value: "Staircase" },
   { label: "Telecom Room", value: "Telecom Room" },
   { label: "Waiting Room", value: "Waiting Room" },
-  { label: "Washroom (Men,Women & Security)", value: "Washroom (Men,Women & Security)" },
+  {
+    label: "Washroom (Men,Women & Security)",
+    value: "Washroom (Men,Women & Security)",
+  },
   { label: "Windows & Mirrors", value: "Windows & Mirrors" },
 ];
 
@@ -236,7 +243,9 @@ export default function Scheduler() {
               description:
                 typeof raw.description === "string" ? raw.description : "",
               defaultPriority:
-                typeof raw.defaultPriority === "number" ? raw.defaultPriority : 3,
+                typeof raw.defaultPriority === "number"
+                  ? raw.defaultPriority
+                  : 3,
               roleNeeded: raw.roleNeeded ?? null,
               assignedWorkerIds: Array.isArray(raw.assignedWorkerIds)
                 ? raw.assignedWorkerIds
@@ -248,7 +257,10 @@ export default function Scheduler() {
             } as TemplateItem;
           });
           setItemsByDay((prev) => ({ ...prev, [day]: arr }));
-          originalRef.current = { ...originalRef.current, [day]: deepClone(arr) };
+          originalRef.current = {
+            ...originalRef.current,
+            [day]: deepClone(arr),
+          };
         },
         () => setLoadingByDay((prev) => ({ ...prev, [day]: false }))
       );
@@ -279,7 +291,9 @@ export default function Scheduler() {
       const batch = writeBatch(db);
       const slice = allIds.slice(i, i + CHUNK);
       slice.forEach((id) => {
-        batch.update(doc(db, "buildings", buildingId, "tasks", id), { forToday: false });
+        batch.update(doc(db, "buildings", buildingId, "tasks", id), {
+          forToday: false,
+        });
       });
       await batch.commit();
     }
@@ -295,7 +309,10 @@ export default function Scheduler() {
     const todayStr = ymd(new Date());
 
     if (loadingByDay[dayKey]) {
-      Alert.alert("Please wait", "Scheduler is still loading. Try again in a moment.");
+      Alert.alert(
+        "Please wait",
+        "Scheduler is still loading. Try again in a moment."
+      );
       return;
     }
 
@@ -337,7 +354,9 @@ export default function Scheduler() {
     await batch.commit();
     Alert.alert(
       "Success",
-      `Cleared ${cleared} existing task${cleared === 1 ? "" : "s"} from today.\n` +
+      `Cleared ${cleared} existing task${
+        cleared === 1 ? "" : "s"
+      } from today.\n` +
         `Rolled out ${createdCount} new task${createdCount === 1 ? "" : "s"}!`
     );
   };
@@ -390,7 +409,9 @@ export default function Scheduler() {
       // deletes
       for (const it of orig) {
         if (!currIds.has(it.id)) {
-          batch.delete(doc(db, "buildings", buildingId, "scheduler", day, "items", it.id));
+          batch.delete(
+            doc(db, "buildings", buildingId, "scheduler", day, "items", it.id)
+          );
         }
       }
 
@@ -398,7 +419,9 @@ export default function Scheduler() {
       curr.forEach((it, idx) => {
         const isTemp = it.id.startsWith("temp_");
         const ref = isTemp
-          ? doc(collection(db, "buildings", buildingId, "scheduler", day, "items"))
+          ? doc(
+              collection(db, "buildings", buildingId, "scheduler", day, "items")
+            )
           : doc(db, "buildings", buildingId, "scheduler", day, "items", it.id);
 
         const toWrite = {
@@ -518,10 +541,27 @@ export default function Scheduler() {
       <SafeAreaView style={{ flex: 1 }}>
         {/* Header */}
         <View style={styles.headerRow}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.smallGreyBtn}
+            accessibilityLabel="Back"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons
+              name="chevron-back"
+              size={20}
+              color={isDark ? "#E5E7EB" : "#111827"}
+            />
+          </TouchableOpacity>
+
           <View style={styles.daySwitcher}>
-            <TouchableOpacity onPress={prevDay} style={styles.arrowBtn} disabled={disabledUI}>
+            <TouchableOpacity
+              onPress={prevDay}
+              style={styles.arrowBtn}
+              disabled={disabledUI}
+            >
               <Ionicons
-                name="chevron-back"
+                name="arrow-back-circle-outline"
                 size={18}
                 color={isDark ? "#E5E7EB" : "#1F2937"}
               />
@@ -534,9 +574,13 @@ export default function Scheduler() {
               </Text>
             </View>
 
-            <TouchableOpacity onPress={nextDay} style={styles.arrowBtn} disabled={disabledUI}>
+            <TouchableOpacity
+              onPress={nextDay}
+              style={styles.arrowBtn}
+              disabled={disabledUI}
+            >
               <Ionicons
-                name="chevron-forward"
+                name="arrow-forward-circle-outline"
                 size={18}
                 color={isDark ? "#E5E7EB" : "#1F2937"}
               />
@@ -576,10 +620,17 @@ export default function Scheduler() {
                 borderColor: isDark ? "#334155" : "#FED7AA",
               }}
             >
-              <Text style={{ fontWeight: "800", color: isDark ? "#F3F4F6" : "#7C2D12" }}>
+              <Text
+                style={{
+                  fontWeight: "800",
+                  color: isDark ? "#F3F4F6" : "#7C2D12",
+                }}
+              >
                 Select a building to manage its scheduler
               </Text>
-              <Text style={{ marginTop: 4, color: isDark ? "#CBD5E1" : "#7C2D12" }}>
+              <Text
+                style={{ marginTop: 4, color: isDark ? "#CBD5E1" : "#7C2D12" }}
+              >
                 All templates and rollouts are scoped per building.
               </Text>
             </View>
@@ -1067,7 +1118,16 @@ const getStyles = (isDark: boolean) =>
       color: "#fff",
       fontWeight: "800",
     },
-
+    smallGreyBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: isDark ? "#111827" : "#E5E7EB",
+      borderWidth: isDark ? 1 : 0,
+      borderColor: isDark ? "#1F2937" : "transparent",
+    },
     saveBar: {
       position: "absolute",
       left: 12,

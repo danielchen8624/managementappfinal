@@ -14,6 +14,7 @@ import {
   FlatList,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import { useTheme } from "../../ThemeContext";
 import { db } from "../../../firebaseConfig";
 import {
@@ -152,7 +153,9 @@ export default function ManagerSchedulerReadOnly() {
               description:
                 typeof raw.description === "string" ? raw.description : "",
               defaultPriority:
-                typeof raw.defaultPriority === "number" ? raw.defaultPriority : 3,
+                typeof raw.defaultPriority === "number"
+                  ? raw.defaultPriority
+                  : 3,
               roleNeeded: raw.roleNeeded ?? null,
               assignedWorkerIds: Array.isArray(raw.assignedWorkerIds)
                 ? raw.assignedWorkerIds
@@ -164,7 +167,10 @@ export default function ManagerSchedulerReadOnly() {
             } as TemplateItem;
           });
           setItemsByDay((prev) => ({ ...prev, [day]: arr }));
-          originalRef.current = { ...originalRef.current, [day]: deepClone(arr) };
+          originalRef.current = {
+            ...originalRef.current,
+            [day]: deepClone(arr),
+          };
         },
         () => setLoadingByDay((prev) => ({ ...prev, [day]: false }))
       );
@@ -207,8 +213,12 @@ export default function ManagerSchedulerReadOnly() {
     return (
       <View style={styles.card}>
         <Text style={styles.title}>{item.title || "Untitled"}</Text>
-        {!!item.description && <Text style={styles.meta}>{item.description}</Text>}
-        {!!item.roomNumber && <Text style={styles.meta}>Room: {item.roomNumber}</Text>}
+        {!!item.description && (
+          <Text style={styles.meta}>{item.description}</Text>
+        )}
+        {!!item.roomNumber && (
+          <Text style={styles.meta}>Room: {item.roomNumber}</Text>
+        )}
         <Text style={styles.meta}>
           Priority {item.defaultPriority ?? 3}
           {item.roleNeeded ? ` • ${item.roleNeeded}` : ""}
@@ -223,10 +233,26 @@ export default function ManagerSchedulerReadOnly() {
       <SafeAreaView style={{ flex: 1 }}>
         {/* Header — looks identical; action buttons are disabled */}
         <View style={styles.headerRow}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.smallGreyBtn}
+            accessibilityLabel="Back"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons
+              name="chevron-back"
+              size={20}
+              color={isDark ? "#E5E7EB" : "#111827"}
+            />
+          </TouchableOpacity>
           <View style={styles.daySwitcher}>
-            <TouchableOpacity onPress={prevDay} style={styles.arrowBtn} disabled={disabledUI}>
+            <TouchableOpacity
+              onPress={prevDay}
+              style={styles.arrowBtn}
+              disabled={disabledUI}
+            >
               <Ionicons
-                name="chevron-back"
+                name="arrow-back-circle-outline"
                 size={18}
                 color={isDark ? "#E5E7EB" : "#1F2937"}
               />
@@ -236,15 +262,18 @@ export default function ManagerSchedulerReadOnly() {
               <Text style={styles.dayLabel}>{DAY_LABEL[selectedDay]}</Text>
             </View>
 
-            <TouchableOpacity onPress={nextDay} style={styles.arrowBtn} disabled={disabledUI}>
+            <TouchableOpacity
+              onPress={nextDay}
+              style={styles.arrowBtn}
+              disabled={disabledUI}
+            >
               <Ionicons
-                name="chevron-forward"
+                name="arrow-forward-circle-outline"
                 size={18}
                 color={isDark ? "#E5E7EB" : "#1F2937"}
               />
             </TouchableOpacity>
           </View>
-         
         </View>
 
         {/* If no building selected, same nudge */}
@@ -259,10 +288,17 @@ export default function ManagerSchedulerReadOnly() {
                 borderColor: isDark ? "#334155" : "#FED7AA",
               }}
             >
-              <Text style={{ fontWeight: "800", color: isDark ? "#F3F4F6" : "#7C2D12" }}>
+              <Text
+                style={{
+                  fontWeight: "800",
+                  color: isDark ? "#F3F4F6" : "#7C2D12",
+                }}
+              >
                 Select a building to view its scheduler
               </Text>
-              <Text style={{ marginTop: 4, color: isDark ? "#CBD5E1" : "#7C2D12" }}>
+              <Text
+                style={{ marginTop: 4, color: isDark ? "#CBD5E1" : "#7C2D12" }}
+              >
                 All templates are scoped per building.
               </Text>
             </View>
@@ -290,7 +326,9 @@ export default function ManagerSchedulerReadOnly() {
             <Text style={styles.emptyText}>
               No items for {DAY_LABEL[selectedDay]} yet.
             </Text>
-            <Text style={styles.emptySubtle}>Supervisor will add items here.</Text>
+            <Text style={styles.emptySubtle}>
+              Supervisor will add items here.
+            </Text>
           </View>
         ) : (
           <FlatList
@@ -419,5 +457,15 @@ const getStyles = (isDark: boolean) =>
     meta: {
       fontSize: 13,
       color: isDark ? "#CBD5E1" : "#4B5563",
+    },
+    smallGreyBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: isDark ? "#111827" : "#E5E7EB",
+      borderWidth: isDark ? 1 : 0,
+      borderColor: isDark ? "#1F2937" : "transparent",
     },
   });

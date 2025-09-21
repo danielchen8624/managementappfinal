@@ -66,13 +66,12 @@ export default function SecurityHourlyNudge() {
 
     // Countdown formatting
     const secs = Math.max(0, security.secondsToNextPing);
+    const showCountdown = Number.isFinite(secs) && secs <= 3600; // only show if ≤ 1 hour
     const mm = String(Math.floor(secs / 60)).padStart(2, "0");
     const ss = String(secs % 60).padStart(2, "0");
 
     // Progress toward next ping (0 → 1 across the hour)
-    // If we're out of pingable hours, this card is hidden already.
-    const progress =
-      Math.max(0, Math.min(1, 1 - secs / 3600)); // 0 at top-of-hour, 1 right before next
+    const progress = Math.max(0, Math.min(1, 1 - secs / 3600));
 
     return (
       <View style={s.placeholderCard}>
@@ -89,19 +88,23 @@ export default function SecurityHourlyNudge() {
           <Text style={s.timeText}>{security.nextPing.toFormat("h:mm a")}</Text>
         </View>
 
-        <View style={s.countdownRow}>
-          <Ionicons
-            name="time-outline"
-            size={14}
-            color={isDark ? "#CBD5E1" : "#64748B"}
-          />
-          <Text style={s.countdownLabel}>Time remaining</Text>
-          
-        </View>
+        {showCountdown && (
+          <>
+            <View style={s.countdownRow}>
+              <Ionicons
+                name="time-outline"
+                size={14}
+                color={isDark ? "#CBD5E1" : "#64748B"}
+              />
+              <Text style={s.countdownLabel}>Time remaining</Text>
+              <Text style={s.countdownValue}>{mm}:{ss}</Text>
+            </View>
 
-        <View style={s.progressTrack}>
-          <View style={[s.progressFill, { width: `${progress * 100}%` }]} />
-        </View>
+            <View style={s.progressTrack}>
+              <View style={[s.progressFill, { width: `${progress * 100}%` }]} />
+            </View>
+          </>
+        )}
       </View>
     );
   }

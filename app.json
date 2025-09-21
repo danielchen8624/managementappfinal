@@ -8,7 +8,6 @@
     "icon": "./assets/images/DCOasis_Icon.png",
     "scheme": "dcoasis",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": false,
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "backgroundColor": "#0B1220",

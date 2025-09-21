@@ -1,3 +1,4 @@
+// app/(settings)/helpAndSupport.tsx (or your original path)
 import React, { useMemo } from "react";
 import {
   SafeAreaView,
@@ -12,7 +13,7 @@ import {
 import * as Clipboard from "expo-clipboard";
 import * as WebBrowser from "expo-web-browser";
 import { Ionicons } from "@expo/vector-icons";
-import { useTheme } from "./../ThemeContext"; 
+import { useTheme } from "./../ThemeContext";
 import { router } from "expo-router";
 
 const SUPPORT_EMAIL = "dcoasismanagement@gmail.com";
@@ -201,9 +202,14 @@ export default function HelpAndSupport() {
           </View>
         </View>
 
-        {/* Optional: back to profile/settings */}
-        <TouchableOpacity style={s.secondaryBtn} onPress={() => router.back()}>
-          <Text style={s.secondaryBtnText}>Back</Text>
+        {/* Back button (matches privacyPolicy.tsx style) */}
+        <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
+          <Ionicons
+            name="chevron-back"
+            size={18}
+            color={isDark ? "#E5E7EB" : "#111827"}
+          />
+          <Text style={s.backBtnText}>Back</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -305,18 +311,24 @@ const getStyles = (isDark: boolean) =>
       textDecorationLine: "underline",
       fontWeight: "600",
     },
-    secondaryBtn: {
-      alignSelf: "center",
-      marginTop: 4,
+
+    /* New back button (matches PrivacyPolicy) */
+    backBtn: {
+      marginTop: 20,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      alignSelf: "flex-start",
       paddingVertical: 10,
-      paddingHorizontal: 18,
-      borderRadius: 999,
+      paddingHorizontal: 14,
+      borderRadius: 12,
       borderWidth: 1,
       borderColor: isDark ? "rgba(255,255,255,0.12)" : "#CBD5E1",
+      backgroundColor: isDark ? "#111827" : "#F1F5F9",
     },
-    secondaryBtnText: {
-      color: isDark ? "#E5E7EB" : "#111827",
-      fontWeight: "600",
+    backBtnText: {
       fontSize: 15,
+      fontWeight: "600",
+      color: isDark ? "#F3F4F6" : "#111827",
     },
   });

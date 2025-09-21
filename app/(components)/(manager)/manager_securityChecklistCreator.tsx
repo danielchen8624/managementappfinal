@@ -15,12 +15,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../ThemeContext";
 import { useBuilding } from "../../BuildingContext";
 import { db } from "../../../firebaseConfig";
-import {
-  collection,
-  onSnapshot,
-  orderBy,
-  query,
-} from "firebase/firestore";
+import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
+import { router } from "expo-router";
 
 /* ---------------------------- Types & helpers ---------------------------- */
 
@@ -99,7 +95,8 @@ const SecurityChecklistReadOnly: React.FC = () => {
           return {
             id: d.id,
             place: typeof data.place === "string" ? data.place : "Untitled",
-            description: typeof data.description === "string" ? data.description : "",
+            description:
+              typeof data.description === "string" ? data.description : "",
             order: typeof data.order === "number" ? data.order : 999,
             active: data.active !== false,
           };
@@ -143,12 +140,22 @@ const SecurityChecklistReadOnly: React.FC = () => {
       <SafeAreaView style={{ flex: 1 }}>
         {/* Header (matches creator UI) */}
         <View style={styles.headerRow}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.smallGreyBtn}
+            accessibilityLabel="Back"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons
+              name="chevron-back"
+              size={20}
+              color={isDark ? "#E5E7EB" : "#111827"}
+            />
+          </TouchableOpacity>
           <View style={{ flex: 1 }}>
             <Text style={styles.headerTitle}>Security Checklist Creator</Text>
             <Text style={styles.headerSub}>
-              {disabledUI
-                ? "Select a building to continue"
-                : "View-only"}
+              {disabledUI ? "Select a building to continue" : "View-only"}
             </Text>
           </View>
 
@@ -174,10 +181,17 @@ const SecurityChecklistReadOnly: React.FC = () => {
                 borderColor: isDark ? "#334155" : "#FED7AA",
               }}
             >
-              <Text style={{ fontWeight: "800", color: isDark ? "#F3F4F6" : "#7C2D12" }}>
+              <Text
+                style={{
+                  fontWeight: "800",
+                  color: isDark ? "#F3F4F6" : "#7C2D12",
+                }}
+              >
                 Building not selected
               </Text>
-              <Text style={{ marginTop: 4, color: isDark ? "#CBD5E1" : "#7C2D12" }}>
+              <Text
+                style={{ marginTop: 4, color: isDark ? "#CBD5E1" : "#7C2D12" }}
+              >
                 Use the building switcher to scope your checklist.
               </Text>
             </View>
@@ -290,6 +304,16 @@ const getStyles = (isDark: boolean) =>
       paddingHorizontal: 10,
       borderRadius: 10,
       backgroundColor: "#EF4444",
+    },
+    smallGreyBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: isDark ? "#111827" : "#E5E7EB",
+      borderWidth: isDark ? 1 : 0,
+      borderColor: isDark ? "#1F2937" : "transparent",
     },
 
     center: { flex: 1, alignItems: "center", justifyContent: "center" },

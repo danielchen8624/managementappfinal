@@ -1,3 +1,4 @@
+// app/securityChecklist.tsx (updated)
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
@@ -20,11 +21,13 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  getDoc,
 } from "firebase/firestore";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { db } from "../../firebaseConfig";
 import { useTheme } from "../ThemeContext";
 import { useBuilding } from "../BuildingContext";
+import { router } from "expo-router";
 
 type ChecklistItem = {
   id: string;
@@ -36,14 +39,10 @@ type ChecklistItem = {
 
 /* ---------- helpers ---------- */
 const pad2 = (n: number) => String(n).padStart(2, "0");
-
 const ymd = (d = new Date()) =>
   `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-
 // Hour bucket label like "10:00" or "22:00"
 const hourBucket = (d = new Date()) => `${pad2(d.getHours())}:00`;
-
-// Local storage key now includes the hour bucket so it resets each hour
 const progressKey = (buildingId?: string | null, d = new Date()) =>
   buildingId ? `secChecklistProgress:${buildingId}:${ymd(d)}-${hourBucket(d)}` : "";
 
@@ -62,6 +61,20 @@ function SecurityChecklist() {
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [onlyUnchecked, setOnlyUnchecked] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // building name (live)
+  const [buildingName, setBuildingName] = useState<string | null>(null);
+  useEffect(() => {
+    setBuildingName(null);
+    if (!buildingId) return;
+    const ref = doc(db, "buildings", buildingId);
+    const unsub = onSnapshot(
+      ref,
+      (snap) => setBuildingName((snap.data() as any)?.name ?? null),
+      () => setBuildingName(null)
+    );
+    return () => unsub();
+  }, [buildingId]);
 
   // keep a live "time bucket" so we know when the hour changes
   const [now, setNow] = useState(() => new Date());
@@ -147,7 +160,6 @@ function SecurityChecklist() {
           const saved = JSON.parse(raw) as Record<string, boolean>;
           setChecked(saved || {});
         } else {
-          // New hour (no saved state) → reset to all unchecked
           setChecked({});
         }
       } catch (e) {
@@ -155,7 +167,6 @@ function SecurityChecklist() {
         setChecked({});
       }
     })();
-    // depend on hourKey so we reload when the hour flips
   }, [buildingId, hourKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Merge: when items change, ensure we keep any existing check states
@@ -171,14 +182,13 @@ function SecurityChecklist() {
   }, [items]);
 
   // ─────────────────────────────
-  // 3) Persist check state (debounced) to AsyncStorage, scoped per-hour
+  // 3) Persist check state (debounced)
   // ─────────────────────────────
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!buildingId) return;
     if (!items.length) return;
 
-    // only persist keys that exist in the current list
     const trimmed: Record<string, boolean> = {};
     items.forEach((it) => (trimmed[it.id] = !!checked[it.id]));
 
@@ -192,11 +202,11 @@ function SecurityChecklist() {
       } catch (e) {
         console.warn("Failed saving checklist progress:", e);
       }
-    }, 200); // small debounce
+    }, 200);
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
-  }, [checked, items, buildingId, hourKey]); // include hourKey so we save under the right bucket
+  }, [checked, items, buildingId, hourKey]);
 
   // derived
   const visibleItems = useMemo(
@@ -217,7 +227,7 @@ function SecurityChecklist() {
     setChecked((prev) => ({ ...prev, [id]: !prev[id] }));
 
   // ─────────────────────────────
-  // 4) Submit run — Firestore docId now includes hour bucket (YYYY-MM-DD-HH:00)
+  // 4) Submit run — Firestore docId includes hour bucket (YYYY-MM-DD-HH:00)
   // ─────────────────────────────
   const submitRun = async () => {
     if (!buildingId) {
@@ -232,9 +242,9 @@ function SecurityChecklist() {
       return;
     }
 
-    const when = new Date(); // current time / window
+    const when = new Date();
     const today = ymd(when);
-    const bucket = hourBucket(when); // e.g. "10:00" or "22:00"
+    const bucket = hourBucket(when); // "HH:00"
     const runId = `${today}-${bucket}`;
 
     try {
@@ -252,7 +262,7 @@ function SecurityChecklist() {
         runRef,
         {
           buildingId,
-          runId,               // "YYYY-MM-DD-HH:00"
+          runId,
           dateYYYYMMDD: today,
           hourHHmm: bucket,
           totalItems: total,
@@ -263,7 +273,6 @@ function SecurityChecklist() {
         { merge: true }
       );
 
-      // Store each item state under subcollection "items"
       const writes = items.map((it, idx) =>
         setDoc(
           doc(runRef, "items", it.id),
@@ -281,7 +290,6 @@ function SecurityChecklist() {
       );
       await Promise.all(writes);
 
-      // keep local progress for this hour bucket
       await AsyncStorage.setItem(
         progressKey(buildingId, when),
         JSON.stringify(checked)
@@ -357,13 +365,17 @@ function SecurityChecklist() {
     );
   };
 
+  const buildingLabel = buildingId
+    ? `Building: ${buildingName ?? "Loading…"} · Window: ${hourBucket(now)}`
+    : "Select a building";
+
   return (
     <View style={s.container}>
       <SafeAreaView style={{ flex: 1 }}>
-        {/* Header */}
+        {/* Header Bar with back chevron + title + subtitle */}
         <Animated.View
           style={[
-            s.headerWrap,
+            s.headerBar,
             {
               transform: [
                 {
@@ -377,12 +389,28 @@ function SecurityChecklist() {
             },
           ]}
         >
-          <Text style={s.headerTitle}>Security Checklist</Text>
-          <Text style={s.headerSub}>
-            {buildingId
-              ? `Building: ${buildingId.slice(0, 8)}… • Window: ${hourBucket(now)}`
-              : "Select a building"}
-          </Text>
+          <View style={s.headerLeft}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={s.smallGreyBtn}
+              accessibilityLabel="Back"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons
+                name="chevron-back"
+                size={20}
+                color={isDark ? "#E5E7EB" : "#111827"}
+              />
+            </TouchableOpacity>
+
+            <View>
+              <Text style={s.headerTitle}>Security Checklist</Text>
+              <Text style={s.headerSub}>{buildingLabel}</Text>
+            </View>
+          </View>
+
+          {/* spacer/right actions if needed later */}
+          <View style={{ width: 36 }} />
         </Animated.View>
 
         {/* Status / controls */}
@@ -505,10 +533,33 @@ const getStyles = (isDark: boolean) =>
     center: { alignItems: "center", justifyContent: "center" },
     loadingText: { marginTop: 8, color: isDark ? "#E5E7EB" : "#111827" },
 
-    headerWrap: {
-      paddingHorizontal: 16,
+    // New header bar with back chevron + title + building name
+    headerBar: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 12,
       paddingTop: 8,
       paddingBottom: 8,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: isDark ? "#1F2937" : "#E5E7EB",
+      backgroundColor: isDark ? "#0F172A" : "#FFFFFF",
+    },
+    headerLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      flexShrink: 1,
+    },
+    smallGreyBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: isDark ? "#111827" : "#E5E7EB",
+      borderWidth: isDark ? 1 : 0,
+      borderColor: isDark ? "#1F2937" : "transparent",
     },
     headerTitle: {
       fontSize: 22,
@@ -576,28 +627,6 @@ const getStyles = (isDark: boolean) =>
       fontSize: 12,
       fontWeight: "900",
       color: isDark ? "#E5E7EB" : "#0F172A",
-      letterSpacing: 0.2,
-    },
-
-    actionsRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 10,
-    },
-    smallBtn: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-      paddingHorizontal: 12,
-      paddingVertical: 10,
-      borderRadius: 12,
-      borderWidth: 1,
-      flex: 1,
-      justifyContent: "center",
-    },
-    smallBtnText: {
-      fontWeight: "800",
-      fontSize: 12,
       letterSpacing: 0.2,
     },
 
