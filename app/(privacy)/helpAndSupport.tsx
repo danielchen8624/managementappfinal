@@ -19,7 +19,7 @@ import { router } from "expo-router";
 const SUPPORT_EMAIL = "dcoasismanagement@gmail.com";
 const SUPPORT_PHONE = "6479154852";
 const SUPPORT_URL = "https://yourapp.com/support";
-const PRIVACY_URL = "https://yourapp.com/privacy";
+const PRIVACY_URL = "https://danielchen8624.github.io/dcoasispages/privacy";
 const TERMS_URL = "https://yourapp.com/terms";
 const ABOUT_TEXT =
   "DCOasis helps property managers schedule, assign, and track housekeeping & maintenance tasks in real time.";
