@@ -1,3 +1,4 @@
+// app/(tabs)/profile.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   SafeAreaView,
@@ -10,6 +11,7 @@ import {
   Animated,
   Easing,
   Image,
+  ActivityIndicator,
 } from "react-native";
 import { signOut } from "firebase/auth";
 import { auth, db } from "@/firebaseConfig";
@@ -17,6 +19,7 @@ import { router } from "expo-router";
 import { useTheme } from "../ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
 import { doc, onSnapshot } from "firebase/firestore";
+import { useUser } from "../UserContext"; // ⬅️ bring in role/loading
 
 type UserDoc = {
   firstName?: string;
@@ -117,6 +120,9 @@ export default function ProfileScreen() {
   const isDark = theme === "dark";
   const s = getStyles(isDark);
 
+  // ⬇️ bring in role & loading exactly like Home
+  const { role, loading } = useUser();
+
   // THEME CROSSFADE
   const themeAnim = useRef(new Animated.Value(isDark ? 1 : 0)).current;
   useEffect(() => {
@@ -181,6 +187,18 @@ export default function ProfileScreen() {
   const editProfile = () => {
     if (auth.currentUser) router.push("/editProfile");
   };
+
+  // Optional: tiny loading guard so the role gate doesn't flash
+  if (loading) {
+    return (
+      <SafeAreaView style={[s.screen, { alignItems: "center", justifyContent: "center" }]}>
+        <ActivityIndicator />
+        <Text style={{ marginTop: 8, color: isDark ? "#9CA3AF" : "#4B5563", fontWeight: "700" }}>
+          Loading…
+        </Text>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={s.screen}>
@@ -337,20 +355,23 @@ export default function ProfileScreen() {
               }
             />
 
-            <SettingsRow
-              label="Add New Building"
-              onPress={() => router.push("/addNewBuilding")}
-              isDark={isDark}
-              icon={
-                <Ionicons
-                  name="business-outline"
-                  size={16}
-                  color={isDark ? "#E5E7EB" : "#111827"}
-                />
-              }
-            />
+            {/* ✅ Only managers & supervisors see this */}
+            {(role === "manager" || role === "supervisor") && (
+              <SettingsRow
+                label="Add New Building"
+                onPress={() => router.push("/addNewBuilding")}
+                isDark={isDark}
+                icon={
+                  <Ionicons
+                    name="business-outline"
+                    size={16}
+                    color={isDark ? "#E5E7EB" : "#111827"}
+                  />
+                }
+              />
+            )}
 
-            {/* Moved here: Delete Account (destructive) */}
+            {/* Destructive */}
             <SettingsRow
               label="Delete Account"
               onPress={() => router.push("/deleteAccount")}
