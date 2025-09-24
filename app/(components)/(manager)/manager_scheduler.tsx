@@ -83,7 +83,7 @@ function deepClone<T>(arr: T[]): T[] {
 }
 
 const { height: SCREEN_H } = Dimensions.get("window");
-const CARD_HEIGHT = Math.max(100, Math.floor(SCREEN_H / 8));
+const CARD_HEIGHT = Math.max(100, Math.floor(SCREEN_H / 6));
 
 /* =====================  MAIN  ===================== */
 export default function ManagerSchedulerReadOnly() {
@@ -433,7 +433,7 @@ const getStyles = (isDark: boolean) =>
     },
 
     card: {
-      height: CARD_HEIGHT,
+      minHeight: CARD_HEIGHT,
       width: "100%",
       backgroundColor: isDark ? "#111827" : "#FFFFFF",
       borderRadius: 16,

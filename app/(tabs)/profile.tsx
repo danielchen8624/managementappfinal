@@ -19,7 +19,7 @@ import { router } from "expo-router";
 import { useTheme } from "../ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
 import { doc, onSnapshot } from "firebase/firestore";
-import { useUser } from "../UserContext"; // ⬅️ bring in role/loading
+import { useUser } from "../UserContext"; 
 
 type UserDoc = {
   firstName?: string;

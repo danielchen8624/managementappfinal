@@ -154,7 +154,7 @@ function deepClone<T>(arr: T[]): T[] {
 }
 
 const { height: SCREEN_H } = Dimensions.get("window");
-const CARD_HEIGHT = Math.max(100, Math.floor(SCREEN_H / 8));
+const CARD_HEIGHT = Math.max(100, Math.floor(SCREEN_H / 6));
 
 const ymd = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
@@ -603,7 +603,7 @@ export default function Scheduler() {
           >
             <Ionicons name="rocket-outline" size={14} color="#fff" />
             <Text style={styles.rolloutText}>
-              Rollout {DAY_LABEL[selectedDay]}
+              Rollout
             </Text>
           </TouchableOpacity>
         </View>
@@ -1070,7 +1070,7 @@ const getStyles = (isDark: boolean) =>
     },
 
     card: {
-      height: CARD_HEIGHT,
+      minHeight: CARD_HEIGHT,
       width: "100%",
       backgroundColor: isDark ? "#111827" : "#FFFFFF",
       borderRadius: 16,
