@@ -377,7 +377,7 @@ export default function Scheduler() {
     const batch = writeBatch(db);
     let createdCount = 0;
 
-    const actor = buildActor("manager"); // 👈 who is creating these tasks
+    const actor = buildActor("manager"); // who is creating these tasks
 
     templates.forEach((tpl) => {
       if (!tpl?.active) return;
