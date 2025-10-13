@@ -1,7 +1,7 @@
 // app/(manager)/securityChecklist_readonly.tsx
 // Read-only view of the Security Checklist. Matches the Creator UI but blocks all mutations.
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -10,6 +10,9 @@ import {
   SafeAreaView,
   FlatList,
   ActivityIndicator,
+  Animated,
+  Easing,
+  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../ThemeContext";
@@ -32,37 +35,68 @@ function deepClone<T>(arr: T[]): T[] {
   return arr.map((x) => ({ ...(x as any) }));
 }
 
-/* --------------------------------- UI ---------------------------------- */
+/* ------------------------------ Minimal palette ------------------------------ */
+const Pal = {
+  light: {
+    bg: "#F7F8FA",
+    surface: "#FFFFFF",
+    text: "#0B1220",
+    textMuted: "#5B6472",
+    hairline: "#E7EAF0",
+    accent: "#147CE5",
+    accentSoft: "#E8F1FF",
+    success: "#16A34A",
+    subtle: "#F3F4F6",
+  },
+  dark: {
+    bg: "#0A0F1A",
+    surface: "#0F1626",
+    text: "#E6EAF2",
+    textMuted: "#9AA4B2",
+    hairline: "#1F2A3A",
+    accent: "#4CA2FF",
+    accentSoft: "#11233B",
+    success: "#22C55E",
+    subtle: "#121A28",
+  },
+};
 
-const EmptyState = ({ isDark }: { isDark: boolean }) => (
-  <View style={{ alignItems: "center", paddingVertical: 48, gap: 8 }}>
-    <Ionicons
-      name="shield-checkmark-outline"
-      size={28}
-      color={isDark ? "#94A3B8" : "#64748B"}
-    />
-    <Text
-      style={{
-        fontSize: 16,
-        fontWeight: "800",
-        color: isDark ? "#E5E7EB" : "#0F172A",
-      }}
-    >
-      No items yet
-    </Text>
-    <Text style={{ color: isDark ? "#94A3B8" : "#64748B" }}>
-      Supervisor will add items to this checklist.
-    </Text>
-  </View>
-);
+/* --------------------------------- Empty ---------------------------------- */
+
+const EmptyState = ({ isDark }: { isDark: boolean }) => {
+  const C = isDark ? Pal.dark : Pal.light;
+  return (
+    <View style={{ alignItems: "center", paddingVertical: 48, gap: 8 }}>
+      <Ionicons name="shield-checkmark-outline" size={28} color={C.textMuted} />
+      <Text style={{ fontSize: 16, fontWeight: "900", color: C.text }}>
+        No items yet
+      </Text>
+      <Text style={{ color: C.textMuted, fontWeight: "700" }}>
+        Supervisor will add items to this checklist.
+      </Text>
+    </View>
+  );
+};
 
 /* ------------------------- Main Screen Component ------------------------ */
 
 const SecurityChecklistReadOnly: React.FC = () => {
   const { theme } = useTheme();
   const isDark = theme === "dark";
-  const styles = getStyles(isDark);
+  const C = isDark ? Pal.dark : Pal.light;
+  const s = getStyles(isDark);
   const { buildingId } = useBuilding();
+
+  // subtle bg crossfade (matches Scheduled Tasks vibe)
+  const themeAnim = useRef(new Animated.Value(isDark ? 1 : 0)).current;
+  useEffect(() => {
+    Animated.timing(themeAnim, {
+      toValue: isDark ? 1 : 0,
+      duration: 180,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: false,
+    }).start();
+  }, [isDark, themeAnim]);
 
   const [items, setItems] = useState<ChecklistItem[]>([]);
   const originalRef = useRef<ChecklistItem[]>([]);
@@ -110,124 +144,87 @@ const SecurityChecklistReadOnly: React.FC = () => {
     return () => unsub();
   }, [buildingId]);
 
-  const renderItem = ({ item }: { item: ChecklistItem }) => (
-    <View style={styles.card}>
-      <View style={styles.itemTextWrap}>
-        <Text style={styles.placeText} numberOfLines={1}>
-          {item.place}
-        </Text>
-        {!!item.description && (
-          <Text style={styles.descText} numberOfLines={2}>
-            {item.description}
+  /* ------------------------------ Render Item ------------------------------ */
+  const renderItem = ({ item }: { item: ChecklistItem }) => {
+    const dotColor = item.active ? C.success : C.textMuted;
+
+    return (
+      <View style={s.row}>
+        <View style={[s.dot, { backgroundColor: dotColor }]} />
+
+        <View style={{ flex: 1 }}>
+          <Text style={s.title} numberOfLines={1}>
+            {item.place}
           </Text>
-        )}
-      </View>
 
-      {/* Keep delete button visible but disabled to match UI */}
-      <TouchableOpacity
-        onPress={() => {}}
-        disabled
-        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        style={[styles.deleteBtn, { opacity: 0.6 }]}
-      >
-        <Ionicons name="trash-outline" size={18} color="#fff" />
-      </TouchableOpacity>
-    </View>
-  );
-
-  return (
-    <View style={styles.container}>
-      <SafeAreaView style={{ flex: 1 }}>
-        {/* Header (matches creator UI) */}
-        <View style={styles.headerRow}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.smallGreyBtn}
-            accessibilityLabel="Back"
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons
-              name="chevron-back"
-              size={20}
-              color={isDark ? "#E5E7EB" : "#111827"}
-            />
-          </TouchableOpacity>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.headerTitle}>Security Checklist Creator</Text>
-            <Text style={styles.headerSub}>
-              {disabledUI ? "Select a building to continue" : "View-only"}
+          {!!item.description && (
+            <Text style={s.desc} numberOfLines={2}>
+              {item.description}
             </Text>
-          </View>
-
-          {/* Add item button present but inert */}
-          <TouchableOpacity
-            style={[styles.addBtn, { opacity: 0.6 }]}
-            disabled
-            onPress={() => {}}
-          >
-            <Ionicons name="add" size={16} color="#fff" />
-            <Text style={styles.addBtnText}>Add item</Text>
-          </TouchableOpacity>
+          )}
         </View>
 
-        {!buildingId ? (
-          <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
-            <View
-              style={{
-                padding: 12,
-                borderRadius: 10,
-                backgroundColor: isDark ? "#1F2937" : "#FFF7ED",
-                borderWidth: 1,
-                borderColor: isDark ? "#334155" : "#FED7AA",
-              }}
-            >
-              <Text
-                style={{
-                  fontWeight: "800",
-                  color: isDark ? "#F3F4F6" : "#7C2D12",
-                }}
-              >
-                Building not selected
-              </Text>
-              <Text
-                style={{ marginTop: 4, color: isDark ? "#CBD5E1" : "#7C2D12" }}
-              >
-                Use the building switcher to scope your checklist.
-              </Text>
-            </View>
-          </View>
-        ) : null}
+        {/* Keep a disabled affordance to signal read-only (very subtle) */}
+        <View style={s.iconGhost}>
+          <Ionicons name="trash-outline" size={18} color={C.textMuted} />
+        </View>
+      </View>
+    );
+  };
 
-        {/* List */}
-        {disabledUI ? (
-          <View style={styles.center}>
-            <ActivityIndicator />
-            <Text style={styles.loadingText}>Waiting for building…</Text>
-          </View>
-        ) : loading ? (
-          <View style={styles.center}>
-            <ActivityIndicator />
-            <Text style={styles.loadingText}>Loading…</Text>
-          </View>
-        ) : items.length === 0 ? (
-          <EmptyState isDark={isDark} />
-        ) : (
-          <FlatList
-            data={items}
-            keyExtractor={(it) => it.id}
-            renderItem={renderItem}
-            contentContainerStyle={{
-              paddingHorizontal: 16,
-              paddingBottom: 96,
-              paddingTop: 8,
-            }}
-            extraData={items.map((i) => i.id).join("|")}
-          />
-        )}
+  return (
+    <SafeAreaView style={s.container}>
+      {/* crossfade background */}
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: Pal.light.bg }]} />
+      <Animated.View
+        style={[
+          StyleSheet.absoluteFill,
+          { backgroundColor: Pal.dark.bg, opacity: themeAnim },
+        ]}
+      />
 
-        {/* Save/Discard bar intentionally omitted in read-only */}
-      </SafeAreaView>
-    </View>
+      {/* Header */}
+      <View style={s.header}>
+        <TouchableOpacity onPress={() => router.back()} style={s.iconBtn} activeOpacity={0.9}>
+          <Ionicons name="chevron-back" size={18} color={C.text} />
+        </TouchableOpacity>
+
+        <View style={s.headerMid}>
+          <Text style={s.headerTitle}>Security Checklist</Text>
+          <Text style={s.headerSub}>{disabledUI ? "Select a building" : "View only"}</Text>
+        </View>
+
+        {/* inert Add button for parity with creator UI (muted) */}
+        <View style={[s.iconBtn, { opacity: 0.35 }]}>
+          <Ionicons name="add" size={18} color={C.text} />
+        </View>
+      </View>
+
+      {/* Content */}
+      {disabledUI ? (
+        <View style={[s.center, { paddingVertical: 24 }]}>
+          <ActivityIndicator />
+          <Text style={s.muted}>Waiting for building…</Text>
+        </View>
+      ) : loading ? (
+        <View style={[s.center, { paddingVertical: 24 }]}>
+          <ActivityIndicator />
+          <Text style={s.muted}>Loading…</Text>
+        </View>
+      ) : items.length === 0 ? (
+        <EmptyState isDark={isDark} />
+      ) : (
+        <FlatList
+          data={items}
+          keyExtractor={(it) => it.id}
+          renderItem={renderItem}
+          ItemSeparatorComponent={() => <View style={s.hairline} />}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 28 }}
+          extraData={items.map((i) => i.id).join("|")}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
+    </SafeAreaView>
   );
 };
 
@@ -235,87 +232,91 @@ export default SecurityChecklistReadOnly;
 
 /* -------------------------------- Styles -------------------------------- */
 
-const getStyles = (isDark: boolean) =>
-  StyleSheet.create({
+const getStyles = (isDark: boolean) => {
+  const C = isDark ? Pal.dark : Pal.light;
+
+  return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: isDark ? "#0B1220" : "#F8FAFC",
+      backgroundColor: C.bg,
     },
-    headerRow: {
+
+    /* Header (mirrors Scheduled Tasks) */
+    header: {
+      paddingHorizontal: 16,
+      paddingTop: 8,
+      paddingBottom: 10,
+      backgroundColor: C.bg,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
-      paddingHorizontal: 12,
-      paddingTop: 12,
-      paddingBottom: 8,
-      gap: 8,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: C.hairline,
     },
-    headerTitle: {
-      fontSize: 18,
-      fontWeight: "800",
-      color: isDark ? "#F3F4F6" : "#111827",
-      letterSpacing: 0.2,
-    },
-    headerSub: {
-      marginTop: 2,
-      color: isDark ? "#A1A1AA" : "#6B7280",
-      fontSize: 12,
-    },
-    addBtn: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-      backgroundColor: isDark ? "#2563EB" : "#1D4ED8",
-      paddingHorizontal: 14,
-      paddingVertical: 10,
-      borderRadius: 10,
-    },
-    addBtnText: { color: "#FFF", fontWeight: "800" },
-
-    card: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 12,
-      backgroundColor: isDark ? "#111827" : "#FFFFFF",
-      borderRadius: 16,
-      padding: 14,
-      marginVertical: 8,
-      borderWidth: isDark ? 1 : 0,
-      borderColor: isDark ? "#1F2937" : "transparent",
-      shadowColor: "#000",
-      shadowOpacity: 0.08,
-      shadowRadius: 4,
-      shadowOffset: { width: 0, height: 2 },
-      elevation: 2,
-    },
-    itemTextWrap: { flex: 1 },
-    placeText: {
-      fontSize: 15,
-      fontWeight: "800",
-      color: isDark ? "#E5E7EB" : "#0F172A",
-    },
-    descText: {
-      marginTop: 2,
-      fontSize: 12,
-      color: isDark ? "#CBD5E1" : "#475569",
-    },
-    deleteBtn: {
-      paddingVertical: 8,
-      paddingHorizontal: 10,
-      borderRadius: 10,
-      backgroundColor: "#EF4444",
-    },
-    smallGreyBtn: {
+    iconBtn: {
       width: 36,
       height: 36,
       borderRadius: 10,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: isDark ? "#111827" : "#E5E7EB",
-      borderWidth: isDark ? 1 : 0,
-      borderColor: isDark ? "#1F2937" : "transparent",
+      backgroundColor: C.surface,
+      borderWidth: 1,
+      borderColor: C.hairline,
+    },
+    headerMid: { alignItems: "center", gap: 2 },
+    headerTitle: {
+      fontSize: 20,
+      fontWeight: "900",
+      color: C.text,
+      letterSpacing: 0.2,
+    },
+    headerSub: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: C.textMuted,
     },
 
-    center: { flex: 1, alignItems: "center", justifyContent: "center" },
-    loadingText: { marginTop: 8, color: isDark ? "#E5E7EB" : "#111827" },
+    /* List rows (minimal) */
+    hairline: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: C.hairline,
+      marginLeft: 16 + 10 + 8, // align under content, not the dot
+    },
+    row: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 10,
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+    },
+    dot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      marginTop: 6,
+      marginLeft: 10,
+    },
+    title: {
+      fontSize: 16,
+      fontWeight: "900",
+      color: C.text,
+      letterSpacing: 0.2,
+    },
+    desc: {
+      marginTop: 6,
+      fontSize: 13,
+      lineHeight: 18,
+      color: C.textMuted,
+      fontWeight: "700",
+    },
+    iconGhost: {
+      opacity: 0.25,
+      paddingLeft: 8,
+      paddingTop: Platform.select({ ios: 0, android: 2, default: 0 }),
+    },
+
+    /* Misc */
+    center: { alignItems: "center", justifyContent: "center" },
+    muted: { color: C.textMuted, fontWeight: "700" },
   });
+};

@@ -265,7 +265,7 @@ function HomePage() {
 
   const isWorker = role === "employee" || role === "security";
 
-  // ⏱️ Clock In/Out
+  // ⏱ Clock In/Out
   const handleClockIn = async () => {
     const uid = auth.currentUser?.uid;
     if (!uid) {

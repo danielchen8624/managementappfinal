@@ -16,6 +16,7 @@ import {
   Alert,
   Animated,
   Easing,
+  StyleSheet as RNStyleSheet,
 } from "react-native";
 import { router } from "expo-router";
 import { db, auth } from "../../firebaseConfig";
@@ -39,7 +40,6 @@ import SwipeableItem, { UnderlayParams } from "react-native-swipeable-item";
 import { Ionicons } from "@expo/vector-icons";
 import { useBuilding } from "../BuildingContext";
 
-/** ---------- helpers ---------- */
 function sortByOrder<T extends { order?: number }>(arr: T[]) {
   return [...arr].sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
 }
@@ -65,7 +65,6 @@ function getProjectEnd(tzNow: DateTime) {
   return tzNow.set({ hour: eh, minute: em, second: 0, millisecond: 0 });
 }
 
-/** ---------- UI primitives ---------- */
 const Chip = ({ text, isDark }: { text: string; isDark: boolean }) => (
   <View
     style={{
@@ -262,38 +261,27 @@ const PriorityToggle = ({
   </TouchableOpacity>
 );
 
-/* =========================================================
-   Main Page
-   ========================================================= */
 function TaskPage() {
-  // Manager buckets
   const [MP1, setMP1] = useState<any[]>([]);
   const [MP2, setMP2] = useState<any[]>([]);
   const [MP3, setMP3] = useState<any[]>([]);
-  // Employee buckets
   const [EP1, setEP1] = useState<any[]>([]);
   const [EP2, setEP2] = useState<any[]>([]);
   const [EP3, setEP3] = useState<any[]>([]);
-
   const [currentProjects, setCurrentProjects] = useState<any[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
-
-  // Collapsible
   const [showTasks, setShowTasks] = useState(true);
   const [showP1, setShowP1] = useState(true);
   const [showP2, setShowP2] = useState(true);
   const [showP3, setShowP3] = useState(true);
   const [showProjects, setShowProjects] = useState(true);
-
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === "dark";
   const s = getStyles(isDark);
   const { role, loading } = useUser();
-
   const { activePriority, tzNow, nextBoundary, isProjectTime } =
     useServerTime();
   const todayISO = useMemo(() => tzNow().toISODate(), [tzNow]);
-
   const uid = auth.currentUser?.uid || null;
   const { buildingId } = useBuilding();
   const [buildingName, setBuildingName] = useState<string | null>(null);
@@ -304,7 +292,6 @@ function TaskPage() {
       return;
     }
     const ref = doc(db, "buildings", buildingId);
-    // realtime so if name changes, header updates automatically
     const unsub = onSnapshot(ref, (snap) => {
       const data = snap.data() as { name?: string } | undefined;
       setBuildingName(data?.name ?? null);
@@ -312,7 +299,6 @@ function TaskPage() {
     return () => unsub();
   }, [buildingId]);
 
-  /** theme crossfade */
   const themeAnim = useRef(new Animated.Value(isDark ? 1 : 0)).current;
   useEffect(() => {
     Animated.timing(themeAnim, {
@@ -324,7 +310,6 @@ function TaskPage() {
   }, [isDark]);
   const darkOpacity = themeAnim;
 
-  /** subscriptions: MANAGER */
   useEffect(() => {
     if (!buildingId) {
       setMP1([]);
@@ -384,7 +369,6 @@ function TaskPage() {
     };
   }, [buildingId, todayISO]);
 
-  /** subscriptions: EMPLOYEE */
   useEffect(() => {
     if (role !== "employee" || !uid || !buildingId) {
       setEP1([]);
@@ -462,11 +446,9 @@ function TaskPage() {
     );
   }
 
-  /** navigation */
   const openTaskScreen = useCallback(
     (item: any) => {
       if (role === "manager") {
-        console.log("hai");
         return;
       }
       router.push({
@@ -490,7 +472,6 @@ function TaskPage() {
   const openProjectScreen = useCallback(
     (item: any) => {
       if (role === "manager") {
-        console.log("hai");
         return;
       }
       router.push({
@@ -510,7 +491,6 @@ function TaskPage() {
     [buildingId, role]
   );
 
-  /** status helpers */
   const isComplete = (item: any) =>
     String(item.status ?? "").toLowerCase() === "completed";
   const hasAssignee = (item: any) => {
@@ -533,7 +513,6 @@ function TaskPage() {
     return `${prefix}${nb.toFormat("ccc HH:mm")}`;
   };
 
-  /** delete */
   const confirmDelete = useCallback(
     (id: string, isProject: boolean, close?: () => void) => {
       if (role !== "supervisor") {
@@ -575,7 +554,6 @@ function TaskPage() {
     [role, buildingId]
   );
 
-  /** pulse for active */
   const pulse = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const loop = Animated.loop(
@@ -617,7 +595,6 @@ function TaskPage() {
     [isDark, pulse]
   );
 
-  /** refined card */
   const renderCard = useCallback(
     (item: any, isProjectItem: boolean = false) => {
       const isActive = isProjectItem
@@ -665,7 +642,6 @@ function TaskPage() {
               }
             >
               <Animated.View style={[s.card, glowStyle(isActive)]}>
-                {/* status rail */}
                 <View style={s.pillRail}>
                   <View style={[s.pill, { backgroundColor: statusColor }]} />
                 </View>
@@ -798,7 +774,6 @@ function TaskPage() {
     );
   }
 
-  // counts for headers
   const tasksCount =
     role === "supervisor" || role === "manager"
       ? MP1.length + MP2.length + MP3.length
@@ -806,23 +781,21 @@ function TaskPage() {
 
   return (
     <SafeAreaView style={s.container}>
-      {/* bg layers */}
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: "#F8FAFC" }]} />
+      <View style={[RNStyleSheet.absoluteFill, { backgroundColor: "#F8FAFC" }]} />
       <Animated.View
         style={[
-          StyleSheet.absoluteFill,
+          RNStyleSheet.absoluteFill,
           { backgroundColor: "#0F172A", opacity: darkOpacity },
         ]}
       />
 
-      {/* header */}
       <View style={s.headerBar}>
         <View>
           <Text style={s.headerTitle}>Tasks</Text>
           <Text style={s.headerSubtitle}>Building: {buildingName ?? buildingId}</Text>
         </View>
         <View style={{ flexDirection: "row", gap: 10 }}>
-                   <TouchableOpacity
+          <TouchableOpacity
             onPress={toggleTheme}
             style={s.iconBtn}
             accessibilityLabel="Toggle theme"
@@ -837,7 +810,6 @@ function TaskPage() {
         </View>
       </View>
 
-      {/* banner */}
       <View style={s.banner}>
         {activePriority ? (
           <>
@@ -867,7 +839,6 @@ function TaskPage() {
         )}
       </View>
 
-      {/* legend */}
       <View style={s.legendRow}>
         <LegendDot color="#EF4444" />
         <Text style={s.legendText}>Unassigned</Text>
@@ -1035,6 +1006,22 @@ function TaskPage() {
                     ))}
                 </View>
               )}
+
+              <SectionToggle
+                title="Projects"
+                open={showProjects}
+                onPress={() => setShowProjects(!showProjects)}
+                isDark={isDark}
+                count={currentProjects.length}
+              />
+              {showProjects &&
+                (currentProjects.length === 0 ? (
+                  <Text style={s.emptyText}>
+                    No pending projects available.
+                  </Text>
+                ) : (
+                  currentProjects.map((item) => renderCard(item, true))
+                ))}
             </>
           }
           showsVerticalScrollIndicator={false}
@@ -1046,7 +1033,6 @@ function TaskPage() {
 
 export default TaskPage;
 
-/** ---------- tiny legend dot ---------- */
 const LegendDot = ({ color }: { color: string }) => (
   <View
     style={{
@@ -1059,13 +1045,9 @@ const LegendDot = ({ color }: { color: string }) => (
   />
 );
 
-/* =========================================================
-   Styles
-   ========================================================= */
 const getStyles = (isDark: boolean) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: isDark ? "#0F172A" : "#F8FAFC" },
-
     headerBar: {
       flexDirection: "row",
       alignItems: "center",
@@ -1088,7 +1070,6 @@ const getStyles = (isDark: boolean) =>
       fontSize: 12,
       color: isDark ? "#94A3B8" : "#64748B",
     },
-
     iconBtn: {
       width: 36,
       height: 36,
@@ -1099,7 +1080,6 @@ const getStyles = (isDark: boolean) =>
       borderWidth: isDark ? 1 : 0,
       borderColor: isDark ? "#1F2937" : "transparent",
     },
-
     banner: {
       paddingHorizontal: 16,
       paddingVertical: 12,
@@ -1117,7 +1097,6 @@ const getStyles = (isDark: boolean) =>
       fontSize: 13,
       color: isDark ? "#CBD5E1" : "#1E40AF",
     },
-
     legendRow: {
       flexDirection: "row",
       alignItems: "center",
@@ -1129,26 +1108,20 @@ const getStyles = (isDark: boolean) =>
       backgroundColor: isDark ? "#0F172A" : "#FFFFFF",
     },
     legendText: { fontSize: 12, color: isDark ? "#A8B1C0" : "#64748B" },
-
     scrollContainer: { padding: 16, paddingBottom: 40 },
-
-    /* Outer shadow container so rowClip can clip without killing shadow */
     shadowWrap: {
       shadowColor: "#000",
       shadowOffset: { width: 0, height: 6 },
       shadowOpacity: 0.08,
       shadowRadius: 10,
       elevation: 6,
-      marginBottom: 14, // spacing between rows lives here
+      marginBottom: 14,
     },
-
-    /* Clips the swipe underlay to the row bounds */
     rowClip: {
       borderRadius: 16,
       overflow: "hidden",
       backgroundColor: "transparent",
     },
-
     card: {
       backgroundColor: isDark ? "#0B1220" : "#FFFFFF",
       borderRadius: 16,
@@ -1157,7 +1130,6 @@ const getStyles = (isDark: boolean) =>
       borderColor: isDark ? "#1F2937" : "#E5E7EB",
       position: "relative",
     },
-
     pillRail: {
       position: "absolute",
       right: 8,
@@ -1168,7 +1140,6 @@ const getStyles = (isDark: boolean) =>
       justifyContent: "center",
     },
     pill: { width: 6, borderRadius: 8, height: "78%" },
-
     titleRow: {
       flexDirection: "row",
       alignItems: "center",
@@ -1182,7 +1153,6 @@ const getStyles = (isDark: boolean) =>
       color: isDark ? "#E2E8F0" : "#0F172A",
       letterSpacing: 0.2,
     },
-
     nowPill: {
       flexDirection: "row",
       gap: 6,
@@ -1198,7 +1168,6 @@ const getStyles = (isDark: boolean) =>
       fontSize: 11,
       letterSpacing: 0.3,
     },
-
     metaRow: {
       flexDirection: "row",
       alignItems: "center",
@@ -1207,7 +1176,6 @@ const getStyles = (isDark: boolean) =>
     },
     metaItem: { flexDirection: "row", alignItems: "center", gap: 6 },
     metaText: { fontSize: 13, color: isDark ? "#CBD5E1" : "#334155" },
-
     emptyText: {
       fontSize: 15,
       textAlign: "center",
@@ -1216,7 +1184,6 @@ const getStyles = (isDark: boolean) =>
       color: isDark ? "#9CA3AF" : "#6B7280",
     },
     text: { color: isDark ? "#E5E7EB" : "#111" },
-
     underlayLeft: {
       flex: 1,
       backgroundColor: "#EF4444",
