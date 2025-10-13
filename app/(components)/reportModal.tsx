@@ -131,18 +131,25 @@ export default function ReportModal({ visible, onClose }: ReportModalProps) {
     try {
       setSubmitting(true);
 
-      //  fetch reporter_name from users/{uid}
-      let reporter_name: string | null = null;
+      // fetch user profile once to build a clean actor object
+      let profile: any = null;
       try {
         const userRef = doc(db, "users", user.uid);
-        const userSnap = await getDoc(userRef);
-        if (userSnap.exists()) {
-          const data = userSnap.data() as any;
-          reporter_name = data.firstName ?? null;
-        }
+        const snap = await getDoc(userRef);
+        if (snap.exists()) profile = snap.data();
       } catch (err) {
-        console.error("Failed to fetch reporter_name:", err);
+        console.error("Failed to fetch user profile:", err);
       }
+
+      const nameFromProfile =
+        profile?.displayName ||
+        [profile?.firstName, profile?.lastName].filter(Boolean).join(" ").trim();
+
+      const createdBy = {
+        id: user.uid,
+        name: nameFromProfile || user.displayName || user.email || user.uid,
+        role: profile?.role || "manager", // adjust default if needed
+      };
 
       await addDoc(collection(db, "buildings", buildingId, "reports"), {
         title: title.trim(),
@@ -150,7 +157,7 @@ export default function ReportModal({ visible, onClose }: ReportModalProps) {
         aptNumber: aptNumber.trim() || null,
         status, // "fixed" or "need assistance"
         createdById: user.uid,
-        createdByName: reporter_name,
+        createdBy, // << OBJECT: { id, name, role }
         createdAt: serverTimestamp(),
         visibility: "manager_supervisor",
         managerHasReviewed: false,

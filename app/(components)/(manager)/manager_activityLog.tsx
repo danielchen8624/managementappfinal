@@ -222,14 +222,14 @@ function ActivityLog() {
     if (t.startsWith("report_"))
       return <MaterialIcons name="assessment" size={18} color={C.accent} />;
     if (t.startsWith("scheduler_item") || t.startsWith("schedule_"))
-      return <Ionicons name="calendar" size={18} color={C.accent} />; // 👈 handle both
+      return <Ionicons name="calendar" size={18} color={C.accent} />; //  handle both
     if (t === "security_check_submitted")
       return <Ionicons name="shield-checkmark" size={18} color={C.accent} />;
     return <MaterialIcons name="receipt-long" size={18} color={C.accent} />;
   };
 
   const subtitleFor = (row: ActivityRow) => {
-    const who = row.actor?.name || row.actor?.role || "Someone";
+    const who = row.actor?.name || row.actor?.role || row.actor || "Someone";
     const when = formatWhen(row.ts);
     const tgt = row.target?.id
       ? ` • #${String(row.target?.id).slice(0, 6)}`
