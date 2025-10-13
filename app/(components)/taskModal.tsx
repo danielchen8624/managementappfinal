@@ -212,7 +212,7 @@ function TaskModal({ visible, onClose }: TaskModalProps) {
         roomNumber,
         priority: finalPriority,
         status: selectedAssignees.length > 0 ? "assigned" : "pending",
-        createdBy: actor, // 👈 structured object
+        createdBy: actor, 
         createdAt: new Date(),
         assignedWorkers: selectedAssignees,
         forToday: true,

@@ -1,4 +1,3 @@
-// app/(manager)/scheduler.tsx
 // Handles task rollout, per-building.
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -18,13 +17,13 @@ import {
   Animated,
 } from "react-native";
 import SwipeableItem, { UnderlayParams } from "react-native-swipeable-item";
-import {router} from "expo-router";
+import { router } from "expo-router";
 import DraggableFlatList, {
   RenderItemParams,
 } from "react-native-draggable-flatlist";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../ThemeContext";
-import { db } from "../../firebaseConfig";
+import { db, auth } from "../../firebaseConfig";
 import {
   collection,
   onSnapshot,
@@ -35,6 +34,8 @@ import {
   where,
   serverTimestamp,
   getDocs,
+  Timestamp,
+  getDoc, // 👈 added
 } from "firebase/firestore";
 import { Dropdown, MultiSelect } from "react-native-element-dropdown";
 
@@ -113,6 +114,13 @@ type Worker = {
   email?: string;
 };
 
+/** Actor written to Firestore (and read back) */
+type Actor = {
+  id?: string | null;
+  name?: string | null; // ← will carry displayName/firstName/etc.
+  role?: string | null;
+} | null;
+
 export type TemplateItem = {
   id: string;
   title: string;
@@ -122,7 +130,12 @@ export type TemplateItem = {
   assignedWorkerIds?: string[];
   order: number;
   active: boolean;
-  roomNumber?: string;
+  roomNumber?: string | null;
+
+  // audit (create only)
+  createdBy?: Actor;
+  createdAt?: Timestamp | null;
+
   [key: string]: any;
 };
 
@@ -206,7 +219,7 @@ export default function Scheduler() {
         const data = d.data() as any;
         return {
           id: d.id,
-          name: data.firstName || data.name || data.email || d.id,
+          name: data.displayName || data.firstName || data.email || d.id,
           email: data.email,
         };
       });
@@ -214,6 +227,44 @@ export default function Scheduler() {
     });
     return () => unsub();
   }, [buildingId]);
+
+  // 🔹 load current user's profile once to build actor names
+  const [me, setMe] = useState<{
+    displayName?: string;
+    firstName?: string;
+    lastName?: string;
+    role?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    (async () => {
+      try {
+        const snap = await getDoc(doc(db, "users", uid));
+        setMe((snap.data() as any) || null);
+      } catch {
+        setMe(null);
+      }
+    })();
+  }, []);
+
+  // helper to build actor object (uses Firestore user doc first, then Auth)
+  const buildActor = (fallbackRole: string = "manager") => {
+    const u = auth.currentUser;
+    const candidateName =
+      me?.displayName ||
+      [me?.firstName, me?.lastName].filter(Boolean).join(" ").trim() ||
+      u?.displayName ||
+      u?.email ||
+      u?.uid ||
+      "unknown";
+    return {
+      id: u?.uid ?? null,
+      name: candidateName,
+      role: me?.role || fallbackRole,
+    };
+  };
 
   // subscribe per-day (scoped to building)
   useEffect(() => {
@@ -254,6 +305,10 @@ export default function Scheduler() {
               active: raw.active !== false,
               roomNumber:
                 typeof raw.roomNumber === "string" ? raw.roomNumber : null,
+
+              // carry through create audit if present
+              createdBy: raw.createdBy ?? null,
+              createdAt: (raw.createdAt as Timestamp) ?? null,
             } as TemplateItem;
           });
           setItemsByDay((prev) => ({ ...prev, [day]: arr }));
@@ -322,6 +377,8 @@ export default function Scheduler() {
     const batch = writeBatch(db);
     let createdCount = 0;
 
+    const actor = buildActor("manager"); // 👈 who is creating these tasks
+
     templates.forEach((tpl) => {
       if (!tpl?.active) return;
 
@@ -344,6 +401,7 @@ export default function Scheduler() {
         status,
         order: tpl.order ?? 999,
         createdAt: serverTimestamp(),
+        createdBy: actor, // 👈 createdBy only
         forToday: true,
         roomNumber: tpl.roomNumber ?? null,
       });
@@ -424,7 +482,7 @@ export default function Scheduler() {
             )
           : doc(db, "buildings", buildingId, "scheduler", day, "items", it.id);
 
-        const toWrite = {
+        const baseFields = {
           id: ref.id,
           title: it.title || "Untitled",
           description: typeof it.description === "string" ? it.description : "",
@@ -442,9 +500,17 @@ export default function Scheduler() {
               : null,
         } as const;
 
-        batch.set(ref, toWrite, { merge: true });
+        // only set createdBy/createdAt on brand-new docs
+        const auditFields = isTemp
+          ? {
+              createdBy: buildActor("manager"),
+              createdAt: serverTimestamp(),
+            }
+          : {};
 
-        if (isTemp) it.id = ref.id;
+        batch.set(ref, { ...baseFields, ...auditFields }, { merge: true });
+
+        if (isTemp) it.id = ref.id; // keep local id in sync after first save
       });
     }
 
@@ -602,9 +668,7 @@ export default function Scheduler() {
             disabled={disabledUI}
           >
             <Ionicons name="rocket-outline" size={14} color="#fff" />
-            <Text style={styles.rolloutText}>
-              Rollout
-            </Text>
+            <Text style={styles.rolloutText}>Rollout</Text>
           </TouchableOpacity>
         </View>
 

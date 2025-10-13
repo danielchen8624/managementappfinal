@@ -1,4 +1,3 @@
-// app/activityLog.tsx
 import React, {
   useEffect,
   useMemo,
@@ -77,6 +76,7 @@ const Pal = {
 type Actor = {
   id?: string;
   displayName?: string | null;
+  name?: string | null;
   role?: string | null;
 } | null;
 type Target = {
@@ -102,6 +102,7 @@ export type ActivityRow = {
   actor?: Actor;
   target?: Target;
   message?: string | null;
+  summary?: string | null;       // 👈 NEW: show this for scheduler events
   meta?: Record<string, any> | null;
 };
 
@@ -153,7 +154,9 @@ function ActivityLog() {
             actor: data.actor ?? null,
             target: data.target ?? null,
             message: data.message ?? null,
+            summary: data.summary ?? null,   // 👈 pick up summary
             meta: data.meta ?? null,
+            name: data.name ?? null, 
           };
         });
         setItems(next);
@@ -183,6 +186,15 @@ function ActivityLog() {
   const titleFor = (row: ActivityRow) => {
     const t = row.type || "note";
     const target = row.target?.kind ? ` • ${prettyKind(row.target.kind)}` : "";
+
+    // 👇 Prefer summary for scheduler events; fallback label if missing
+    const isScheduler =
+      t.startsWith("scheduler_item") || t.startsWith("schedule_");
+    if (isScheduler) {
+      const label = (row.summary ?? "").trim();
+      return label || "Schedule item added";
+    }
+
     switch (t) {
       case "task_created":
         return `Task created${target}`;
@@ -196,10 +208,6 @@ function ActivityLog() {
         return `Report created${target}`;
       case "report_updated":
         return `Report updated${target}`;
-      case "scheduler_item_created":
-        return `Scheduler item created`;
-      case "scheduler_item_updated":
-        return `Scheduler item updated`;
       case "security_check_submitted":
         return `Security check submitted`;
       default:
@@ -213,15 +221,15 @@ function ActivityLog() {
       return <MaterialIcons name="assignment" size={18} color={C.accent} />;
     if (t.startsWith("report_"))
       return <MaterialIcons name="assessment" size={18} color={C.accent} />;
-    if (t.startsWith("scheduler_item"))
-      return <Ionicons name="calendar" size={18} color={C.accent} />;
+    if (t.startsWith("scheduler_item") || t.startsWith("schedule_"))
+      return <Ionicons name="calendar" size={18} color={C.accent} />; // 👈 handle both
     if (t === "security_check_submitted")
       return <Ionicons name="shield-checkmark" size={18} color={C.accent} />;
     return <MaterialIcons name="receipt-long" size={18} color={C.accent} />;
   };
 
   const subtitleFor = (row: ActivityRow) => {
-    const who = row.actor?.displayName || row.actor?.role || "Someone";
+    const who = row.actor?.name || row.actor?.role || "Someone";
     const when = formatWhen(row.ts);
     const tgt = row.target?.id
       ? ` • #${String(row.target?.id).slice(0, 6)}`

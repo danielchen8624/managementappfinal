@@ -67,7 +67,6 @@ export default function SignUp() {
       if (stored) setEmail(stored);
     })();
   }, []);
-
   const trimmedEmail = useMemo(() => email.trim(), [email]);
   const trimmedPass = useMemo(() => password.trim(), [password]);
   const canSubmit =
