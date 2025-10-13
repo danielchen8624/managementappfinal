@@ -1,11 +1,5 @@
 // app/manager_report.tsx
-import React, {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useCallback,
-} from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -17,100 +11,84 @@ import {
   Animated,
   Easing,
   SafeAreaView,
+  Platform,
 } from "react-native";
 import { router } from "expo-router";
-import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import {
-  collection,
-  onSnapshot,
-  orderBy,
-  query,
-  where,
-} from "firebase/firestore";
+import { Ionicons } from "@expo/vector-icons";
+import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
 import { db } from "../../../firebaseConfig";
 import { useBuilding } from "../../BuildingContext";
 import { useTheme } from "../../ThemeContext";
 
-/** -------------------------------------------------------
- * Types
- * ------------------------------------------------------*/
+/* ---------------- Types ---------------- */
+type Actor = { id?: string | null; name?: string | null; role?: string | null } | null;
+
 type ReportItem = {
   id: string;
   title?: string;
   description?: string;
-  status?: string;
-  resolved?: boolean;
-  createdAt?: any;
-  createdByName?: string;
-  createdBy?: string;
-  roomNumber?: string;
-  priority?: number;
-  severity?: "low" | "medium" | "high" | string;
-  managerHasReviewed?: boolean;
-  reporter_name?: string | null; // <-- NEW
+  status?: string;            // "need assistance" | "fixed" | etc.
+  resolved?: boolean;         // legacy fallback
+  createdAt?: any;            // Firestore Timestamp
+  createdBy?: Actor;          // preferred
+  actor?: Actor;              // fallback
+  createdByName?: string;     // legacy fallback
+  reporter_name?: string;     // legacy fallback
+  aptNumber?: string | null;
 };
 
-/** -------------------------------------------------------
- * Palette
- * ------------------------------------------------------*/
+/* -------------- Minimal Theme (same as scheduled_tasks) -------------- */
 const Pal = {
   light: {
-    bg: "#F5F7FA",
+    bg: "#F7F8FA",
     surface: "#FFFFFF",
+    text: "#0B1220",
+    textMuted: "#5B6472",
+    hairline: "#E7EAF0",
+    accent: "#147CE5",
+    accentSoft: "#E8F1FF",
+    success: "#16A34A",
     subtle: "#F3F4F6",
-    text: "#0F172A",
-    textMuted: "#475569",
-    outline: "#E5E7EB",
-    outlineBold: "#CBD5E1",
-    primary: "#1D4ED8",
-    warning: "#B45309",
-    success: "#059669",
-    danger: "#DC2626",
   },
   dark: {
-    bg: "#0B1220",
-    surface: "#111827",
-    subtle: "#0F172A",
-    text: "#F3F4F6",
-    textMuted: "#94A3B8",
-    outline: "#1F2937",
-    outlineBold: "#334155",
-    primary: "#2563EB",
-    warning: "#F59E0B",
-    success: "#10B981",
-    danger: "#EF4444",
+    bg: "#0A0F1A",
+    surface: "#0F1626",
+    text: "#E6EAF2",
+    textMuted: "#9AA4B2",
+    hairline: "#1F2A3A",
+    accent: "#4CA2FF",
+    accentSoft: "#11233B",
+    success: "#22C55E",
+    subtle: "#121A28",
   },
 };
 
-function fmt(ts?: any) {
-  try {
-    const d = ts?.toDate?.();
-    if (!d) return "—";
-    return new Date(d).toLocaleString();
-  } catch {
-    return "—";
-  }
+type StatusFilter = "all" | "needs" | "fixed";
+
+/* ---------------- Helpers ---------------- */
+function reporterFrom(r: ReportItem) {
+  return (
+    r?.createdBy?.name ||
+    r?.actor?.name ||
+    r?.createdByName ||
+    r?.reporter_name ||
+    "Unknown"
+  );
 }
 
-function severityPillColor(sev?: string, C?: any) {
-  const s = (sev || "").toLowerCase();
-  if (s === "high") return C?.danger;
-  if (s === "medium") return C?.warning;
-  if (s === "low") return C?.success;
-  return C?.outlineBold;
+function isFixed(r: ReportItem) {
+  const s = (r.status || "").toLowerCase();
+  if (["fixed", "resolved", "closed"].includes(s)) return true;
+  if (typeof r.resolved === "boolean") return r.resolved;
+  return false;
+}
+function isNeeds(r: ReportItem) {
+  const s = (r.status || "").toLowerCase();
+  return s === "need assistance" || s === "needs assistance";
 }
 
-function reviewStateColor(
-  reviewed: boolean | undefined,
-  C: typeof Pal.light | typeof Pal.dark
-) {
-  return reviewed ? C.success : C.primary;
-}
-
-/** -------------------------------------------------------
- * Screen
- * ------------------------------------------------------*/
-export default function ManagerAllReportsScreen() {
+/* ---------------- Screen ---------------- */
+export default function ManagerReportsScreen() {
   const { buildingId } = useBuilding();
   const { theme } = useTheme();
   const isDark = theme === "dark";
@@ -119,19 +97,21 @@ export default function ManagerAllReportsScreen() {
 
   const [loading, setLoading] = useState(true);
   const [reports, setReports] = useState<ReportItem[]>([]);
-  const [filter, setFilter] = useState<"all" | "open" | "resolved">("all");
   const [qText, setQText] = useState("");
+  const [filter, setFilter] = useState<StatusFilter>("all");
 
+  // subtle bg crossfade like scheduled_tasks
   const themeAnim = useRef(new Animated.Value(isDark ? 1 : 0)).current;
   useEffect(() => {
     Animated.timing(themeAnim, {
       toValue: isDark ? 1 : 0,
-      duration: 220,
-      easing: Easing.inOut(Easing.quad),
+      duration: 180,
+      easing: Easing.out(Easing.quad),
       useNativeDriver: false,
     }).start();
   }, [isDark, themeAnim]);
 
+  // Live subscription: recent reports for this building
   useEffect(() => {
     if (!buildingId) {
       setReports([]);
@@ -140,38 +120,7 @@ export default function ManagerAllReportsScreen() {
     }
     setLoading(true);
     const baseRef = collection(db, "buildings", buildingId, "reports");
-
-    let qy = query(baseRef, orderBy("createdAt", "desc"));
-    if (filter === "open") {
-      try {
-        qy = query(
-          baseRef,
-          where("status", "in", ["open", "investigating", "triage"]),
-          orderBy("createdAt", "desc")
-        );
-      } catch {
-        qy = query(
-          baseRef,
-          where("resolved", "==", false),
-          orderBy("createdAt", "desc")
-        );
-      }
-    } else if (filter === "resolved") {
-      try {
-        qy = query(
-          baseRef,
-          where("status", "in", ["closed", "resolved"]),
-          orderBy("createdAt", "desc")
-        );
-      } catch {
-        qy = query(
-          baseRef,
-          where("resolved", "==", true),
-          orderBy("createdAt", "desc")
-        );
-      }
-    }
-
+    const qy = query(baseRef, orderBy("createdAt", "desc"));
     const unsub = onSnapshot(
       qy,
       (snap) => {
@@ -182,205 +131,153 @@ export default function ManagerAllReportsScreen() {
       },
       () => setLoading(false)
     );
-
     return () => unsub();
-  }, [buildingId, filter]);
+  }, [buildingId]);
 
+  // search + filter (client-side to keep it simple)
   const filtered = useMemo(() => {
+    let base = reports;
+    if (filter === "needs") base = base.filter(isNeeds);
+    if (filter === "fixed") base = base.filter(isFixed);
     const q = qText.trim().toLowerCase();
-    if (!q) return reports;
-    return reports.filter((r) => {
-      const hay = `${r.title || ""} ${r.description || ""} ${
-        r.reporter_name || ""
-      }`.toLowerCase(); // <-- search reporter_name
+    if (!q) return base;
+    return base.filter((r) => {
+      const hay = `${r.title || ""} ${r.description || ""} ${reporterFrom(r)} ${r.aptNumber || ""}`.toLowerCase();
       return hay.includes(q);
     });
-  }, [reports, qText]);
+  }, [reports, qText, filter]);
 
+  // counts for header subtitle
   const counts = useMemo(() => {
-    const all = reports.length;
-    const open =
-      reports.filter(
-        (r) =>
-          (r.status &&
-            ["open", "investigating", "triage"].includes(
-              (r.status || "").toLowerCase()
-            )) ||
-          r.resolved === false
-      ).length || 0;
-    const res =
-      reports.filter(
-        (r) =>
-          (r.status &&
-            ["closed", "resolved"].includes((r.status || "").toLowerCase())) ||
-          r.resolved === true
-      ).length || 0;
-    return { all, open, res };
+    const total = reports.length;
+    const needs = reports.filter(isNeeds).length;
+    const fixed = reports.filter(isFixed).length;
+    return { total, needs, fixed };
   }, [reports]);
+
+  const Seg: React.FC<{ label: string; active?: boolean; onPress(): void }> = ({
+    label,
+    active,
+    onPress,
+  }) => (
+    <TouchableOpacity onPress={onPress} activeOpacity={0.9} style={[s.seg, active && s.segActive]}>
+      <Text style={[s.segText, active && s.segTextActive]}>{label}</Text>
+    </TouchableOpacity>
+  );
 
   const renderItem = useCallback(
     ({ item }: { item: ReportItem }) => {
-      const reviewed = !!item.managerHasReviewed;
-      const reviewBg = reviewStateColor(reviewed, C);
-      const sevBg = severityPillColor(item.severity, C);
-      const reviewLabel = reviewed ? "Reviewed" : "In Progress";
+      const done = isFixed(item);
+      const dotColor = done ? C.success : C.accent;
+      const subtitleBits = [
+        reporterFrom(item),
+        item.aptNumber ? `Apt ${item.aptNumber}` : null,
+      ].filter(Boolean);
 
       return (
-        <View style={s.cardWrap}>
-          <View style={s.card}>
-            <View style={s.statusRail}>
-              <View style={[s.statusPill, { backgroundColor: reviewBg }]} />
-            </View>
+        <View style={s.row}>
+          {/* tiny status dot (green = fixed, blue = needs assistance/other) */}
+          <View style={[s.dot, { backgroundColor: dotColor }]} />
 
-            <View style={{ flex: 1 }}>
-              <View style={s.titleRow}>
-                <Text numberOfLines={1} style={s.title}>
-                  {item.title || "Untitled report"}
-                </Text>
-                <View style={[s.chip, { backgroundColor: reviewBg }]}>
-                  <Text style={s.chipText}>{reviewLabel}</Text>
-                </View>
-              </View>
+          <View style={{ flex: 1 }}>
+            <Text numberOfLines={1} style={s.title}>
+              {item.title || "Untitled report"}
+            </Text>
 
-              <Text numberOfLines={2} style={s.desc}>
-                {item.description || "No description."}
-              </Text>
-
-              <View style={s.metaRow}>
-                <View style={s.metaItem}>
-                  <Ionicons
-                    name="person-circle-outline"
-                    size={14}
-                    color={C.textMuted}
-                  />
-                  <Text style={s.metaText}>
-                    {item.reporter_name || "Unknown"}{" "}
-                    {/* <-- show reporter_name */}
+            <View style={s.metaLine}>
+              {subtitleBits.map((bit, idx) => (
+                <React.Fragment key={`${item.id}-m-${idx}`}>
+                  {idx > 0 && <Text style={s.metaDivider}>·</Text>}
+                  <Text numberOfLines={1} style={s.meta}>
+                    {bit}
                   </Text>
-                </View>
-                <View style={s.metaItem}>
-                  <Ionicons name="time-outline" size={14} color={C.textMuted} />
-                  <Text style={s.metaText}>{fmt(item.createdAt)}</Text>
-                </View>
-                {!!item.roomNumber && (
-                  <View style={s.metaItem}>
-                    <Ionicons
-                      name="business-outline"
-                      size={14}
-                      color={C.textMuted}
-                    />
-                    <Text style={s.metaText}>Room {item.roomNumber}</Text>
-                  </View>
-                )}
-              </View>
+                </React.Fragment>
+              ))}
             </View>
 
-            {!!item.severity && (
-              <View style={[s.sidePill, { borderColor: sevBg }]}>
-                <Text style={[s.sidePillText, { color: sevBg }]}>
-                  {(item.severity || "").toUpperCase()}
-                </Text>
-              </View>
+            {!!item.description && (
+              <Text numberOfLines={2} style={s.desc}>
+                {item.description}
+              </Text>
             )}
           </View>
         </View>
       );
     },
-    [C, s]
+    [s, C]
   );
 
   return (
-    <SafeAreaView style={[s.container]}>
-      <View
-        style={[StyleSheet.absoluteFill, { backgroundColor: Pal.light.bg }]}
-      />
+    <SafeAreaView style={s.container}>
+      {/* crossfade background */}
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: Pal.light.bg }]} />
       <Animated.View
-        style={[
-          StyleSheet.absoluteFill,
-          { backgroundColor: Pal.dark.bg, opacity: themeAnim },
-        ]}
+        style={[StyleSheet.absoluteFill, { backgroundColor: Pal.dark.bg, opacity: themeAnim }]}
       />
 
+      {/* Header (identical layout to scheduled_tasks) */}
       <View style={s.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={s.headerBtn}
-          activeOpacity={0.9}
-        >
+        <TouchableOpacity onPress={() => router.back()} style={s.iconBtn} activeOpacity={0.9}>
           <Ionicons name="chevron-back" size={18} color={C.text} />
         </TouchableOpacity>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <MaterialIcons name="assessment" size={18} color={C.text} />
-          <Text style={s.headerTitle}>All Reports</Text>
+
+        <View style={s.headerMid}>
+          <Text style={s.headerTitle}>Reports</Text>
+          <Text style={s.headerSub}>
+            {counts.needs} need assistance • {counts.fixed} fixed
+          </Text>
         </View>
-        <View style={s.headerBtn} />
+
+        <View style={s.iconBtn} />
       </View>
 
-      {!buildingId && (
-        <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
-          <View style={s.inlineBanner}>
-            <Text style={s.inlineBannerTitle}>
-              Select a building to continue
-            </Text>
-            <Text style={s.inlineBannerText}>
-              Reports are scoped to your chosen building.
-            </Text>
-          </View>
-        </View>
-      )}
-
-      <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
-        <View style={s.searchWrap}>
+      {/* Search + Segmented filter (same component styling) */}
+      <View style={s.controlsWrap}>
+        <View className="search" style={s.searchBox}>
           <Ionicons name="search-outline" size={16} color={C.textMuted} />
           <TextInput
             value={qText}
             onChangeText={setQText}
-            placeholder="Search title, description, reporter…"
+            placeholder="Search"
             placeholderTextColor={C.textMuted}
             style={s.searchInput}
           />
+          {qText.length > 0 && (
+            <TouchableOpacity
+              onPress={() => setQText("")}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="close-circle" size={16} color={C.textMuted} />
+            </TouchableOpacity>
+          )}
         </View>
 
         <View style={s.segment}>
-          <SegBtn
-            label={`All ${counts.all}`}
-            active={filter === "all"}
-            onPress={() => setFilter("all")}
-            isDark={isDark}
-          />
-          <SegBtn
-            label={`Open ${counts.open}`}
-            active={filter === "open"}
-            onPress={() => setFilter("open")}
-            isDark={isDark}
-          />
-          <SegBtn
-            label={`Resolved ${counts.res}`}
-            active={filter === "resolved"}
-            onPress={() => setFilter("resolved")}
-            isDark={isDark}
-          />
+          <Seg label="All"               active={filter === "all"}   onPress={() => setFilter("all")} />
+          <Seg label="Needs assistance"  active={filter === "needs"} onPress={() => setFilter("needs")} />
+          <Seg label="Fixed"             active={filter === "fixed"} onPress={() => setFilter("fixed")} />
         </View>
       </View>
 
+      {/* List */}
       {loading ? (
-        <View style={[s.center, { paddingVertical: 16 }]}>
+        <View style={[s.center, { paddingVertical: 24 }]}>
           <ActivityIndicator />
-          <Text style={[s.muted, { marginTop: 8 }]}>Loading reports…</Text>
+          <Text style={s.muted}>Loading</Text>
         </View>
       ) : (
         <FlatList
           data={filtered}
           keyExtractor={(it) => it.id}
           renderItem={renderItem}
-          contentContainerStyle={{
-            paddingHorizontal: 16,
-            paddingTop: 10,
-            paddingBottom: 24,
-          }}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 28 }}
+          ItemSeparatorComponent={() => <View style={s.hairline} />}
           ListEmptyComponent={
-            <View style={[s.center, { paddingVertical: 24 }]}>
-              <Text style={s.muted}>No reports found.</Text>
+            <View style={[s.center, { paddingVertical: 40 }]}>
+              <Ionicons name="clipboard-outline" size={26} color={C.textMuted} />
+              <Text style={[s.muted, { marginTop: 8 }]}>
+                {qText ? "No results" : "No reports yet"}
+              </Text>
             </View>
           }
           showsVerticalScrollIndicator={false}
@@ -390,127 +287,68 @@ export default function ManagerAllReportsScreen() {
   );
 }
 
-/** -------------------------------------------------------
- * Tiny Segmented Button
- * ------------------------------------------------------*/
-function SegBtn({
-  label,
-  active,
-  onPress,
-  isDark,
-}: {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-  isDark: boolean;
-}) {
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      activeOpacity={0.9}
-      style={{
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        borderRadius: 10,
-        borderWidth: 1,
-        borderColor: active
-          ? isDark
-            ? "#3B82F6"
-            : "#1D4ED8"
-          : isDark
-          ? "#1F2937"
-          : "#E5E7EB",
-        backgroundColor: active
-          ? isDark
-            ? "rgba(37,99,235,0.15)"
-            : "rgba(29,78,216,0.08)"
-          : "transparent",
-        marginRight: 8,
-      }}
-    >
-      <Text
-        style={{
-          fontSize: 12,
-          fontWeight: "800",
-          color: active
-            ? isDark
-              ? "#93C5FD"
-              : "#1D4ED8"
-            : isDark
-            ? "#E5E7EB"
-            : "#0F172A",
-        }}
-      >
-        {label}
-      </Text>
-    </TouchableOpacity>
-  );
-}
-
-/** -------------------------------------------------------
- * Styles
- * ------------------------------------------------------*/
+/* ---------------- Styles (copied structure from scheduled_tasks) ---------------- */
 const getStyles = (isDark: boolean) => {
   const C = isDark ? Pal.dark : Pal.light;
+
   return StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: C.bg,
     },
+
+    /* Header */
     header: {
       paddingHorizontal: 16,
-      paddingVertical: 10,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: C.outline,
-      backgroundColor: C.surface,
+      paddingTop: 8,
+      paddingBottom: 10,
+      backgroundColor: C.bg,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: C.hairline,
     },
-    headerBtn: {
-      width: 34,
-      height: 34,
+    iconBtn: {
+      width: 36,
+      height: 36,
       borderRadius: 10,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: C.subtle,
+      backgroundColor: C.surface,
       borderWidth: 1,
-      borderColor: C.outline,
+      borderColor: C.hairline,
     },
+    headerMid: { alignItems: "center", gap: 2 },
     headerTitle: {
-      fontSize: 16,
+      fontSize: 20,
       fontWeight: "900",
       color: C.text,
       letterSpacing: 0.2,
     },
-    inlineBanner: {
-      padding: 12,
-      borderRadius: 12,
-      backgroundColor: isDark ? "#132235" : "#FDF5E6",
-      borderWidth: 1,
-      borderColor: isDark ? C.outlineBold : "#F2D9A6",
-      marginTop: 10,
-    },
-    inlineBannerTitle: {
-      fontWeight: "900",
-      color: isDark ? C.text : "#7C2D12",
-    },
-    inlineBannerText: {
-      marginTop: 4,
-      color: isDark ? C.textMuted : "#7C2D12",
+    headerSub: {
+      fontSize: 12,
       fontWeight: "700",
+      color: C.textMuted,
     },
-    searchWrap: {
+
+    /* Controls */
+    controlsWrap: {
+      paddingHorizontal: 16,
+      paddingTop: 12,
+      paddingBottom: 6,
+      gap: 10,
+    },
+    searchBox: {
       flexDirection: "row",
       alignItems: "center",
       gap: 8,
       paddingHorizontal: 12,
-      paddingVertical: 10,
+      paddingVertical: Platform.select({ ios: 10, android: 8, default: 10 }),
       borderRadius: 12,
-      backgroundColor: isDark ? "#0B1220" : "#F8FAFC",
+      backgroundColor: C.surface,
       borderWidth: 1,
-      borderColor: isDark ? "#1F2937" : "#E5E7EB",
-      marginBottom: 8,
+      borderColor: C.hairline,
     },
     searchInput: {
       flex: 1,
@@ -518,78 +356,86 @@ const getStyles = (isDark: boolean) => {
       fontWeight: "700",
       paddingVertical: 0,
     },
-    segment: { flexDirection: "row", alignItems: "center", marginBottom: 6 },
-    center: { alignItems: "center", justifyContent: "center" },
-    muted: { color: C.textMuted, fontWeight: "700" },
-    cardWrap: {
-      shadowColor: "#000",
-      shadowOpacity: isDark ? 0.25 : 0.08,
-      shadowRadius: 10,
-      shadowOffset: { width: 0, height: 6 },
-      elevation: 6,
-      marginBottom: 12,
-    },
-    card: {
-      borderRadius: 14,
-      backgroundColor: C.surface,
-      borderWidth: 1,
-      borderColor: C.outline,
-      padding: 14,
+
+    segment: {
       flexDirection: "row",
-      gap: 12,
-      position: "relative",
+      backgroundColor: isDark ? C.subtle : C.surface,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: C.hairline,
       overflow: "hidden",
     },
-    statusRail: {
-      position: "absolute",
-      left: 8,
-      top: 8,
-      bottom: 8,
-      width: 6,
+    seg: {
+      flex: 1,
       alignItems: "center",
-      justifyContent: "center",
+      paddingVertical: 8,
     },
-    statusPill: { width: 4, borderRadius: 8, height: "78%" },
-    titleRow: {
+    segActive: {
+      backgroundColor: isDark ? C.accentSoft : C.accentSoft,
+    },
+    segText: {
+      fontSize: 12,
+      fontWeight: "800",
+      color: C.textMuted,
+      letterSpacing: 0.2,
+    },
+    segTextActive: {
+      color: isDark ? "#EAF2FF" : C.accent,
+    },
+
+    /* List rows */
+    hairline: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: C.hairline,
+      marginLeft: 16 + 10 + 8, // align under content, not dot
+    },
+    row: {
       flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
+      alignItems: "flex-start",
       gap: 10,
-      marginBottom: 6,
+      paddingVertical: 14,
+    },
+    dot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      marginTop: 6,
+      marginLeft: 10,
     },
     title: {
-      fontSize: 15,
+      fontSize: 16,
       fontWeight: "900",
       color: C.text,
       letterSpacing: 0.2,
-      flex: 1,
     },
-    chip: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },
-    chipText: {
-      color: "#fff",
-      fontSize: 11,
-      fontWeight: "900",
-      letterSpacing: 0.3,
-    },
-    desc: { color: C.textMuted, fontSize: 13, fontWeight: "700" },
-    metaRow: {
+    metaLine: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 14,
-      marginTop: 8,
-      flexWrap: "wrap",
+      gap: 6,
+      marginTop: 4,
+      flexWrap: "nowrap",
     },
-    metaItem: { flexDirection: "row", alignItems: "center", gap: 6 },
-    metaText: { color: C.textMuted, fontSize: 12, fontWeight: "800" },
-    sidePill: {
-      position: "absolute",
-      right: 12,
-      top: 12,
-      paddingHorizontal: 8,
-      paddingVertical: 2,
-      borderRadius: 999,
-      borderWidth: 1,
+    meta: {
+      fontSize: 12,
+      color: C.textMuted,
+      fontWeight: "700",
     },
-    sidePillText: { fontSize: 10, fontWeight: "900", letterSpacing: 0.4 },
+    metaDivider: {
+      fontSize: 12,
+      color: C.textMuted,
+      opacity: 0.7,
+      fontWeight: "700",
+    },
+    desc: {
+      marginTop: 6,
+      fontSize: 13,
+      lineHeight: 18,
+      color: C.textMuted,
+      fontWeight: "700",
+    },
+
+    /* Misc */
+    center: { alignItems: "center", justifyContent: "center" },
+    muted: { color: C.textMuted, fontWeight: "700" },
   });
 };

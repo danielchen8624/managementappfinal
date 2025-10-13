@@ -11,59 +11,52 @@ import {
   Animated,
   Easing,
   SafeAreaView,
+  Platform,
 } from "react-native";
 import { router } from "expo-router";
-import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "../../../firebaseConfig";
 import { useBuilding } from "../../BuildingContext";
 import { useTheme } from "../../ThemeContext";
 
-/** -------------------------------------------------------
- * Types
- * ------------------------------------------------------*/
+/* ---------------- Types ---------------- */
 type TaskItem = {
   id: string;
   title?: string;
   description?: string;
   roomNumber?: string;
   assignedToName?: string;
-  priority?: number;          // 1..n (lower = higher urgency)
-  status?: string;            // "open" | "in_progress" | "done" | "completed" | etc.
-  forToday?: boolean;         // filter true
-  createdAt?: any;            // Firestore Timestamp
-  // dueAt?: any;             // intentionally not shown per request
+  priority?: number;   // 1..n (lower = higher urgency)
+  status?: string;     // "open" | "in_progress" | "done" | "completed" | ...
+  forToday?: boolean;
+  createdAt?: any;     // Firestore Timestamp
 };
 
-/** -------------------------------------------------------
- * Palette
- * ------------------------------------------------------*/
+/* -------------- Minimal Theme --------------
+   Neutral greys + a very soft blue accent. */
 const Pal = {
   light: {
-    bg: "#F5F7FA",
+    bg: "#F7F8FA",
     surface: "#FFFFFF",
+    text: "#0B1220",
+    textMuted: "#5B6472",
+    hairline: "#E7EAF0",
+    accent: "#147CE5",
+    accentSoft: "#E8F1FF",
+    success: "#16A34A",
     subtle: "#F3F4F6",
-    text: "#0F172A",
-    textMuted: "#475569",
-    outline: "#E5E7EB",
-    outlineBold: "#CBD5E1",
-    primary: "#1D4ED8",
-    warning: "#B45309", // amber
-    success: "#059669", // green
-    danger: "#DC2626",
   },
   dark: {
-    bg: "#0B1220",
-    surface: "#111827",
-    subtle: "#0F172A",
-    text: "#F3F4F6",
-    textMuted: "#94A3B8",
-    outline: "#1F2937",
-    outlineBold: "#334155",
-    primary: "#2563EB",
-    warning: "#F59E0B", // amber
-    success: "#10B981", // green
-    danger: "#EF4444",
+    bg: "#0A0F1A",
+    surface: "#0F1626",
+    text: "#E6EAF2",
+    textMuted: "#9AA4B2",
+    hairline: "#1F2A3A",
+    accent: "#4CA2FF",
+    accentSoft: "#11233B",
+    success: "#22C55E",
+    subtle: "#121A28",
   },
 };
 
@@ -72,9 +65,9 @@ function isCompletedStatus(s?: string) {
   return v === "done" || v === "completed" || v === "closed";
 }
 
-/** -------------------------------------------------------
- * Screen
- * ------------------------------------------------------*/
+type StatusFilter = "all" | "active" | "completed";
+
+/* --------------- Screen --------------- */
 export default function ScheduledTasksScreen() {
   const { buildingId } = useBuilding();
   const { theme } = useTheme();
@@ -85,14 +78,15 @@ export default function ScheduledTasksScreen() {
   const [loading, setLoading] = useState(true);
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [qText, setQText] = useState("");
+  const [filter, setFilter] = useState<StatusFilter>("all");
 
-  // header crossfade polish
+  // subtle bg crossfade for theme switch
   const themeAnim = useRef(new Animated.Value(isDark ? 1 : 0)).current;
   useEffect(() => {
     Animated.timing(themeAnim, {
       toValue: isDark ? 1 : 0,
-      duration: 220,
-      easing: Easing.inOut(Easing.quad),
+      duration: 180,
+      easing: Easing.out(Easing.quad),
       useNativeDriver: false,
     }).start();
   }, [isDark, themeAnim]);
@@ -112,8 +106,15 @@ export default function ScheduledTasksScreen() {
       (snap) => {
         const list: TaskItem[] = [];
         snap.forEach((d) => list.push({ id: d.id, ...(d.data() as any) }));
-        // Order by priority: P1 → P2 → P3 (lower number first)
-        list.sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999));
+        // Priority (low number first), then createdAt desc
+        list.sort((a, b) => {
+          const pa = a.priority ?? 999;
+          const pb = b.priority ?? 999;
+          if (pa !== pb) return pa - pb;
+          const ta = a.createdAt?.toMillis?.() ?? 0;
+          const tb = b.createdAt?.toMillis?.() ?? 0;
+          return tb - ta;
+        });
         setTasks(list);
         setLoading(false);
       },
@@ -124,81 +125,92 @@ export default function ScheduledTasksScreen() {
 
   const filtered = useMemo(() => {
     const q = qText.trim().toLowerCase();
-    if (!q) return tasks;
-    return tasks.filter((t) => {
+    let base = tasks;
+    if (filter === "active") base = base.filter((t) => !isCompletedStatus(t.status));
+    if (filter === "completed") base = base.filter((t) => isCompletedStatus(t.status));
+    if (!q) return base;
+    return base.filter((t) => {
       const hay = `${t.title || ""} ${t.description || ""} ${t.assignedToName || ""} ${t.roomNumber || ""}`.toLowerCase();
       return hay.includes(q);
     });
-  }, [tasks, qText]);
+  }, [tasks, qText, filter]);
+
+  const headerCounts = useMemo(() => {
+    const total = tasks.length;
+    const completed = tasks.filter((t) => isCompletedStatus(t.status)).length;
+    const active = total - completed;
+    return { total, active, completed };
+  }, [tasks]);
+
+  const Seg: React.FC<{ label: string; active?: boolean; onPress(): void }> = ({
+    label,
+    active,
+    onPress,
+  }) => (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.9}
+      style={[s.seg, active && s.segActive]}
+    >
+      <Text style={[s.segText, active && s.segTextActive]}>{label}</Text>
+    </TouchableOpacity>
+  );
 
   const renderItem = useCallback(
     ({ item }: { item: TaskItem }) => {
-      const completed = isCompletedStatus(item.status);
-      const statusColor = completed ? C.success : C.warning; // ✅ green = done, amber = in progress
+      const done = isCompletedStatus(item.status);
 
       return (
-        <View style={s.cardWrap}>
-          <View style={s.card}>
-            {/* left status rail */}
-            <View style={s.statusRail}>
-              <View style={[s.statusPill, { backgroundColor: statusColor }]} />
-            </View>
+        <View style={s.row}>
+          {/* tiny status dot */}
+          <View
+            style={[
+              s.dot,
+              { backgroundColor: done ? C.success : C.accent },
+            ]}
+          />
+          <View style={{ flex: 1 }}>
+            <Text numberOfLines={1} style={s.title}>
+              {item.title || "Untitled task"}
+            </Text>
 
-            <View style={{ flex: 1 }}>
-              {/* Title */}
-              <View style={s.titleRow}>
-                <Text numberOfLines={1} style={s.title}>
-                  {item.title || "Untitled task"}
-                </Text>
-              </View>
-
-              {!!item.description && (
-                <Text numberOfLines={2} style={s.desc}>
-                  {item.description}
+            {/* meta line: only show what exists, compact */}
+            <View style={s.metaLine}>
+              {!!item.assignedToName && (
+                <Text numberOfLines={1} style={s.meta}>
+                  {item.assignedToName}
                 </Text>
               )}
-
-              <View style={s.metaRow}>
-                {!!item.assignedToName && (
-                  <View style={s.metaItem}>
-                    <Ionicons name="person-circle-outline" size={14} color={C.textMuted} />
-                    <Text style={s.metaText}>{item.assignedToName}</Text>
-                  </View>
-                )}
-                {!!item.roomNumber && (
-                  <View style={s.metaItem}>
-                    <Ionicons name="business-outline" size={14} color={C.textMuted} />
-                    <Text style={s.metaText}>Room {item.roomNumber}</Text>
-                  </View>
-                )}
-              </View>
-
-              {/* ⬇️ Priority pill moved to the bottom of the card */}
-              {typeof item.priority === "number" && (
-                <View style={s.footerRow}>
-                  <View style={[s.priorityPill, s.priorityBottom]}>
-                    <Text style={s.priorityText}>P{item.priority}</Text>
-                  </View>
-                </View>
+              {!!item.assignedToName && !!item.roomNumber && <Text style={s.metaDivider}>·</Text>}
+              {!!item.roomNumber && (
+                <Text numberOfLines={1} style={s.meta}>
+                  Room {item.roomNumber}
+                </Text>
               )}
             </View>
 
-            {/* Status text pill (top-right) */}
-            <View style={[s.sidePill, { borderColor: statusColor }]}>
-              <Text style={[s.sidePillText, { color: statusColor }]}>
-                {completed ? "COMPLETED" : "IN PROGRESS"}
+            {!!item.description && (
+              <Text numberOfLines={2} style={s.desc}>
+                {item.description}
               </Text>
-            </View>
+            )}
           </View>
+
+          {/* small priority capsule, very low-key */}
+          {typeof item.priority === "number" && (
+            <View style={s.priorityCapsule}>
+              <Text style={s.priorityText}>P{item.priority}</Text>
+            </View>
+          )}
         </View>
       );
     },
-    [C, s]
+    [s, C]
   );
 
   return (
     <SafeAreaView style={s.container}>
-      {/* crossfade layers */}
+      {/* crossfade background */}
       <View style={[StyleSheet.absoluteFill, { backgroundColor: Pal.light.bg }]} />
       <Animated.View
         style={[
@@ -207,62 +219,69 @@ export default function ScheduledTasksScreen() {
         ]}
       />
 
-      {/* Header */}
+      {/* Header (very light, airy) */}
       <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()} style={s.headerBtn} activeOpacity={0.9}>
+        <TouchableOpacity onPress={() => router.back()} style={s.iconBtn} activeOpacity={0.9}>
           <Ionicons name="chevron-back" size={18} color={C.text} />
         </TouchableOpacity>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <MaterialIcons name="event-available" size={18} color={C.text} />
-          <Text style={s.headerTitle}>Scheduled Tasks</Text>
+
+        <View style={s.headerMid}>
+          <Text style={s.headerTitle}>Scheduled</Text>
+          <Text style={s.headerSub}>
+            {headerCounts.active} active • {headerCounts.completed} done
+          </Text>
         </View>
-        <View style={s.headerBtn} />
+
+        <View style={s.iconBtn} />
       </View>
 
-      {/* Select building nudge */}
-      {!buildingId && (
-        <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
-          <View style={s.inlineBanner}>
-            <Text style={s.inlineBannerTitle}>Select a building to continue</Text>
-            <Text style={s.inlineBannerText}>Tasks are scoped to your chosen building.</Text>
-          </View>
-        </View>
-      )}
-
-      {/* Search */}
-      <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
-        <View style={s.searchWrap}>
+      {/* Search + Segmented filter */}
+      <View style={s.controlsWrap}>
+        <View style={s.searchBox}>
           <Ionicons name="search-outline" size={16} color={C.textMuted} />
           <TextInput
             value={qText}
             onChangeText={setQText}
-            placeholder="Search tasks, rooms, assignees…"
+            placeholder="Search"
             placeholderTextColor={C.textMuted}
             style={s.searchInput}
           />
           {qText.length > 0 && (
-            <TouchableOpacity onPress={() => setQText("")} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <TouchableOpacity
+              onPress={() => setQText("")}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
               <Ionicons name="close-circle" size={16} color={C.textMuted} />
             </TouchableOpacity>
           )}
+        </View>
+
+        <View style={s.segment}>
+          <Seg label="All"        active={filter === "all"}       onPress={() => setFilter("all")} />
+          <Seg label="Active"     active={filter === "active"}    onPress={() => setFilter("active")} />
+          <Seg label="Completed"  active={filter === "completed"} onPress={() => setFilter("completed")} />
         </View>
       </View>
 
       {/* List */}
       {loading ? (
-        <View style={[s.center, { paddingVertical: 16 }]}>
+        <View style={[s.center, { paddingVertical: 24 }]}>
           <ActivityIndicator />
-          <Text style={[s.muted, { marginTop: 8 }]}>Loading tasks…</Text>
+          <Text style={s.muted}>Loading</Text>
         </View>
       ) : (
         <FlatList
           data={filtered}
           keyExtractor={(it) => it.id}
           renderItem={renderItem}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 24 }}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 28 }}
+          ItemSeparatorComponent={() => <View style={s.hairline} />}
           ListEmptyComponent={
-            <View style={[s.center, { paddingVertical: 24 }]}>
-              <Text style={s.muted}>No scheduled tasks for today.</Text>
+            <View style={[s.center, { paddingVertical: 40 }]}>
+              <Ionicons name="clipboard-outline" size={26} color={C.textMuted} />
+              <Text style={[s.muted, { marginTop: 8 }]}>
+                {qText ? "No results" : "Nothing scheduled for today"}
+              </Text>
             </View>
           }
           showsVerticalScrollIndicator={false}
@@ -272,76 +291,68 @@ export default function ScheduledTasksScreen() {
   );
 }
 
-/** -------------------------------------------------------
- * Styles (mirrors your aesthetic)
- * ------------------------------------------------------*/
+/* ---------------- Styles ---------------- */
 const getStyles = (isDark: boolean) => {
   const C = isDark ? Pal.dark : Pal.light;
+
   return StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: C.bg,
     },
 
-    // Header
+    /* Header */
     header: {
       paddingHorizontal: 16,
-      paddingVertical: 10,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: C.outline,
-      backgroundColor: C.surface,
+      paddingTop: 8,
+      paddingBottom: 10,
+      backgroundColor: C.bg,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: C.hairline,
     },
-    headerBtn: {
-      width: 34,
-      height: 34,
+    iconBtn: {
+      width: 36,
+      height: 36,
       borderRadius: 10,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: C.subtle,
+      backgroundColor: C.surface,
       borderWidth: 1,
-      borderColor: C.outline,
+      borderColor: C.hairline,
     },
+    headerMid: { alignItems: "center", gap: 2 },
     headerTitle: {
-      fontSize: 16,
+      fontSize: 20,
       fontWeight: "900",
       color: C.text,
       letterSpacing: 0.2,
     },
-
-    // Nudge
-    inlineBanner: {
-      padding: 12,
-      borderRadius: 12,
-      backgroundColor: isDark ? "#132235" : "#FDF5E6",
-      borderWidth: 1,
-      borderColor: isDark ? C.outlineBold : "#F2D9A6",
-      marginTop: 10,
-    },
-    inlineBannerTitle: {
-      fontWeight: "900",
-      color: isDark ? C.text : "#7C2D12",
-    },
-    inlineBannerText: {
-      marginTop: 4,
-      color: isDark ? C.textMuted : "#7C2D12",
+    headerSub: {
+      fontSize: 12,
       fontWeight: "700",
+      color: C.textMuted,
     },
 
-    // Search
-    searchWrap: {
+    /* Controls */
+    controlsWrap: {
+      paddingHorizontal: 16,
+      paddingTop: 12,
+      paddingBottom: 6,
+      gap: 10,
+    },
+    searchBox: {
       flexDirection: "row",
       alignItems: "center",
       gap: 8,
       paddingHorizontal: 12,
-      paddingVertical: 10,
+      paddingVertical: Platform.select({ ios: 10, android: 8, default: 10 }),
       borderRadius: 12,
-      backgroundColor: isDark ? "#0B1220" : "#F8FAFC",
+      backgroundColor: C.surface,
       borderWidth: 1,
-      borderColor: isDark ? "#1F2937" : "#E5E7EB",
-      marginBottom: 8,
+      borderColor: C.hairline,
     },
     searchInput: {
       flex: 1,
@@ -349,114 +360,101 @@ const getStyles = (isDark: boolean) => {
       fontWeight: "700",
       paddingVertical: 0,
     },
-
-    center: { alignItems: "center", justifyContent: "center" },
-    muted: { color: C.textMuted, fontWeight: "700" },
-
-    // Cards
-    cardWrap: {
-      shadowColor: "#000",
-      shadowOpacity: isDark ? 0.25 : 0.08,
-      shadowRadius: 10,
-      shadowOffset: { width: 0, height: 6 },
-      elevation: 6,
-      marginBottom: 12,
-    },
-    card: {
-      borderRadius: 14,
-      backgroundColor: C.surface,
-      borderWidth: 1,
-      borderColor: C.outline,
-      padding: 14,
+    segment: {
       flexDirection: "row",
-      gap: 12,
-      position: "relative",
+      backgroundColor: isDark ? C.subtle : C.surface,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: C.hairline,
       overflow: "hidden",
     },
-    statusRail: {
-      position: "absolute",
-      left: 8,
-      top: 8,
-      bottom: 8,
-      width: 6,
+    seg: {
+      flex: 1,
       alignItems: "center",
-      justifyContent: "center",
+      paddingVertical: 8,
     },
-    statusPill: {
-      width: 4,
-      borderRadius: 8,
-      height: "78%",
+    segActive: {
+      backgroundColor: isDark ? C.accentSoft : C.accentSoft,
     },
-    titleRow: {
+    segText: {
+      fontSize: 12,
+      fontWeight: "800",
+      color: C.textMuted,
+      letterSpacing: 0.2,
+    },
+    segTextActive: {
+      color: isDark ? "#EAF2FF" : C.accent,
+    },
+
+    /* List rows */
+    hairline: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: C.hairline,
+      marginLeft: 16 + 10 + 8, // align under content, not dot
+    },
+    row: {
       flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
+      alignItems: "flex-start",
       gap: 10,
-      marginBottom: 6,
+      paddingVertical: 14,
+    },
+    dot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      marginTop: 6,
+      marginLeft: 10,
     },
     title: {
-      fontSize: 15,
+      fontSize: 16,
       fontWeight: "900",
       color: C.text,
       letterSpacing: 0.2,
-      flex: 1,
+    },
+    metaLine: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      marginTop: 4,
+    },
+    meta: {
+      fontSize: 12,
+      color: C.textMuted,
+      fontWeight: "700",
+    },
+    metaDivider: {
+      fontSize: 12,
+      color: C.textMuted,
+      opacity: 0.7,
+      fontWeight: "700",
+    },
+    desc: {
+      marginTop: 6,
+      fontSize: 13,
+      lineHeight: 18,
+      color: C.textMuted,
+      fontWeight: "700",
     },
 
-    // Priority pill (neutral)
-    priorityPill: {
-      paddingHorizontal: 10,
+    priorityCapsule: {
+      alignSelf: "flex-start",
+      paddingHorizontal: 8,
       paddingVertical: 4,
       borderRadius: 999,
-      backgroundColor: isDark ? "#1F2937" : "#F3F4F6",
       borderWidth: 1,
-      borderColor: isDark ? C.outlineBold : C.outline,
+      borderColor: C.hairline,
+      backgroundColor: C.surface,
+      marginLeft: 8,
     },
     priorityText: {
       fontSize: 11,
       fontWeight: "900",
-      color: C.text,
+      color: C.textMuted,
       letterSpacing: 0.3,
     },
 
-    desc: {
-      color: C.textMuted,
-      fontSize: 13,
-      fontWeight: "700",
-    },
-    metaRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 14,
-      marginTop: 8,
-      flexWrap: "wrap",
-    },
-    metaItem: { flexDirection: "row", alignItems: "center", gap: 6 },
-    metaText: { color: C.textMuted, fontSize: 12, fontWeight: "800" },
-
-    // Footer row to hold the bottom priority pill
-    footerRow: {
-      marginTop: 10,
-      flexDirection: "row",
-      justifyContent: "flex-start",
-    },
-    priorityBottom: {
-      alignSelf: "flex-start",
-    },
-
-    // Status text (top-right)
-    sidePill: {
-      position: "absolute",
-      right: 12,
-      top: 12,
-      paddingHorizontal: 8,
-      paddingVertical: 2,
-      borderRadius: 999,
-      borderWidth: 1,
-    },
-    sidePillText: {
-      fontSize: 10,
-      fontWeight: "900",
-      letterSpacing: 0.4,
-    },
+    /* Misc */
+    center: { alignItems: "center", justifyContent: "center" },
+    muted: { color: C.textMuted, fontWeight: "700" },
   });
 };
