@@ -60,6 +60,7 @@
     "@babel/core": "^7.25.2",
     "@types/luxon": "^3.7.1",
     "@types/react": "~19.1.10",
+    "eas-cli": "^16.22.0",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
     "firebase-tools": "^14.15.2",

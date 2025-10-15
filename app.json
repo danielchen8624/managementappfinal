@@ -28,6 +28,7 @@
     "android": {
       "edgeToEdgeEnabled": true,
       "package": "com.daniel.chen0113.dcoasis",
+      "googleServicesFile": "./google-services.json",
       "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
